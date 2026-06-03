@@ -289,6 +289,8 @@ export const de = {
   'offline.panelTitle': 'Offline-Datenquellen', 'offline.refreshNow': 'Jetzt alle aktualisieren',
   'offline.panelHelp': 'Das Display liest diese hinterlegten Daten — kein Live-API-Aufruf, kein Schlüssel, kein Internet am Bildschirm nötig.',
   'offline.lastUpdated': 'Stand: {when}', 'offline.neverYet': 'noch nicht hinterlegt',
+  'offline.refreshingOne': 'Hole Daten…', 'offline.refreshOneOk': 'Offline-Daten hinterlegt — unten sichtbar.',
+  'offline.refreshOneFail': 'Konnte Daten nicht holen: {msg}',
   'pub.success': 'Veröffentlicht, Display aktualisiert in Sekunden.',
   'pub.successGroup': 'An die ganze Group veröffentlicht.', 'pub.failed': 'Veröffentlichen fehlgeschlagen: {msg}',
 

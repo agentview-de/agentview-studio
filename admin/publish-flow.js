@@ -15,7 +15,7 @@ import { openModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { t } from './i18n.js';
 import { collectUniqueSlots } from '../shared/binding-resolver.js';
-import { offlineSlugFor, withOfflineBindings, offlineWidgets } from '../shared/offline-data.js';
+import { offlineSlugFor, withOfflineBindings, offlineWidgets, isStored } from '../shared/offline-data.js';
 import { setOfflinePreview } from './offline-preview.js';
 import { get as getPlugin } from '../shared/plugins/registry.js';
 import { buildSyncAnchor } from '../shared/sync-clock.js';
@@ -85,6 +85,29 @@ export async function refreshAllOfflineData() {
 // Does the current playlist have any offline-data widgets? (gates the toolbar button)
 export function hasOfflineData() {
   return offlineWidgets(state.playlist).length > 0;
+}
+
+// Provision ONE widget's offline data right away — called when the user switches a
+// widget to "offline" in the inspector, so the data appears immediately instead of
+// only after the header "Daten" action. No-op (returns false) when the widget isn't
+// stored, has no source to fetch yet, or there's no connection. Errors surface as a
+// toast and never throw (switching the dropdown must not blow up the inspector).
+export async function provisionWidgetOffline(widget) {
+  if (!isStored(widget?.content)) return false;
+  const plugin = getPlugin(widget.type);
+  const hasSource = typeof plugin?.provisionOffline === 'function'
+    || !!(widget.content?.dataUrl ?? widget.content?.url);
+  if (!hasSource) return false;                              // wait until a URL is set
+  if (state.connection.status !== 'connected') return false; // refresh needs the API
+  try {
+    toast(t('offline.refreshingOne') ?? 'Fetching data…', { kind: 'info', ttl: 1500 });
+    await refreshWidgetData(widget);
+    toast(t('offline.refreshOneOk') ?? 'Offline data stored.', { kind: 'success' });
+    return true;
+  } catch (e) {
+    toast(t('offline.refreshOneFail', { msg: e.message }) ?? `Could not fetch data: ${e.message}`, { kind: 'warn' });
+    return false;
+  }
 }
 
 // "Datenquellen" overview — the toolbar button opens this. Lists every provided-

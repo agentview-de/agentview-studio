@@ -5,6 +5,7 @@
 import { state, commit, subscribe, on } from '../store.js';
 import { get as getPlugin } from '../../shared/plugins/registry.js';
 import { buildForm } from '../ui/inspector.js';
+import { isStored } from '../../shared/offline-data.js';
 import { getControl } from '../ui/field-controls/registry.js';
 import { widgetIcon } from '../../shared/data/widget-icons.js';
 import { THEME_SWATCHES } from '../../shared/data/themes.js';
@@ -492,6 +493,10 @@ export function renderWidgetInspector(host) {
     // reset the user's folding.
     formKey: widget.type,
     onChange: v => {
+      // Detect a switch INTO "provided offline" so we can fetch the data right
+      // away (below) — the user shouldn't have to go to the header "Daten" action
+      // just to see anything.
+      const wasStored = isStored(widget.content);
       // If the widget exposes a content-driven ratio (e.g. YouTube 16:9 / 9:16),
       // snap its box to that ratio when the ratio actually changes.
       const oldR = plugin.contentRatio?.(widget.content);
@@ -503,6 +508,13 @@ export function renderWidgetInspector(host) {
           const k = inp.dataset.geo;
           inp.value = k === 'z' ? (widget.z ?? 0) : k === 'rot' ? (widget.rotation ?? 0) : Math.round(widget.rect[k] * 10) / 10;
         });
+      }
+      // Just switched to offline → provision its data now and re-render so it
+      // shows immediately. Lazy import keeps the inspector free of the publish
+      // flow's module graph. (provisionWidgetOffline is a no-op without a source.)
+      if (!wasStored && isStored(v)) {
+        import('../publish-flow.js').then(({ provisionWidgetOffline }) =>
+          provisionWidgetOffline(widget).then(ok => { if (ok) refreshWidget(widget.id); }));
       }
       debounce(() => { refreshWidget(widget.id); commit('widget-content'); });
     },
