@@ -3,6 +3,7 @@ import { themeField } from '../data/themes.js';
 import { colorOverrideDefaults, colorOverrideFields, applyColorOverrides } from '../widget-color.js';
 import { composeDispose } from '../plugin-contract.js';
 import { liveSource } from '../live-source.js';
+import { offlineLiveOpts, SOURCE_OPTIONS } from '../offline-data.js';
 import { escapeHtml } from '../utils/escape.js';
 
 // Normalises remote JSON into { headers:[], rows:[[...]] }. Accepts an array of
@@ -37,7 +38,8 @@ export default register({
   }),
   schema: () => ({
     fields: [
-      { key: 'source', type: 'select', label: 'Data source', options: ['inline', 'url'] },
+      { key: 'source', type: 'select', label: 'Data source', options: SOURCE_OPTIONS,
+        help: 'Offline: the Studio fetches the JSON URL on “Refresh data” and stores it in agentView; the display reads that — no live call, no internet needed on the screen.' },
       { key: 'headers', type: 'text', label: 'Column headers (comma-separated)',
         showIf: c => (c.source ?? 'inline') === 'inline',
         help: 'Names the columns. The number of headers determines the number of columns (1–10).' },
@@ -55,9 +57,9 @@ export default register({
         help: 'One letter per column, l=left, c=centre, r=right. e.g. "lrr" = label + two right-aligned number columns. Leave blank for the default (left-aligned).' },
       { key: 'striped', type: 'toggle', label: 'Striped rows' },
       { key: 'dataUrl', type: 'url', label: 'Remote JSON URL', test: 'json',
-        showIf: c => c.source === 'url',
+        showIf: c => c.source === 'url' || c.source === 'stored',
         placeholder: 'https://api.example.com/rows.json',
-        help: 'Accepts an array of objects (keys become column headers) or an array of arrays (first row = headers). Must be CORS-enabled.' },
+        help: 'Accepts an array of objects (keys become column headers) or an array of arrays (first row = headers). Must be CORS-enabled for whichever side fetches it (display in Live mode, Studio in Offline mode).' },
       { key: 'refreshSec', type: 'duration', label: 'Refresh every (0 = once)', min: 0, default: 0,
         showIf: c => c.source === 'url',
         help: 'Polls the JSON URL on a timer so live data stays current.' },
@@ -100,11 +102,18 @@ export default register({
       return { headers, rows };
     };
 
-    if (c.source === 'url') {
+    const stored = c.source === 'stored';
+    if (c.source === 'url' || stored) {
+      // Offline mode but nothing provisioned yet (editor before the first
+      // "Refresh data") → neutral placeholder, not an error.
+      if (stored && c._offline?.data === undefined) {
+        wrap.innerHTML = '<div class="bb-dt-empty">Provided-offline — appears on the display after “Refresh data”.</div>';
+        return composeDispose(() => root.remove());
+      }
       // URL mode but no URL yet → prompt for one. Previously this fell through
       // to the inline sample, so picking "url" showed fake placeholder rows
       // (A. Lovelace…) until a URL was entered, confusing.
-      if (!c.dataUrl) {
+      if (!stored && !c.dataUrl) {
         wrap.innerHTML = '<div class="bb-dt-empty">Add a JSON URL in the inspector.</div>';
         return composeDispose(() => root.remove());
       }
@@ -124,6 +133,7 @@ export default register({
         maxErrors: 0,
         backoff: false,
         stopOnCorsError: false,
+        ...offlineLiveOpts(c),
         onData: (data) => paint(fromJson(data)),
         onError: () => {
           if (!ctx?.onError?.()) wrap.innerHTML = '<div class="bb-dt-empty">Data unavailable.</div>';

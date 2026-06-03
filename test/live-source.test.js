@@ -177,3 +177,42 @@ describe('live-source · error policy', () => {
     expect(errs[errs.length - 1].gaveUp).toBe(false);
   });
 });
+
+describe('live-source · offline (provided data)', () => {
+  test('renders offlineData once and NEVER fetches or schedules', async () => {
+    const clock = fakeClock();
+    const _fetch = fakeFetch([{ body: 'should-not-be-used' }]);
+    const data = [];
+    const dispose = liveSource({ url: '/x', offline: true, offlineData: { a: 1 },
+      _fetch, _setTimer: clock.set, _clearTimer: clock.clear, onData: d => data.push(d) });
+    await settle();
+    expect(data).toEqual([{ a: 1 }]);
+    expect(_fetch.calls).toHaveLength(0);  // no network in offline mode
+    expect(clock.size()).toBe(0);          // no poll scheduled
+    expect(typeof dispose).toBe('function');
+  });
+
+  test('missing offlineData stays SILENT — no onData, no onError, no fetch', async () => {
+    const clock = fakeClock();
+    const _fetch = fakeFetch([{ body: 1 }]);
+    let onData = false; const errs = [];
+    liveSource({ url: '/x', offline: true, offlineData: undefined,
+      _fetch, _setTimer: clock.set, _clearTimer: clock.clear,
+      onData: () => { onData = true; }, onError: (e, i) => errs.push(i) });
+    await settle();
+    expect(onData).toBe(false);
+    expect(errs).toHaveLength(0);
+    expect(_fetch.calls).toHaveLength(0);
+  });
+
+  test('onData throwing on offline data is routed to onError (gaveUp)', async () => {
+    const errs = [];
+    liveSource({ offline: true, offlineData: { bad: true },
+      onData: () => { throw new Error('bad shape'); },
+      onError: (e, i) => errs.push({ msg: e.message, ...i }) });
+    await settle();
+    expect(errs).toHaveLength(1);
+    expect(errs[0].msg).toBe('bad shape');
+    expect(errs[0].gaveUp).toBe(true);
+  });
+});

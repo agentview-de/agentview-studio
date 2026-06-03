@@ -275,6 +275,12 @@ export const en = {
   'pub.connectFirst': 'Connect to agentView first.', 'pub.publishing': 'Publishing…',
   'pub.modeHelp': 'Display = one screen · Group = every screen in a category · Multiple = hand-pick several.',
   'pub.warnings': 'Published with {n} validation warning(s).',
+  'offline.refreshBtn': 'Data', 'offline.refreshTip': 'Offline data sources — overview & refresh all',
+  'offline.none': 'No offline data sources in this playlist.', 'offline.refreshing': 'Refreshing data sources…',
+  'offline.refreshOk': '{n} data source(s) refreshed.', 'offline.refreshPartial': '{ok} refreshed, {fail} failed.',
+  'offline.panelTitle': 'Offline data sources', 'offline.refreshNow': 'Refresh all now',
+  'offline.panelHelp': 'The display reads this stored data — no live API call, no key, no internet needed on screen.',
+  'offline.lastUpdated': 'Last refreshed: {when}', 'offline.neverYet': 'not provisioned yet',
   'pub.success': 'Published, display refreshes within seconds.',
   'pub.successGroup': 'Published to the whole group.', 'pub.failed': 'Publish failed: {msg}',
 

@@ -5,6 +5,27 @@ import { colorOverrideDefaults, colorOverrideFields, applyColorOverrides } from 
 import { composeDispose, childSignal } from '../plugin-contract.js';
 import { escapeHtml } from '../utils/escape.js';
 import { cssUrl } from '../safe-url.js';
+import { fetchFeedItems } from '../feeds.js';
+import { isStored, DATAMODE_OPTIONS } from '../offline-data.js';
+
+// Map one <item>/<entry> node to a photo card. Shared by the live fetch and
+// offline provisioning so both store/show identical data.
+const newsMapItem = (it) => {
+  const dateStr = it.querySelector('pubDate, published, updated')?.textContent;
+  const date = dateStr ? new Date(dateStr) : null;
+  const img = it.getElementsByTagName('media:thumbnail')[0]?.getAttribute('url')
+           || it.getElementsByTagName('media:content')[0]?.getAttribute('url')
+           || it.querySelector('enclosure[type^="image"]')?.getAttribute('url')
+           || (it.querySelector('description')?.textContent ?? '').match(/<img[^>]+src="([^"]+)"/)?.[1]
+           || '';
+  return {
+    title: it.querySelector('title')?.textContent ?? '',
+    desc: (it.querySelector('description, summary')?.textContent ?? '')
+      .replace(/<[^>]*>/g, '').slice(0, 200),
+    img,
+    date: date && !isNaN(date) ? date.getTime() : 0,
+  };
+};
 
 // News with Photos, image-card grid version of the RSS widget. Shares the
 // fit/paginate layout pattern: render all cards, then either hide overflow
@@ -23,7 +44,18 @@ export default register({
     note: 'Headlines and images come from third-party news feeds; check the terms of each publisher before commercial display.',
   },
   schemaVersion: 1,
+  // Offline provisioning: the Studio fetches + parses the feeds on "Refresh data"
+  // and stores the merged card array; the display reads that (no live fetch).
+  provisionOffline: async (content) => {
+    const { items, okCount, configured } = await fetchFeedItems(content?.url, {
+      mapItem: newsMapItem, maxItems: content?.maxItems ?? 8,
+    });
+    if (!configured) throw new Error('No feed configured');
+    if (!okCount) throw new Error('Feed unavailable');
+    return items;
+  },
   defaults: () => ({ ...colorOverrideDefaults(),
+    dataMode: 'live',
     url: ['https://www.tagesschau.de/index~rss2.xml'],
     theme: 'editorial-mono',
     textScale: 100,
@@ -34,6 +66,8 @@ export default register({
   }),
   schema: () => ({
     fields: [
+      { key: 'dataMode', type: 'select', label: 'Data source', default: 'live', options: DATAMODE_OPTIONS,
+        help: 'Offline: the Studio fetches the feeds on “Refresh data” and stores them; the display reads that — no live fetch on screen.' },
       { key: 'url', type: 'feed-list', label: 'RSS Feeds' },
       themeField(),
       ...colorOverrideFields(),
@@ -133,48 +167,30 @@ export default register({
       }
     };
 
+    // Offline / provided mode: the Studio pre-fetched + parsed the feeds and the
+    // merged cards live in a data slot, injected here as content._offline.data via
+    // a slot binding (set at publish). The display renders that — no live fetch.
+    const stored = isStored(c);
+
     (async () => {
-      const urls = Array.isArray(c.url) ? c.url.filter(Boolean)
-                 : (typeof c.url === 'string' && c.url) ? [c.url]
-                 : [];
-      if (!urls.length) { grid.innerHTML = '<div class="bb-news-loading">No feed configured</div>'; return; }
-      const responses = await Promise.allSettled(
-        urls.map(u => fetch(u, { signal: ctrl.signal }).then(r => r.text()))
-      );
-      if (ctrl.signal.aborted) return;
-      const merged = [];
-      let okCount = 0;
-      for (const resp of responses) {
-        if (resp.status !== 'fulfilled') continue;
-        try {
-          const doc = new DOMParser().parseFromString(resp.value, 'application/xml');
-          const items = Array.from(doc.querySelectorAll('item, entry'));
-          if (!items.length) continue;
-          okCount++;
-          for (const it of items) {
-            const dateStr = it.querySelector('pubDate, published, updated')?.textContent;
-            const date = dateStr ? new Date(dateStr) : null;
-            const img = it.getElementsByTagName('media:thumbnail')[0]?.getAttribute('url')
-                     || it.getElementsByTagName('media:content')[0]?.getAttribute('url')
-                     || it.querySelector('enclosure[type^="image"]')?.getAttribute('url')
-                     || (it.querySelector('description')?.textContent ?? '').match(/<img[^>]+src="([^"]+)"/)?.[1]
-                     || '';
-            merged.push({
-              title: it.querySelector('title')?.textContent ?? '',
-              desc: (it.querySelector('description, summary')?.textContent ?? '')
-                .replace(/<[^>]*>/g, '').slice(0, 200),
-              img,
-              date: date && !isNaN(date) ? date.getTime() : 0,
-            });
-          }
-        } catch { /* malformed feed, skip */ }
-      }
-      if (!okCount) {
-        if (!ctx?.onError?.()) grid.innerHTML = '<div class="bb-news-error">Feed unavailable</div>';
+      if (stored) {
+        const offlineItems = c._offline?.data;
+        if (offlineItems === undefined) {
+          grid.innerHTML = '<div class="bb-news-loading">Provided offline — appears after “Refresh data”.</div>';
+          return;
+        }
+        allItems = (Array.isArray(offlineItems) ? offlineItems : []).slice(0, c.maxItems ?? 8);
+        if (!allItems.length) { grid.innerHTML = '<div class="bb-news-loading">Feed empty</div>'; return; }
+        layout();
         return;
       }
-      merged.sort((a, b) => b.date - a.date);
-      allItems = merged.slice(0, c.maxItems ?? 8);
+      const { items, okCount, configured } = await fetchFeedItems(c.url, {
+        signal: ctrl.signal, mapItem: newsMapItem, maxItems: c.maxItems ?? 8,
+      });
+      if (ctrl.signal.aborted) return;
+      if (!configured) { grid.innerHTML = '<div class="bb-news-loading">No feed configured</div>'; return; }
+      if (!okCount) { if (!ctx?.onError?.()) grid.innerHTML = '<div class="bb-news-error">Feed unavailable</div>'; return; }
+      allItems = items;
       layout();
     })();
 

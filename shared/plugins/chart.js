@@ -3,6 +3,7 @@ import { themeField } from '../data/themes.js';
 import { colorOverrideDefaults, colorOverrideFields, applyColorOverrides } from '../widget-color.js';
 import { composeDispose } from '../plugin-contract.js';
 import { liveSource } from '../live-source.js';
+import { offlineLiveOpts, SOURCE_OPTIONS } from '../offline-data.js';
 import { escapeHtml } from '../utils/escape.js';
 
 // Tiny pure-canvas charts (line, bar, pie). No external lib, keeps dispose simple.
@@ -281,12 +282,13 @@ export default register({
     fields: [
       { type: 'section', label: 'Data' },
       { key: 'kind', type: 'select', label: 'Chart type', options: ['line','bar','pie'] },
-      { key: 'source', type: 'select', label: 'Data source', options: ['inline','url'] },
+      { key: 'source', type: 'select', label: 'Data source', options: SOURCE_OPTIONS,
+        help: 'Offline: the Studio fetches the JSON URL on “Refresh data” and stores it; the display reads that — no live call on screen.' },
       { key: 'data', type: 'table', label: 'Data points',
         showIf: c => (c.source ?? 'inline') === 'inline',
         columns: [{ key: 'label', label: 'Label' }, { key: 'value', label: 'Value', type: 'number' }] },
       { key: 'dataUrl', type: 'url', label: 'Remote JSON URL', test: 'json',
-        showIf: c => c.source === 'url' },
+        showIf: c => c.source === 'url' || c.source === 'stored' },
 
       { type: 'section', label: 'Axes & labels', showIf: c => (c.kind ?? 'bar') !== 'pie' },
       { type: 'row', children: [
@@ -383,10 +385,14 @@ export default register({
     // Inline data draws immediately; a remote source fetches once via the shared
     // live-source seam. A load failure surfaces instead of a silently empty
     // canvas, an unreachable URL would otherwise look identical to "no data".
-    if (c.source === 'url' && c.dataUrl) {
+    const stored = c.source === 'stored';
+    if (stored || (c.source === 'url' && c.dataUrl)) {
+      // Offline with nothing provisioned yet → draw the empty-state hint.
+      if (stored && c._offline?.data === undefined) { draw([]); return composeDispose(() => root.remove()); }
       const stop = liveSource({
         url: c.dataUrl,
         signal: ctx?.signal,
+        ...offlineLiveOpts(c),
         onData: (data) => draw(data),
         onError: (e) => {
           if (ctx?.onError?.()) return;
