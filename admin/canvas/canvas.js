@@ -8,6 +8,9 @@ import { state, commit, subscribe } from '../store.js';
 import { get as getPlugin } from '../../shared/plugins/registry.js';
 import { createWidget, resolveCanvas } from '../../shared/slide-schema.js';
 import { mountWidget } from '../../shared/widget-host.js';
+import { isStored, offlineSlugFor } from '../../shared/offline-data.js';
+import { getOfflinePreview, setOfflinePreview } from '../offline-preview.js';
+import { slots } from '../api.js';
 import { applyDesign } from '../../shared/designs.js';
 import { applyBackground, applySlideBackground, applySlideContrast, isPainted } from '../../shared/background.js';
 import { playBuildOnce, applyLoop, clearLoop, isLoop } from '../../shared/animations.js';
@@ -335,9 +338,23 @@ function buildFrame(slide, widget) {
   // instead of fetching, until the user opts its preview in for this session —
   // that fetch would transmit the device IP to a third-party API. The player is
   // unaffected (it uses its own mount path), so displays always render live.
-  const dispose = (plugin?.network && !_livePreviewIds.has(widget.id))
-    ? mountPrivacyPlaceholder(content, widget, plugin)
-    : mountWidget(widget, slide, content, { mode: 'preview', t: k => k });
+  //
+  // "Provided offline" widgets are the exception: their render reads pre-fetched
+  // data from content._offline and never calls the network, so the privacy
+  // placeholder doesn't apply. The editor has no slot poller (the player injects
+  // _offline itself), so we inject the previewed payload here — from the cache the
+  // "Refresh data" action fills, or lazily from the slot on first mount.
+  let dispose;
+  if (isStored(widget.content)) {
+    const preview = getOfflinePreview(widget.id);
+    const w = preview ? { ...widget, content: { ...widget.content, _offline: preview } } : widget;
+    dispose = mountWidget(w, slide, content, { mode: 'preview', t: k => k });
+    if (!preview) loadOfflinePreview(widget.id);
+  } else if (plugin?.network && !_livePreviewIds.has(widget.id)) {
+    dispose = mountPrivacyPlaceholder(content, widget, plugin);
+  } else {
+    dispose = mountWidget(widget, slide, content, { mode: 'preview', t: k => k });
+  }
 
   const teardown = makeInteractive(frameEl, {
     getStageRect: () => stage.getBoundingClientRect(),
@@ -357,6 +374,22 @@ function buildFrame(slide, widget) {
   });
 
   frames.set(widget.id, { frameEl, dispose: () => { teardown(); dispose(); } });
+}
+
+// Lazily read a stored widget's data slot once (so a reload previews the last
+// provisioned data, not just after a fresh "Refresh data"). On success, cache it
+// and re-render just that frame. Reads the user's OWN agentView slot — no
+// third-party fetch, so it's exempt from the live-preview privacy gate.
+async function loadOfflinePreview(id) {
+  const widget = activeSlide()?.widgets.find(w => w.id === id);
+  if (!widget || !isStored(widget.content) || getOfflinePreview(id)) return;
+  try {
+    const val = await slots.getValue(offlineSlugFor(widget));
+    if (val && val.data !== undefined && !getOfflinePreview(id) && frames.has(id)) {
+      setOfflinePreview(id, { data: val.data, fetchedAt: val.fetchedAt });
+      refreshWidget(id);
+    }
+  } catch { /* no slot provisioned yet — the placeholder stays */ }
 }
 
 export function refreshWidget(id) {

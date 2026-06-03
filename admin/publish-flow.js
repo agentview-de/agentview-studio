@@ -16,6 +16,7 @@ import { toast } from './ui/toast.js';
 import { t } from './i18n.js';
 import { collectUniqueSlots } from '../shared/binding-resolver.js';
 import { offlineSlugFor, withOfflineBindings, offlineWidgets } from '../shared/offline-data.js';
+import { setOfflinePreview } from './offline-preview.js';
 import { get as getPlugin } from '../shared/plugins/registry.js';
 import { buildSyncAnchor } from '../shared/sync-clock.js';
 import { isEditingVariant, exitVariantEdit } from './canvas/variant-ctx.js';
@@ -44,11 +45,15 @@ async function refreshWidgetData(w) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     data = await res.json();
   }
+  const fetchedAt = new Date().toISOString();
   await slots.put(
     offlineSlugFor(w),
-    { data, fetchedAt: new Date().toISOString() },
+    { data, fetchedAt },
     { label: `${w.content?.title || w.type || 'Offline data'} · ${offlineSlugFor(w)}` },
   );
+  // Let the editor canvas preview the same payload the display will get (the
+  // editor has no slot poller). Preview-only — never persisted into the playlist.
+  setOfflinePreview(w.id, { data, fetchedAt });
 }
 
 // Refresh ALL "provided offline" widgets in the CURRENT playlist in one action —
@@ -71,6 +76,9 @@ export async function refreshAllOfflineData() {
       : (t('offline.refreshOk', { n: ok }) ?? `${ok} data source(s) refreshed.`),
     { kind: fail ? 'warn' : 'success' },
   );
+  // Re-render the active slide so stored widgets pick up the freshly-previewed data
+  // (lazy import avoids any canvas<->publish-flow module cycle; no-op if no canvas).
+  try { const { renderSlide } = await import('./canvas/canvas.js'); renderSlide(); } catch { /* canvas not mounted */ }
   return { ok, fail, total: results.length };
 }
 
