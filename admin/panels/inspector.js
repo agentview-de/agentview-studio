@@ -552,7 +552,10 @@ export function renderWidgetInspector(host) {
   // Data-protection note (DSGVO): any network widget transmits the rendering
   // device's IP to a third party when it loads its live data. Surface it on
   // every network widget — not only the ones carrying a licensing tier.
-  if (plugin?.network) {
+  // Exception: a widget in "provided offline" mode makes NO network call in the
+  // editor (it reads pre-fetched data from its slot), so the IP note and the
+  // live-preview toggle don't apply — the Studio, not the display, did the fetch.
+  if (plugin?.network && !isStored(widget.content)) {
     const provider = usage?.attribution || t('privacy.providerGeneric');
     const ipNote = document.createElement('div');
     ipNote.className = 'avs-inspector-usage avs-inspector-ipnote';
