@@ -18,6 +18,12 @@ describe('module-graph · transformModule (supported forms)', () => {
     expect(out).toContain('const { a: c, d } = __require("/x.js");');
   });
 
+  test('default import → const NAME = __require().default', () => {
+    const out = transformModule('m', `import qrcode from "/shared/vendor/qrcode.js";`);
+    expect(out).toContain('const qrcode = __require("/shared/vendor/qrcode.js").default;');
+    expect(out).notToContain('import');
+  });
+
   test('bare side-effect import → __require call', () => {
     const out = transformModule('m', `import "/shared/side.js";`);
     expect(out).toContain('__require("/shared/side.js");');
@@ -68,11 +74,11 @@ describe('module-graph · transformModule (supported forms)', () => {
 });
 
 describe('module-graph · transformModule (unsupported forms fail loudly)', () => {
-  test('default import throws', () => {
-    expect(() => transformModule('p.js', `import x from "/y.js";`)).toThrow(/unsupported module syntax in p\.js/);
-  });
   test('namespace import throws', () => {
     expect(() => transformModule('p.js', `import * as ns from "/y.js";`)).toThrow(/unsupported module syntax/);
+  });
+  test('combined default+named import throws', () => {
+    expect(() => transformModule('p.js', `import x, { a } from "/y.js";`)).toThrow(/unsupported module syntax/);
   });
   test('export class throws', () => {
     expect(() => transformModule('p.js', `export class Foo {}`)).toThrow(/unsupported module syntax/);
