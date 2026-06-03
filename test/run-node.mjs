@@ -33,6 +33,8 @@ const suites = [
   // Publish bundler seams — globals preamble + </script breakout escaping.
   // publish.js imports only shared/module-graph.js (pure) at load time.
   './publish.test.js',
+  // Vendor-inline runtime resolver (DOM-free paths: null fallback + src/data lookup).
+  './inline-vendor.test.js',
   // Reactive store deep-Proxy: identity stability + path notification.
   // store.js touches localStorage/setTimeout only inside functions, not at load.
   './store.test.js',

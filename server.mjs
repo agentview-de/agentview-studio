@@ -100,8 +100,14 @@ async function proxy(req, res, pathAndQuery) {
   res.writeHead(up.status, out);
   if (up.body) {
     // Stream incrementally — crucial for SSE (text/event-stream) endpoints, which
-    // never finish and would hang if buffered.
-    Readable.fromWeb(up.body).pipe(res);
+    // never finish and would hang if buffered. The stream can error LATE (e.g.
+    // undici UND_ERR_BODY_TIMEOUT on a long-lived SSE/large upload), after proxy()
+    // has already resolved — so its 'error' escapes the done() catch. Handle it
+    // here, otherwise an unhandled stream 'error' would crash the whole dev server.
+    const stream = Readable.fromWeb(up.body);
+    stream.on('error', (e) => { try { res.destroy(e); } catch {} });
+    res.on('error', () => { try { stream.destroy(); } catch {} });
+    stream.pipe(res);
   } else {
     res.end();
   }
@@ -158,6 +164,13 @@ function openBrowser(url) {
       : ['xdg-open', [url]];
   try { spawn(cmd, cmdArgs, { stdio: 'ignore', detached: true }).unref(); } catch {}
 }
+
+// Backstop: a dev proxy talking to a remote API will occasionally hit a transient
+// stream/socket error (SSE drop, body timeout, client disconnect mid-upload). None
+// of those should take the whole server down and interrupt an editing session — log
+// and keep serving. Real bugs still surface in the log.
+process.on('unhandledRejection', (e) => console.error('[server] unhandledRejection:', e?.message ?? e));
+process.on('uncaughtException', (e) => console.error('[server] uncaughtException:', e?.message ?? e));
 
 function listenOn(port) {
   return new Promise((resolve, reject) => {

@@ -167,8 +167,14 @@ agentview-studio/              ← this repository (standalone, no build, no npm
 - **Same render in editor and screen.** A `widgetAsSlide()` adapter feeds each widget to
   its plugin, so editor previews and the live player share the exact same code — no drift.
 - **Publish-bundler instead of a build step.** Locally the player is clean ES modules. At
-  publish time `admin/publish.js` walks the import graph and emits one self-contained HTML
-  string — agentView's CDN host receives a file that needs nothing else.
+  publish time `admin/publish.js` walks the import graph and emits one HTML string with all
+  app + vendor JS (marked / pdf.js / Prism) and CSS inlined. Self-hosted fonts are uploaded
+  once as agentView assets (sha256-deduped) and referenced by URL — relative `/fonts` paths
+  404 on the content host. Vendored libs that widgets lazy-load at render time (the pdf.js
+  worker, hls.js, Leaflet) are inlined as source and turned into `blob:`/`data:` URLs at
+  runtime — but only for the widget types a given playlist actually uses, so a text-only
+  player ships none of them. Net result: the content host serves a page whose every
+  dependency it can actually reach.
 - **Memory-safe player.** Every plugin returns a `dispose()`; the player calls it before
   each transition, and a scheduled 6-hour hard reload keeps long-running screens honest.
 
@@ -237,7 +243,8 @@ card showing online state and the slideshow it's currently running. Pick a targe
 - **Multiple** — tick a hand-picked set of screens.
 
 Either path uploads your playlist JSON to a data slot, bundles the player into one
-self-contained HTML string, and ships it. Screens refresh within seconds.
+HTML string (with runtime binaries uploaded as assets), and ships it. Screens refresh
+within seconds.
 
 ### Watch what a screen sees
 

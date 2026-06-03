@@ -6,22 +6,47 @@
 // live in shared/vendor/leaflet/images/ and we point Leaflet's default icon path
 // at them so markers render without reaching out to a CDN.
 
+import { inlinedVendorUrl, inlinedVendorSrc } from './inline-vendor.js';
+
 let _leafletPromise = null;
 
+// In a published player the vendored leaflet/* siblings 404 on the content host and
+// the asset store rejects .js, so the bundler inlines leaflet.js (blob: script),
+// leaflet.css (inline <style>, its image url()s pre-rewritten to data:) and the
+// marker PNGs (data:). The dev shell has no BB_VENDOR and falls back to the
+// vendored files via import.meta.url.
 export function loadLeaflet() {
   if (window.L) return Promise.resolve(window.L);
   if (_leafletPromise) return _leafletPromise;
   _leafletPromise = new Promise((res, rej) => {
     const base = new URL('./vendor/leaflet/', import.meta.url);
-    const css = document.createElement('link');
-    css.rel = 'stylesheet';
-    css.href = new URL('leaflet.css', base).href;
-    document.head.appendChild(css);
+
+    const cssSrc = inlinedVendorSrc('leaflet/leaflet.css');
+    if (cssSrc) {
+      const st = document.createElement('style');
+      st.textContent = cssSrc;
+      document.head.appendChild(st);
+    } else {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = new URL('leaflet.css', base).href;
+      document.head.appendChild(css);
+    }
+
     const s = document.createElement('script');
-    s.src = new URL('leaflet.js', base).href;
+    s.src = inlinedVendorUrl('leaflet/leaflet.js') || new URL('leaflet.js', base).href;
     s.onload = () => {
-      // Marker/layer icons are self-hosted next to the CSS; tell Leaflet where.
-      if (window.L?.Icon?.Default) window.L.Icon.Default.imagePath = new URL('images/', base).href;
+      const icon = inlinedVendorUrl('leaflet/images/marker-icon.png');
+      if (icon && window.L?.Icon?.Default) {
+        // Inlined: give Leaflet explicit data: URLs (no images/ directory to point at).
+        window.L.Icon.Default.mergeOptions({
+          iconUrl: icon,
+          iconRetinaUrl: inlinedVendorUrl('leaflet/images/marker-icon-2x.png') || icon,
+          shadowUrl: inlinedVendorUrl('leaflet/images/marker-shadow.png') || '',
+        });
+      } else if (window.L?.Icon?.Default) {
+        window.L.Icon.Default.imagePath = new URL('images/', base).href;
+      }
       res(window.L);
     };
     s.onerror = rej;

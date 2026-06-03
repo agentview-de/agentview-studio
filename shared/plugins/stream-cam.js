@@ -2,16 +2,20 @@ import { register } from './registry.js';
 import { mediaFitField, objectFitValue } from '../media-fit.js';
 import { composeDispose } from '../plugin-contract.js';
 import { isSafeImgUrl } from '../safe-url.js';
+import { inlinedVendorUrl } from '../inline-vendor.js';
 
 // HLS via hls.js, self-hosted (vendored under shared/vendor/), lazy-loaded the
-// first time a stream widget renders. No third-party CDN call (DSGVO/GDPR).
+// first time a stream widget renders. No third-party CDN call (DSGVO/GDPR). In a
+// published player the relative vendor path 404s on the content host, so the
+// bundler inlines hls.min.js (see shared/inline-vendor.js) and we load it from a
+// blob: URL (`script-src blob:` is allowed); dev falls back to import.meta.url.
 let _hlsPromise = null;
 function loadHls() {
   if (window.Hls) return Promise.resolve(window.Hls);
   if (_hlsPromise) return _hlsPromise;
   _hlsPromise = new Promise((res, rej) => {
     const s = document.createElement('script');
-    s.src = new URL('../vendor/hls.min.js', import.meta.url).href;
+    s.src = inlinedVendorUrl('hls.min.js') || new URL('../vendor/hls.min.js', import.meta.url).href;
     s.onload = () => res(window.Hls);
     s.onerror = rej;
     document.head.appendChild(s);
