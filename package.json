@@ -5,7 +5,14 @@
   "type": "module",
   "private": true,
   "license": "MIT",
-  "homepage": "https://github.com/agentview/agentview-studio",
+  "homepage": "https://github.com/agentview-de/agentview-studio#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agentview-de/agentview-studio.git"
+  },
+  "bugs": {
+    "url": "https://github.com/agentview-de/agentview-studio/issues"
+  },
   "scripts": {
     "test": "node test/run-node.mjs",
     "test:browser": "node test/run-browser.mjs",
