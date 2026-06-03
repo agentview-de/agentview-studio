@@ -135,7 +135,7 @@ agentview-studio/              ← this repository (standalone, no build, no npm
 ├── shared/                    imported by BOTH admin + player — single source of truth
 │   ├── plugin-contract.js     { type, label, group, icon, defaults, schema, render } + helpers
 │   ├── plugins/               ONE file per widget type (33) + registry + all.js barrel
-│   ├── slide-schema.js        schema v2: Playlist / Slide / Widget + v1→v2 migration
+│   ├── slide-schema.js        schema v3: Playlist / Slide / Widget + per-widget content migration
 │   ├── designs.js             the 6 designs, as widget generators
 │   ├── animations.js          transition · build · loop catalogs + apply helpers
 │   ├── scheduler-core.js      isSlideVisible(slide, now)
