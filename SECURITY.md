@@ -67,9 +67,10 @@ stay anonymous.
   RSS feeds). These are documented in
   [`docs/datenquellen.md`](docs/datenquellen.md); a provider changing or removing
   an endpoint is a normal breaking change, not a security bug.
-- The fact that `server.mjs` attaches permissive CORS headers and proxies to
-  `agentview.de`. It is a **local development convenience**, intended for
-  `localhost` only — do not expose it on a public interface.
+- The fact that `server.mjs` proxies API calls to `agentview.de` so the app can
+  talk to it same-origin. It is a **local development convenience**, intended for
+  `localhost` only (it binds to localhost and rejects foreign `Host` headers) —
+  do not expose it on a public interface.
 - Rate-limiting or abuse-protection of the agentView platform. That is the
   platform's responsibility — report it against the platform.
 
@@ -80,7 +81,8 @@ session token) you connect with is held in the browser's `localStorage`
 (`avs_conn`). This is convenient (no server round-trip) but means **a successful
 script-injection bug in the app could read that credential**. We mitigate by
 routing all untrusted content through the escaping/sanitising helpers above and
-by pinning every CDN dependency with Subresource Integrity. For commercial
+by **self-hosting (vendoring) every third-party library under `shared/vendor/`**,
+so the app loads no code from a CDN at runtime. For commercial
 deployments, prefer connecting with a **short-lived session token** (via the
 login flow) over a long-lived API key where possible.
 

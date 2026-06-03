@@ -27,8 +27,9 @@ No install step. Serve the folder with any static server and open it:
 npx -y http-server ./ -p 8080   # any OS; without a proxy you need the API to allow your origin's CORS
 ```
 
-Or use the bundled dev server, which also proxies `/api`, `/data` and the SSE
-stream to `agentview.de` same-origin (any OS, Node 20+):
+Or use the bundled dev server, which also proxies the agentView API
+(`/api`, `/data`, `/send`, `/oauth`, `/.well-known`) — including its SSE event
+stream — to `agentview.de` same-origin (any OS, Node 20+):
 
 ```bash
 node server.mjs    # picks a free port, opens the browser; --help for options
@@ -51,9 +52,9 @@ The **app** needs no npm. There are two ways to run the suites:
   Exit code `0` = pass, `1` = fail.
 
 - **Full (source of truth):** open [`test/index.html`](test/index.html) in a
-  browser. The DOM-dependent suites (HTML escaping/sanitising, plugin/schema
-  round-trips, the publish-bundler escaping, the reactive store) run here too.
-  The canvas z-order/hit-testing integration suite has its own page,
+  browser. It runs every suite — including the DOM-only ones the Node runner
+  skips (HTML escaping/sanitising and the plugin/schema round-trips). The canvas
+  z-order/hit-testing integration suite has its own page,
   [`test/canvas-zorder.test.html`](test/canvas-zorder.test.html), because it
   needs the real editor stylesheet.
 
@@ -96,8 +97,9 @@ under `shared/vendor/` are never linted.
   **self-hosted (vendored) under `shared/vendor/`** and loaded from there
   (eagerly, or lazily at the point of use). **Do not add CDN-loaded
   dependencies:** a third-party CDN call leaks viewer/display IP addresses and
-  breaks the project's DSGVO/GDPR posture. Vendor any new library locally, ship
-  its license under `shared/vendor/LICENSES/`, and record it in
+  breaks the project's DSGVO/GDPR posture. Vendor any new library locally, keep
+  its license with it — a file under `shared/vendor/LICENSES/`, or the original
+  header retained in a single-file lib (as `qrcode.js` does) — and record it in
   [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
 - **Escape everything untrusted.** Reuse the existing helpers — do not reinvent:
   - `escapeHtml` / `escapeAttr` from `shared/utils/escape.js`
@@ -105,9 +107,12 @@ under `shared/vendor/` are never linted.
   - `isSafeImgUrl` / `cssUrl` from `shared/safe-url.js` for URLs
 - **Match the surrounding style.** Same indentation, comment density, and naming
   as the file you are editing. Comments explain *why*, not *what*.
-- **Mind the vocabulary.** Some product terms are intentional brand language and
-  stay German in every locale (Verwaltung, Veröffentlichen, Einpassen, Vollbild,
-  Folie). Any *other* stray German UI string is a localisation bug.
+- **Mind the vocabulary.** The admin console is branded **Verwaltung** and keeps
+  that name in every locale (see `cg.adminTitle` in
+  [`admin/locales/en.js`](admin/locales/en.js)). Everything else is fully
+  localised — e.g. *Veröffentlichen → Publish*, *Folie → Slide*, *Einpassen →
+  Fit*, *Vollbild → Fullscreen* — so a stray German string left untranslated in
+  the English locale is a localisation bug.
 
 ## Adding a widget Plugin
 
