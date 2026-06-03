@@ -19,14 +19,16 @@
 // (see the guard at the end of transformModule) rather than shipped as a player
 // that can't boot:
 //   import { a, b as c } from '…'      named import          → const { a, b: c } = __require('…')
+//   import x from '…'                   default import        → const x = __require('…').default
 //   import '…'                          side-effect import    → __require('…')
 //   export default EXPR                 default export        → exports.default = EXPR
 //   export [async] function NAME        named fn export       → fn + exports.NAME = NAME
 //   export function* NAME               generator export      → "
 //   export const|let|var NAME           named binding export  → decl + exports.NAME = NAME
 //   export {}                           bare module marker     → dropped
-// NOT supported (guard throws): default imports (`import x from`), namespace
-// imports (`import * as`), `export class`, and re-exports (`export … from`).
+// NOT supported (guard throws): namespace imports (`import * as`), combined
+// default+named (`import x, { … }`), `export class`, and re-exports
+// (`export … from`).
 // parseImports() additionally recognises re-exports and dynamic import() for
 // GRAPH purposes — finding an edge is always safe; only transformModule is
 // restricted.
@@ -105,6 +107,12 @@ export function transformModule(path, code) {
         }).join(', ');
         return `${ws}const { ${binds} } = __require(${JSON.stringify(spec)});`;
       })
+    // `import NAME from "abs"` (default) → `const NAME = __require("abs").default`
+    // Disjoint from the named/bare rules above: the identifier after `import`
+    // can't be `{`, `*` or a quote, so namespace/combined forms still fall
+    // through to the guard. Mirrors `export default EXPR → exports.default`.
+    .replace(/^([ \t]*)import[ \t]+([A-Za-z0-9_$]+)[ \t]+from[ \t]*["']([^"']+)["'][ \t]*;?/gm,
+      (_m, ws, name, spec) => `${ws}const ${name} = __require(${JSON.stringify(spec)}).default;`)
     // bare `import "abs"` (side-effect) → `__require("abs")`
     .replace(/^([ \t]*)import[ \t]*["']([^"']+)["'][ \t]*;?/gm,
       (_m, ws, spec) => `${ws}__require(${JSON.stringify(spec)});`);
