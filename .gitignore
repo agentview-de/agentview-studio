@@ -1,0 +1,57 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python (occasional helper scripts)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node (template tooling, screenshot pipelines)
+node_modules/
+
+# .NET build output (applications/)
+bin/
+obj/
+dist/
+*.user
+*.suo
+.vs/
+.vscode/
+.idea/
+
+# NuGet
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+
+# Test results / coverage
+TestResults/
+coverage.*
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Claude Code / agent tooling state
+.claude/
+.claude/launch.json
+.claude/settings.local.json
+
+# Local Chrome profile used for manual testing — contains a password
+# dictionary and other user state; must never be committed.
+.chrome-profile/
+
+# Internal agentView coordination notes — kept locally for the maintainer, but
+# never published in the public OSS showcase (internal API gaps, bug reports,
+# backend-team requests; may contain account identifiers).
+/docs/agentview-api-requests.md
+/docs/agentview-api-open-requests.md
+/docs/agentview-bug-report-*.md
+/docs/release-checklist.md

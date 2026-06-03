@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/png" href="logo.png" />
+  <title>agentView Studio · Player</title>
+
+  <!-- Self-hosted fonts (no Google Fonts CDN — DSGVO/GDPR). -->
+  <link rel="stylesheet" href="styles/fonts.css" />
+
+  <!-- Runtime libs — self-hosted (vendored, see shared/vendor/) so the player makes no third-party CDN
+       call: display/viewer IPs stay out of CDN logs (DSGVO/GDPR). License texts in shared/vendor/LICENSES/. -->
+  <script src="shared/vendor/marked.min.js"></script>
+  <script src="shared/vendor/pdf.min.js"></script>
+  <script src="shared/vendor/prism.min.js"></script>
+  <link rel="stylesheet" href="shared/vendor/prism-tomorrow.min.css" />
+
+  <link rel="stylesheet" href="styles/slide-themes.css" />
+
+  <style>
+    html, body { width: 100%; height: 100%; margin: 0; background:#000; color:#fff; font-family: Inter, system-ui, sans-serif; overflow:hidden; }
+    /* #bb-stage fills the viewport and centres the frame; #bb-frame carries the
+       canvas fit mode (fill / cover / contain), sized by the runtime. */
+    #bb-stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    #bb-frame { position: relative; width: 100%; height: 100%; }
+    .bb-slide-host { position: absolute; inset: 0; }
+    .bb-missing { color:#f55; padding: 24px; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <div id="bb-stage"><div id="bb-frame"></div></div>
+  <script type="module" src="./player/runtime.js"></script>
+</body>
+</html>

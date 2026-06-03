@@ -1,0 +1,44 @@
+* text=auto eol=lf
+
+# Force LF on text content (Linux line endings in the repo regardless
+# of the contributor's OS — Windows tools, including Visual Studio and
+# the dotnet SDK, handle LF cleanly).
+*.md         text eol=lf
+*.html       text eol=lf
+*.css        text eol=lf
+*.js         text eol=lf
+*.json       text eol=lf
+*.py         text eol=lf
+*.sh         text eol=lf
+*.yml        text eol=lf
+*.yaml       text eol=lf
+*.txt        text eol=lf
+*.gitignore  text eol=lf
+
+# .NET sources
+*.cs         text eol=lf diff=csharp
+*.csproj     text eol=lf
+*.sln        text eol=lf
+*.xaml       text eol=lf
+*.manifest   text eol=lf
+*.ps1        text eol=lf
+*.psm1       text eol=lf
+
+# Windows batch launchers must stay CRLF — cmd.exe can mishandle LF-only
+# line endings in multi-line blocks.
+*.cmd        text eol=crlf
+*.bat        text eol=crlf
+
+# Binary assets — never line-ending-fixed
+*.png        binary
+*.jpg        binary
+*.jpeg       binary
+*.gif        binary
+*.webp       binary
+*.ico        binary
+*.woff       binary
+*.woff2      binary
+*.ttf        binary
+*.otf        binary
+*.pdf        binary
+*.zip        binary

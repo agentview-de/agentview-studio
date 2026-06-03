@@ -1,0 +1,987 @@
+/* agentView Studio — v2 shell. Apple-restrained: neutral surfaces, generous
+   whitespace, chrome-only glass, ONE accent. Reuses --bb-* tokens so light/dark
+   keep working. Layers on top of components.css (bb-* widgets reused as-is). */
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bb-bg-0);
+  color: var(--bb-ink);
+  font-family: var(--bb-font);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+#app { display: flex; flex-direction: column; height: 100vh; }
+button { font-family: inherit; }
+
+/* Restraint: flatten the brand gradient to a single calm accent. */
+.bb-btn-primary {
+  background: var(--bb-accent) !important;
+  color: #fff !important;
+  border: none !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,.25) !important;
+}
+.bb-btn-primary:hover { filter: brightness(1.08); }
+
+.avs-iconbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 32px; height: 32px; padding: 0 8px;
+  background: transparent; color: var(--bb-ink-muted);
+  border: 1px solid transparent; border-radius: var(--bb-r-sm);
+  cursor: pointer; font-size: 14px; transition: var(--bb-trans-fast);
+}
+.avs-iconbtn:hover { background: color-mix(in srgb, var(--bb-ink) 8%, transparent); color: var(--bb-ink); }
+/* The agentView logo doubles as the link to the agentView web dashboard
+   (opens in a new tab) — keeps the action row uncluttered. The ↗ hints at the
+   external jump on hover/focus without taking permanent space. */
+.avs-brandlink { display: inline-flex; align-items: center; text-decoration: none; }
+.avs-brandlink::after {
+  content: "↗"; margin-left: 2px; font-size: 11px; line-height: 1;
+  color: var(--bb-ink-muted); opacity: 0; transition: var(--bb-trans-fast);
+}
+.avs-brandlink:hover::after, .avs-brandlink:focus-visible::after { opacity: .7; }
+.avs-brandlink:focus-visible { outline: 2px solid var(--bb-accent); outline-offset: 2px; border-radius: var(--bb-r-sm); }
+
+/* Dashboard link inside the connected-account modal (under the email/plan). */
+.avs-account-dash {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 12px;
+  padding: 6px 12px; border: 1px solid var(--bb-border); border-radius: var(--bb-r-sm);
+  color: var(--bb-ink); text-decoration: none; font-size: 13px; font-weight: 500;
+  transition: var(--bb-trans-fast);
+}
+.avs-account-dash:hover { background: var(--bb-bg-3); }
+
+/* Data-minimising live-preview placeholder (DSGVO) — shown on the editor canvas
+   for network widgets until the user explicitly loads the preview, so building
+   slides doesn't transmit the device IP to third-party APIs.
+   Sizing uses container-query units (cqmin) so the text scales WITH the widget
+   box — the canvas is zoom-scaled and widgets render at slide resolution, so
+   fixed px would be illegibly small. The content layer is pointer-events:none,
+   so only the button re-enables pointer events (see .avs-lpp-btn). */
+.avs-live-preview-ph {
+  position: absolute; inset: 0; box-sizing: border-box;
+  container-type: size;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: clamp(4px, 2cqmin, 16px); padding: clamp(6px, 4cqmin, 30px);
+  text-align: center; overflow: hidden;
+  background: color-mix(in srgb, var(--bb-ink) 4%, transparent);
+  border: 1px dashed var(--bb-border-strong, var(--bb-border));
+  border-radius: var(--bb-r-md); color: var(--bb-ink-muted);
+}
+.avs-lpp-icon  { font-size: clamp(20px, 16cqmin, 96px); line-height: 1; opacity: .8; }
+.avs-lpp-title { font-size: clamp(13px, 6cqmin, 36px); font-weight: 600; line-height: 1.2; color: var(--bb-ink); }
+.avs-lpp-body  { font-size: clamp(11px, 4cqmin, 24px); line-height: 1.4; max-width: 94%; color: var(--bb-ink-faint); }
+.avs-lpp-btn   {
+  pointer-events: auto; cursor: pointer; margin-top: clamp(2px, 1.5cqmin, 12px);
+  font-size: clamp(12px, 5cqmin, 26px);
+  padding: clamp(4px, 2cqmin, 14px) clamp(8px, 4cqmin, 26px);
+}
+/* Drop detail on small widgets so nothing overflows / overlaps. */
+@container (max-height: 120px) { .avs-lpp-icon { display: none; } }
+@container (max-height: 76px)  { .avs-lpp-body { display: none; } }
+@container (max-width: 150px)  { .avs-lpp-body { display: none; } }
+.avs-chip {
+  padding: 3px 9px; border-radius: 999px; font-size: 12px; cursor: pointer;
+  background: color-mix(in srgb, var(--bb-ink) 8%, transparent);
+  color: var(--bb-ink-muted); border: 1px solid var(--bb-border);
+}
+.avs-chip-accent { background: color-mix(in srgb, var(--bb-accent) 18%, transparent); color: var(--bb-ink); border-color: transparent; }
+
+/* ---------- Topbar (glass chrome) ---------- */
+.avs-topbar {
+  display: flex; align-items: center; gap: 16px;
+  height: 54px; padding: 0 16px; flex: 0 0 auto;
+  background: var(--bb-glass-bg);
+  backdrop-filter: blur(var(--bb-glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--bb-glass-blur)) saturate(1.4);
+  border-bottom: 1px solid var(--bb-glass-border);
+  z-index: 50;
+}
+.avs-brand { display: flex; align-items: center; gap: 9px; }
+.avs-logo-img { height: 28px; width: auto; display: block; }
+.avs-logo { font-weight: 800; letter-spacing: -.02em; font-size: 17px; }
+.avs-brand-tag { font-size: 14px; font-weight: 600; letter-spacing: -.01em; color: var(--bb-ink); }
+
+.avs-viewswitch {
+  display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px;
+  background: color-mix(in srgb, var(--bb-ink) 7%, transparent);
+  border: 1px solid var(--bb-border);
+}
+.avs-viewswitch button {
+  border: 0; background: transparent; color: var(--bb-ink-muted);
+  padding: 5px 16px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 500;
+  transition: var(--bb-trans-fast);
+}
+.avs-viewswitch button.avs-on { background: var(--bb-bg-3); color: var(--bb-ink); box-shadow: var(--bb-shadow-1); }
+
+.avs-top-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.avs-publish-btn { padding: 7px 16px; border-radius: var(--bb-r-md); font-weight: 600; }
+.avs-savechip { font-size: 11px; color: var(--bb-ink-faint); min-width: 26px; text-align: right; }
+.avs-conn {
+  display: inline-flex; align-items: center; gap: 7px; max-width: 200px;
+  padding: 6px 12px; border-radius: 999px; cursor: pointer; font-size: 12px;
+  background: color-mix(in srgb, var(--bb-ink) 6%, transparent);
+  border: 1px solid var(--bb-border); color: var(--bb-ink-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.avs-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--bb-ink-faint); flex: 0 0 auto; }
+.avs-dot.avs-on { background: var(--bb-success); box-shadow: 0 0 8px var(--bb-success); }
+.avs-dot.avs-off { background: var(--bb-ink-faint); }
+
+/* ---------- Views ---------- */
+.avs-views { flex: 1 1 auto; min-height: 0; position: relative; }
+.avs-view { height: 100%; }
+
+/* ---------- Editor 3-column ---------- */
+.avs-editor { display: grid; grid-template-columns: 252px 1fr 332px; height: 100%; min-height: 0; }
+.avs-col { min-height: 0; height: 100%; overflow: hidden; }
+.avs-col-rail, .avs-col-right {
+  background: var(--bb-glass-bg);
+  backdrop-filter: blur(var(--bb-glass-blur));
+  -webkit-backdrop-filter: blur(var(--bb-glass-blur));
+  display: flex; flex-direction: column;
+}
+.avs-col-rail { border-right: 1px solid var(--bb-glass-border); }
+.avs-col-right { border-left: 1px solid var(--bb-glass-border); }
+
+/* ---------- Slide rail ---------- */
+.avs-rail { display: flex; flex-direction: column; height: 100%; }
+.avs-rail-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 14px 8px; }
+.avs-rail-title { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--bb-ink-faint); font-weight: 600; }
+.avs-rail-list { flex: 1; overflow-y: auto; padding: 6px 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+.avs-slide-card {
+  position: relative; display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start;
+  padding: 8px; border-radius: var(--bb-r-md); cursor: pointer;
+  border: 1px solid transparent; transition: var(--bb-trans-fast);
+}
+.avs-slide-card:hover { background: color-mix(in srgb, var(--bb-ink) 5%, transparent); }
+.avs-slide-card.avs-on { border-color: var(--bb-accent); background: color-mix(in srgb, var(--bb-accent) 10%, transparent); }
+.avs-slide-card.bb-dragging { opacity: .4; }
+.avs-slide-index { font-size: 11px; color: var(--bb-ink-faint); text-align: center; padding-top: 2px; }
+.avs-rail-thumb {
+  grid-column: 2; position: relative; aspect-ratio: 16/9; width: 100%;
+  border-radius: var(--bb-r-sm); overflow: hidden; background: var(--bb-bg-2);
+  box-shadow: var(--bb-shadow-1);
+}
+.avs-thumb-block {
+  position: absolute; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; background: color-mix(in srgb, var(--bb-ink) 10%, transparent);
+  border: .5px solid var(--bb-border); overflow: hidden;
+}
+.avs-slide-meta { grid-column: 2; display: flex; align-items: center; gap: 6px; margin-top: 5px; }
+.avs-slide-name { font-size: 12px; color: var(--bb-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.avs-slide-sched { font-size: 11px; }
+.avs-slide-actions { position: absolute; top: 6px; right: 6px; display: none; gap: 2px; }
+.avs-slide-card:hover .avs-slide-actions { display: flex; }
+
+/* ---------- Canvas ---------- */
+.avs-col-canvas { background: var(--bb-canvas-bg); position: relative; }
+.avs-canvas { display: flex; flex-direction: column; height: 100%; }
+.avs-canvas-toolbar {
+  display: flex; align-items: center; gap: 14px; padding: 8px 14px; flex: 0 0 auto;
+  border-bottom: 1px solid var(--bb-border); background: color-mix(in srgb, var(--bb-bg-1) 60%, transparent);
+}
+.avs-zoom-cluster { display: flex; align-items: center; gap: 4px; }
+.avs-zoom-label { min-width: 52px; text-align: center; background: transparent; border: 1px solid var(--bb-border); color: var(--bb-ink-muted); border-radius: var(--bb-r-sm); padding: 4px 6px; cursor: pointer; font-size: 12px; transition: background var(--bb-trans-fast), border-color var(--bb-trans-fast), color var(--bb-trans-fast); }
+.avs-zoom-label:hover { background: var(--bb-fill-soft); border-color: var(--bb-border-strong); color: var(--bb-ink); }
+.avs-canvas-hint { font-size: 11px; color: var(--bb-ink-faint); }
+.avs-canvas-scroller { flex: 1; position: relative; overflow: hidden; }
+.avs-stage-wrap { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+.avs-stage {
+  position: relative; width: 1600px; height: 900px; background: #000;
+  box-shadow: 0 24px 80px rgba(0,0,0,.5), 0 0 0 1px var(--bb-border-strong);
+  border-radius: 4px; overflow: hidden;
+  /* Own stacking context, so the slide-bg layer (z-index:-9999) and any
+     negative-z widget frame paint ABOVE the stage's own #000 backdrop instead
+     of behind it. Without this the stage isn't a context (position:relative
+     alone), negative-z descendants fall below its background, and back widgets
+     vanish. */
+  isolation: isolate;
+}
+
+/* Slide-settings: canvas size controls */
+.avs-size-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.avs-size-preset {
+  padding: 4px 10px; font-size: 12px; cursor: pointer;
+  background: var(--bb-bg-2); color: var(--bb-ink-muted);
+  border: 1px solid var(--bb-border); border-radius: var(--bb-r-sm);
+}
+.avs-size-preset:hover { color: var(--bb-ink); }
+.avs-size-preset.bb-on { background: color-mix(in srgb, var(--bb-accent) 18%, transparent); border-color: var(--bb-accent); color: var(--bb-ink); }
+.avs-size-fields { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; }
+.avs-size-fields > label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--bb-ink-muted); }
+.avs-size-fields input[type="number"] { width: 84px; }
+.avs-size-fields .avs-size-fit { flex: 1; min-width: 140px; }
+.avs-size-x { align-self: center; padding-bottom: 6px; color: var(--bb-ink-faint); }
+.avs-guides { position: absolute; inset: 0; pointer-events: none; z-index: 9999; }
+.avs-guide { position: absolute; background: var(--bb-accent-2); }
+.avs-guide-v { top: 0; bottom: 0; width: 1px; }
+.avs-guide-h { left: 0; right: 0; height: 1px; }
+
+.avs-widget-frame {
+  position: absolute; outline: 1px solid transparent; cursor: move;
+  transition: outline-color var(--bb-trans-fast);
+}
+.avs-widget-frame:hover { outline-color: color-mix(in srgb, var(--bb-accent) 50%, transparent); }
+.avs-frame-selected { outline: 2px solid var(--bb-accent); z-index: 1000 !important; }
+.avs-widget-content { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.avs-widget-label {
+  position: absolute; top: 0; left: 0; transform: translateY(-100%);
+  font-size: 10px; background: var(--bb-accent); color: #fff; padding: 1px 6px;
+  border-radius: 4px 4px 0 0; white-space: nowrap; opacity: 0; transition: var(--bb-trans-fast); pointer-events: none;
+}
+.avs-widget-frame:hover .avs-widget-label, .avs-frame-selected .avs-widget-label { opacity: 1; }
+
+.avs-handle { position: absolute; width: 11px; height: 11px; background: #fff; border: 1.5px solid var(--bb-accent); border-radius: 2px; display: none; z-index: 1001; }
+.avs-frame-selected .avs-handle { display: block; }
+.avs-handle-nw { top: -6px; left: -6px; cursor: nwse-resize; }
+.avs-handle-n  { top: -6px; left: 50%; margin-left: -6px; cursor: ns-resize; }
+.avs-handle-ne { top: -6px; right: -6px; cursor: nesw-resize; }
+.avs-handle-e  { top: 50%; right: -6px; margin-top: -6px; cursor: ew-resize; }
+.avs-handle-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+.avs-handle-s  { bottom: -6px; left: 50%; margin-left: -6px; cursor: ns-resize; }
+.avs-handle-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+.avs-handle-w  { top: 50%; left: -6px; margin-top: -6px; cursor: ew-resize; }
+
+/* Rotation knob above the top edge (stem drawn with ::before). Shown only while
+   the frame is selected, like the resize handles. Rotates with the frame, so it
+   tracks the widget's current top — the Figma/PowerPoint behaviour. */
+.avs-rotate-handle {
+  position: absolute; top: -28px; left: 50%; margin-left: -7px;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; border: 1.5px solid var(--bb-accent);
+  display: none; z-index: 1001; cursor: grab;
+}
+.avs-rotate-handle::before {
+  content: ''; position: absolute; left: 50%; top: 100%;
+  width: 1.5px; height: 14px; margin-left: -0.75px;
+  background: var(--bb-accent);
+}
+.avs-rotate-handle:active { cursor: grabbing; }
+.avs-frame-selected .avs-rotate-handle { display: block; }
+
+/* ---------- Right panel ---------- */
+.avs-col-right { overflow-y: auto; }
+.avs-right-section { padding: 8px; border-bottom: 1px solid var(--bb-border); }
+.avs-right-swap { flex: 1; min-height: 0; }
+
+/* Slide-settings trigger — compact one-liner that replaces the old always-on
+   strip (~180px). Opens the full settings modal where name / duration /
+   transition / aspect / theme / background / schedule live.
+   The 3-col grid + geo-grid styling stays — both are still used by the
+   slide-settings modal body and by the widget inspector's geometry block. */
+.avs-ss-trigger {
+  display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 2px;
+  width: 100%; padding: 8px 10px;
+  background: var(--bb-bg-2); border: 1px solid var(--bb-border); color: var(--bb-ink);
+  border-radius: var(--bb-r-sm); cursor: pointer;
+  text-align: left; font: inherit;
+  transition: background var(--bb-trans-fast), border-color var(--bb-trans-fast);
+}
+.avs-ss-trigger:hover { background: var(--bb-bg-3); border-color: var(--bb-border-strong); }
+.avs-ss-trigger-icon { grid-row: 1 / span 2; align-self: center; font-size: 16px; }
+.avs-ss-trigger-label { font-size: 12px; font-weight: 600; }
+.avs-ss-trigger-sub {
+  font-size: 11px; color: var(--bb-ink-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.avs-ss-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.avs-ss-grid label, .avs-geo-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--bb-ink-faint); }
+.avs-ss-grid select, .avs-ss-grid input, .avs-geo-grid input {
+  background: var(--bb-bg-2); border: 1px solid var(--bb-border); color: var(--bb-ink);
+  border-radius: var(--bb-r-sm); padding: 6px 8px; font-size: 12px;
+}
+/* Slide-settings modal body — keeps form-groups stacked with reasonable gaps. */
+.avs-slide-modal { display: flex; flex-direction: column; gap: 14px; }
+.avs-slide-modal .avs-ss-grid { gap: 8px; }
+.avs-slide-modal #sm-name { padding: 8px 10px; font-size: 14px; font-weight: 600; }
+.avs-slide-modal #sm-name, .avs-slide-modal #sm-dur {
+  width: 100%; background: var(--bb-bg-2); border: 1px solid var(--bb-border);
+  color: var(--bb-ink); border-radius: var(--bb-r-sm);
+}
+.avs-ss-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.avs-ss-actions .bb-btn { flex: 1; }
+
+.avs-inspector, .avs-library { display: flex; flex-direction: column; height: 100%; }
+.avs-inspector-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--bb-border); }
+.avs-inspector-title { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.avs-inspector-actions { display: flex; gap: 2px; flex: 0 0 auto; }
+/* "← Library" affordance — explicit way out of the per-widget inspector,
+   mirrors the implicit "click empty stage" deselect that's not always
+   discoverable when the widget fills the slide or the canvas is small. */
+.avs-inspector-back {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 26px; padding: 0 8px 0 6px;
+  background: transparent; border: 1px solid transparent; border-radius: var(--bb-r-sm);
+  color: var(--bb-ink-muted); font-size: 12px; line-height: 1;
+  cursor: pointer; flex: 0 0 auto;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.avs-inspector-back:hover { background: color-mix(in srgb, var(--bb-ink) 8%, transparent); color: var(--bb-ink); border-color: var(--bb-border); }
+.avs-inspector-back-arrow { font-size: 14px; line-height: 1; }
+.avs-inspector-back-label { font-weight: 500; }
+.avs-inspector-body { padding: 0 14px 16px; overflow-y: auto; }
+.avs-inspector-empty { padding: 28px 16px; color: var(--bb-ink-faint); font-size: 13px; text-align: center; }
+.avs-geo-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 6px 0 8px; }
+/* Layout preset row — small icon buttons under the X/Y/W/H grid that snap
+   the widget to common slide regions without typing numbers. */
+.avs-geo-presets {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin: 0 0 14px;
+  padding: 6px;
+  background: var(--bb-bg-2); border: 1px solid var(--bb-border);
+  border-radius: var(--bb-r-sm);
+}
+.avs-geo-preset {
+  width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  font: 600 16px/1 inherit;
+  color: var(--bb-ink-muted);
+  background: transparent; border: 1px solid transparent;
+  border-radius: var(--bb-r-sm); cursor: pointer;
+  transition: var(--bb-trans-fast);
+}
+.avs-geo-preset:hover { background: var(--bb-bg-3); color: var(--bb-ink); border-color: var(--bb-border); }
+.avs-inspector-content { border-top: 1px solid var(--bb-border); padding-top: 12px; }
+
+/* ---------- Library ---------- */
+.avs-lib-tabs { display: flex; gap: 2px; padding: 0 12px 10px; flex-wrap: wrap; }
+.avs-lib-tab { border: 0; background: transparent; color: var(--bb-ink-faint); padding: 5px 10px; border-radius: var(--bb-r-sm); cursor: pointer; font-size: 12px; font-weight: 500; transition: background var(--bb-trans-fast), color var(--bb-trans-fast); }
+.avs-lib-tab:not(.avs-on):hover { background: var(--bb-fill-soft); color: var(--bb-ink); }
+.avs-lib-tab.avs-on { background: var(--bb-accent-soft); color: var(--bb-ink); }
+.avs-lib-body { padding: 0 12px 16px; overflow-y: auto; }
+.avs-lib-group-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--bb-ink-faint); margin: 12px 0 6px; }
+.avs-widget-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.avs-widget-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 12px 6px;
+  background: var(--bb-bg-2); border: 1px solid var(--bb-border); border-radius: var(--bb-r-md);
+  color: var(--bb-ink-muted); cursor: pointer; transition: var(--bb-trans-fast);
+}
+/* Single source of truth for the tile hover — the components.css "design pass"
+   block intentionally lifts it -2px + shadow-pop; match that here (this rule
+   wins on load order) so the two files agree instead of mixing -1px with the
+   shadow. Accent border + brightened label signal "pickable". */
+.avs-widget-tile:hover { border-color: var(--bb-accent); color: var(--bb-ink); transform: translateY(-2px); box-shadow: var(--bb-shadow-pop); }
+.avs-widget-tile { cursor: grab; }
+.avs-widget-tile:active { cursor: grabbing; }
+.avs-widget-tile.avs-widget-tile-dragging { opacity: .45; transform: scale(.95); }
+.avs-widget-ic { font-size: 20px; }
+.avs-widget-lab { font-size: 11px; text-align: center; }
+/* Canvas drop-target highlight while a widget tile is being dragged over. */
+.avs-stage.avs-stage-dragover {
+  outline: 2px dashed var(--bb-accent);
+  outline-offset: -4px;
+  background-color: color-mix(in srgb, var(--bb-accent) 6%, transparent);
+}
+.avs-design-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.avs-design-card { display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--bb-bg-2); border: 1px solid var(--bb-border); border-radius: var(--bb-r-md); cursor: pointer; }
+.avs-design-card:hover { border-color: var(--bb-accent); }
+.avs-design-card.bb-sel { border-color: var(--bb-accent); background: color-mix(in srgb, var(--bb-accent) 12%, var(--bb-bg-2)); }
+.avs-design-thumb { position: relative; aspect-ratio: 16/9; background: var(--bb-bg-0); border-radius: var(--bb-r-sm); overflow: hidden; }
+.avs-design-thumb span { position: absolute; background: color-mix(in srgb, var(--bb-accent) 35%, transparent); border: .5px solid var(--bb-bg-2); }
+.avs-design-label { font-size: 11px; color: var(--bb-ink-muted); text-align: center; }
+
+/* ---------- Displays dashboard ---------- */
+.avs-displays { height: 100%; overflow-y: auto; padding: 22px 26px 40px; }
+.avs-disp-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.avs-disp-title { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+.avs-disp-tools { display: flex; gap: 8px; }
+.avs-group { margin-bottom: 26px; }
+.avs-group-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.avs-group-name { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; }
+.avs-group-chip { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, var(--bb-accent) 16%, transparent); color: var(--bb-ink-muted); }
+.avs-group-count { font-size: 12px; color: var(--bb-ink-faint); background: var(--bb-bg-2); border-radius: 999px; padding: 1px 8px; }
+.avs-group-actions { display: flex; align-items: center; gap: 6px; }
+.avs-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(252px, 1fr)); gap: 14px; }
+.avs-display-card {
+  background: var(--bb-glass-bg); backdrop-filter: blur(var(--bb-glass-blur));
+  border: 1px solid var(--bb-glass-border); border-radius: var(--bb-r-lg);
+  padding: 16px; box-shadow: var(--bb-shadow-2); display: flex; flex-direction: column; gap: 12px;
+  transition: transform var(--bb-trans-fast), border-color var(--bb-trans-fast);
+}
+.avs-display-card:hover { transform: translateY(-2px); border-color: var(--bb-accent-line); }
+@media (prefers-reduced-motion: reduce) { .avs-display-card:hover { transform: none; } }
+.avs-dc-top { display: flex; align-items: center; gap: 10px; }
+.avs-dc-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+.avs-dc-dot.avs-on { background: var(--bb-success); box-shadow: 0 0 10px var(--bb-success); }
+.avs-dc-dot.avs-off { background: var(--bb-ink-faint); }
+.avs-dc-name { font-size: 14px; font-weight: 600; }
+.avs-dc-sub { font-size: 11px; color: var(--bb-ink-faint); }
+.avs-dc-running { font-size: 12px; color: var(--bb-ink-muted); padding: 8px 10px; background: var(--bb-bg-2); border-radius: var(--bb-r-sm); }
+.avs-dc-running b { color: var(--bb-ink); font-weight: 600; }
+.avs-dc-idle { color: var(--bb-ink-faint); }
+.avs-dc-group select { width: 100%; background: var(--bb-bg-2); border: 1px solid var(--bb-border); color: var(--bb-ink-muted); border-radius: var(--bb-r-sm); padding: 6px 8px; font-size: 12px; transition: border-color var(--bb-trans-fast), box-shadow var(--bb-trans-fast); }
+.avs-dc-group select:hover { border-color: var(--bb-border-strong); }
+.avs-dc-group select:focus-visible { outline: none; border-color: var(--bb-accent-line); box-shadow: var(--bb-focus-ring); }
+.avs-dc-actions { display: flex; align-items: center; gap: 6px; }
+.avs-dc-actions .bb-btn { flex: 1; }
+
+/* ---------- Publish picker + overflow menu ---------- */
+.avs-publish-picker { display: flex; flex-direction: column; gap: 14px; min-width: 320px; }
+.avs-pub-modes { width: 100%; }
+.avs-pub-target label { display: block; font-size: 12px; color: var(--bb-ink-faint); margin-bottom: 6px; }
+.avs-pub-target select { width: 100%; background: var(--bb-bg-2); border: 1px solid var(--bb-border); color: var(--bb-ink); border-radius: var(--bb-r-sm); padding: 8px 10px; }
+.avs-pub-checks { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }
+.avs-check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.avs-menu { display: flex; flex-direction: column; gap: 2px; min-width: 240px; }
+.avs-menu-item { display: block; text-align: left; text-decoration: none; background: transparent; border: 0; color: var(--bb-ink); padding: 10px 12px; border-radius: var(--bb-r-sm); cursor: pointer; font-size: 13px; }
+.avs-menu-item:hover { background: color-mix(in srgb, var(--bb-ink) 8%, transparent); }
+
+/* Floating right-click context menu */
+.avs-context-menu {
+  position: fixed; z-index: 4000; min-width: 200px;
+  background: var(--bb-bg-1); border: 1px solid var(--bb-border-strong);
+  border-radius: var(--bb-r-md); box-shadow: var(--bb-shadow-pop); padding: 5px;
+  animation: bb-pop-in var(--bb-trans-fast) both;
+}
+.avs-context-menu .avs-menu-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; }
+.avs-context-menu .avs-menu-item:disabled { opacity: .4; cursor: default; }
+.avs-context-menu .avs-menu-item:disabled:hover { background: transparent; }
+.avs-menu-ic { display: inline-flex; width: 18px; justify-content: center; font-size: 13px; flex: 0 0 auto; }
+.avs-menu-sep { height: 1px; background: var(--bb-border); margin: 5px 6px; }
+
+/* First-run welcome modal */
+.avs-brand-logo { display: block; height: 72px; width: auto; margin: 2px auto 16px; }
+.avs-pub-newdisp { margin-top: 10px; }
+
+/* Connect gate (Displays / Verwaltung while not connected) */
+.avs-connect-gate { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 10px; max-width: 460px; margin: 48px auto; padding: 48px 24px; }
+.avs-connect-gate .avs-brand-logo { height: 84px; margin: 0 0 6px; }
+.avs-cg-title { font-size: 20px; font-weight: 650; }
+.avs-cg-desc { margin: 0; font-size: 14px; line-height: 1.55; color: var(--bb-ink-dim, #94a3b8); }
+.avs-connect-gate .avs-cg-btn { margin-top: 10px; }
+.avs-welcome-langrow { display: flex; justify-content: flex-end; margin: -6px -2px 2px; }
+.avs-welcome-lang { background: transparent; border: 1px solid var(--bb-border); color: var(--bb-ink); border-radius: var(--bb-r-sm); font-size: 11px; font-weight: 600; letter-spacing: .03em; padding: 3px 8px; cursor: pointer; }
+.avs-welcome-lang:hover { background: color-mix(in srgb, var(--bb-ink) 8%, transparent); }
+.avs-langbtn { font-weight: 600; font-size: 12px; letter-spacing: .03em; }
+.avs-welcome-lead { margin: 0 0 12px; font-size: 15px; line-height: 1.5; }
+.avs-welcome-points { margin: 0 0 14px; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
+.avs-welcome-foot { margin: 0; font-size: 12px; color: var(--bb-ink-dim, #94a3b8); line-height: 1.5; }
+.avs-welcome-foot a { color: var(--bb-accent, #8b5cf6); text-decoration: none; }
+.avs-welcome-foot a:hover { text-decoration: underline; }
+
+/* ---------- Background layers + editor ---------- */
+/* Pinned far behind every widget frame. Frames are z-index (widget.z + 1), and
+   "send to back" can drive widget.z negative — without this floor a widget at
+   z <= -2 would land behind this (always-opaque, theme-bg fallback) layer and
+   vanish from the canvas while still showing as a block in the slide-rail
+   thumbnail. A child's negative z-index still paints above its parent's own
+   background, so the stage's backdrop stays covered. */
+.avs-slide-bg { position: absolute; inset: 0; z-index: -9999; }
+.avs-widget-bg { position: absolute; inset: 0; pointer-events: none; }
+
+.avs-inspector-section { border-top: 1px solid var(--bb-border); margin-top: 12px; padding-top: 12px; }
+.avs-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--bb-ink-faint); margin-bottom: 8px; }
+
+/* Animation section (widget inspector): build select + replay button, timing
+   grid, loop select. Selects reuse the inspector field look. */
+.avs-anim-section select {
+  width: 100%; background: var(--bb-bg-2); border: 1px solid var(--bb-border);
+  color: var(--bb-ink); border-radius: var(--bb-r-sm); padding: 6px 8px; font-size: 12px;
+}
+.avs-anim-row { display: flex; gap: 6px; align-items: center; }
+.avs-anim-row select { flex: 1; }
+.avs-anim-timing { margin: 8px 0; }
+.avs-anim-timing.avs-disabled { opacity: .45; pointer-events: none; }
+
+.avs-bg-editor { display: flex; flex-direction: column; gap: 10px; }
+.avs-bg-types { width: 100%; flex-wrap: wrap; }
+.avs-bg-types .bb-bezel-btn { flex: 1; min-width: 60px; }
+.avs-bg-theme-chip { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background-size: cover; background-position: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.3); }
+.avs-bg-help { margin: 2px 0 0; }
+.avs-bg-body { display: flex; flex-direction: column; gap: 8px; }
+.avs-bg-preview { height: 40px; border-radius: var(--bb-r-md); border: 1px solid var(--bb-border-strong); box-shadow: var(--bb-shadow-1); }
+.avs-bg-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--bb-ink-muted); }
+.avs-bg-row > span:first-child { min-width: 62px; }
+.avs-bg-row input[type="text"], .avs-bg-row select { flex: 1; background: var(--bb-bg-2); border: 1px solid var(--bb-border); color: var(--bb-ink); border-radius: var(--bb-r-sm); padding: 5px 8px; font-size: 12px; }
+.avs-bg-row input[type="range"] { flex: 1; accent-color: var(--bb-accent); }
+/* Color pickers as filled swatches (Chrome renders them as a thin line otherwise) */
+input[type="color"] { height: 30px; padding: 0; border: 1px solid var(--bb-border); border-radius: var(--bb-r-sm); background: none; cursor: pointer; }
+input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
+input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
+.bb-form-color input[type="color"] { width: 64px; align-self: flex-start; }
+.avs-bg-row input[type="color"] { width: 46px; flex: 0 0 auto; }
+.avs-bg-stop input[type="color"] { flex: 1 1 auto; min-width: 0; }
+.avs-bg-row input[type="number"] { width: 62px; background: var(--bb-bg-2); border: 1px solid var(--bb-border); color: var(--bb-ink); border-radius: var(--bb-r-sm); padding: 5px 6px; font-size: 12px; }
+.avs-bg-val { font-size: 11px; color: var(--bb-ink-faint); min-width: 40px; text-align: right; }
+.avs-bg-sublabel { font-size: 11px; color: var(--bb-ink-faint); margin: 4px 0; }
+.avs-bg-stops { display: flex; flex-direction: column; gap: 6px; }
+.avs-bg-stop { display: flex; align-items: center; gap: 6px; }
+.avs-bg-stop input[type="number"] { width: 54px; flex: 0 0 auto; }
+.avs-bg-addstop { align-self: flex-start; padding: 4px 10px; font-size: 12px; }
+
+/* ---------- Preview overlay (fullscreen player in iframe) ---------- */
+.avs-preview-overlay {
+  position: fixed; inset: 0; z-index: 9000;
+  background: #000;
+  display: flex; align-items: center; justify-content: center;
+  animation: avs-preview-in 200ms ease-out both;
+}
+.avs-preview-overlay.avs-preview-closing { animation: avs-preview-out 200ms ease-in both; }
+@keyframes avs-preview-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes avs-preview-out { from { opacity: 1; } to { opacity: 0; } }
+.avs-preview-frame {
+  border: 0; background: #000; display: block;
+  /* Letterboxed: largest box of the playlist aspect that fits the viewport.
+     --avs-preview-aspect is set inline (e.g. "16 / 9" or "9 / 16"). */
+  aspect-ratio: var(--avs-preview-aspect, 16 / 9);
+  width: min(100vw, 100vh * (var(--avs-preview-aspect, 16 / 9)));
+  height: min(100vh, 100vw / (var(--avs-preview-aspect, 16 / 9)));
+  max-width: 100vw; max-height: 100vh;
+  box-shadow: 0 0 60px rgba(0, 0, 0, .6);
+}
+.avs-preview-close {
+  position: absolute; top: 16px; right: 16px;
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.5); color: #fff;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 50%; cursor: pointer;
+  font-size: 16px; line-height: 1;
+  opacity: 0;
+  transition: opacity 150ms ease, background 150ms ease;
+  z-index: 9001;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.avs-preview-overlay:hover .avs-preview-close,
+.avs-preview-close:focus-visible { opacity: 1; }
+.avs-preview-close:hover { background: rgba(0,0,0,.75); }
+.avs-preview-hint {
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,.5); color: rgba(255,255,255,.85);
+  padding: 6px 14px; border-radius: 999px;
+  font-size: 12px; letter-spacing: .04em;
+  pointer-events: none;
+  z-index: 9001;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  transition: opacity 600ms ease;
+}
+.avs-preview-hint.avs-preview-hint-fade { opacity: 0; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1100px) {
+  .avs-editor { grid-template-columns: 200px 1fr 280px; }
+  .avs-canvas-hint { display: none; }
+}
+
+/* =================================================================
+   v3 — Verwaltung-View, Per-Display-Drawer, Brand-Kit, Bindings
+   ================================================================= */
+
+/* Org chip in topbar */
+.avs-orgchip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 6px;
+  background: var(--bb-bg-2);
+  border: 1px solid var(--bb-border);
+  font-size: 12px; cursor: pointer; color: var(--bb-ink);
+}
+.avs-orgchip:hover { background: var(--bb-fill-softer); }
+
+/* ---------- Admin (Verwaltung) View ---------- */
+.avs-admin {
+  display: grid; grid-template-columns: 232px 1fr; height: 100%;
+  gap: 0;
+}
+.avs-admin-nav {
+  display: flex; flex-direction: column; gap: 2px;
+  border-right: 1px solid var(--bb-border);
+  padding: 16px 10px;
+  background: var(--bb-bg-2);
+  overflow-y: auto;
+}
+.avs-admin-tab {
+  position: relative;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px;
+  background: transparent; border: 0; border-radius: var(--bb-r-sm);
+  color: var(--bb-ink-muted); cursor: pointer; text-align: left;
+  font-size: 13.5px; font-weight: 500; letter-spacing: -.01em;
+  transition: background var(--bb-trans-fast), color var(--bb-trans-fast);
+}
+.avs-admin-tab:hover { background: var(--bb-fill-soft); color: var(--bb-ink); }
+.avs-admin-tab:focus-visible { outline: none; box-shadow: var(--bb-focus-ring); }
+.avs-admin-tab.avs-on { background: var(--bb-accent-soft); color: var(--bb-ink); }
+.avs-admin-tab.avs-on::before {
+  content: ""; position: absolute; left: 3px; top: 8px; bottom: 8px;
+  width: 3px; border-radius: 2px; background: var(--bb-accent);
+}
+.avs-admin-tab-icon { font-size: 15px; width: 18px; text-align: center; flex: 0 0 auto; }
+.avs-admin-tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.avs-admin-body {
+  padding: 28px 36px; overflow-y: auto;
+}
+.avs-admin-section-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin-bottom: 22px; padding-bottom: 16px;
+  border-bottom: 1px solid var(--bb-border);
+}
+.avs-admin-section-head h2 {
+  margin: 0; font-family: var(--bb-display); font-size: 21px; font-weight: 600;
+  letter-spacing: -.02em;
+}
+.avs-admin-section-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.avs-admin-empty {
+  padding: 56px 20px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  max-width: 480px; margin: 24px auto;
+}
+.avs-admin-empty-icon { font-size: 40px; opacity: .5; }
+.avs-admin-empty > div:not(.avs-admin-empty-icon) {
+  font-size: 13.5px; line-height: 1.55; color: var(--bb-ink-muted);
+}
+.avs-admin-error {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px; margin-top: 4px;
+  background: color-mix(in srgb, var(--bb-danger) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bb-danger) 32%, transparent);
+  border-radius: var(--bb-r-md); color: var(--bb-danger); font-size: 13px;
+}
+.avs-admin-error::before { content: "⚠"; font-size: 15px; flex: 0 0 auto; }
+.avs-admin-loading {
+  display: flex; justify-content: center; align-items: center;
+  padding: 44px; font-size: 0; /* hide the literal "…" placeholder text */
+}
+.avs-admin-loading::after {
+  content: ""; width: 22px; height: 22px; border-radius: 50%;
+  border: 2.5px solid var(--bb-border-strong); border-top-color: var(--bb-accent);
+  animation: avs-admin-spin .7s linear infinite;
+}
+@keyframes avs-admin-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .avs-admin-loading::after { animation: none; } }
+.avs-admin-table {
+  width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 13px;
+}
+.avs-admin-table th, .avs-admin-table td {
+  padding: 11px 14px; text-align: left; vertical-align: middle;
+  border-bottom: 1px solid var(--bb-border);
+}
+.avs-admin-table thead th {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--bb-ink-faint); font-weight: 600;
+  border-bottom: 1px solid var(--bb-border-strong);
+}
+.avs-admin-table tbody tr { transition: background var(--bb-trans-fast); }
+.avs-admin-table tbody tr:hover { background: var(--bb-fill-soft); }
+.avs-admin-table tbody tr:last-child td { border-bottom: 0; }
+.avs-admin-table code { font-size: 11.5px; color: var(--bb-ink-muted); }
+.avs-admin-cards {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+.avs-admin-card {
+  padding: 18px; border-radius: var(--bb-r-md);
+  background: var(--bb-bg-2);
+  border: 1px solid var(--bb-border);
+  transition: border-color var(--bb-trans-fast), box-shadow var(--bb-trans-fast);
+}
+.avs-admin-card:hover { border-color: var(--bb-border-strong); box-shadow: var(--bb-shadow-1); }
+.avs-admin-card h3 {
+  margin: 0 0 8px; font-family: var(--bb-display); font-size: 15px; font-weight: 600;
+  letter-spacing: -.01em;
+}
+.avs-admin-card-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.avs-admin-filter {
+  display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; align-items: center;
+}
+.avs-admin-filter input, .avs-admin-filter select {
+  padding: 7px 11px; border-radius: var(--bb-r-sm);
+  background: var(--bb-bg-2);
+  border: 1px solid var(--bb-border);
+  color: var(--bb-ink); font-size: 13px;
+  transition: border-color var(--bb-trans-fast), box-shadow var(--bb-trans-fast);
+}
+.avs-admin-filter input:focus-visible, .avs-admin-filter select:focus-visible {
+  outline: none; border-color: var(--bb-accent-line); box-shadow: var(--bb-focus-ring);
+}
+.avs-codeblock {
+  background: var(--bb-fill-soft); padding: 12px; border-radius: 4px;
+  font-family: var(--bb-mono, monospace); font-size: 12px;
+  user-select: all; word-break: break-all; white-space: pre-wrap;
+  position: relative; cursor: copy;
+  transition: background 120ms ease;
+}
+.avs-codeblock:hover { background: var(--bb-fill-softer); }
+.avs-codeblock::after {
+  content: '📋'; position: absolute; right: 8px; top: 6px;
+  font-size: 11px; opacity: .55; pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.avs-codeblock:hover::after { opacity: 1; }
+.avs-codeblock.avs-copied { background: color-mix(in srgb, var(--bb-success) 18%, transparent); }
+.avs-codeblock.avs-copied::after { content: '✓ kopiert'; opacity: 1; color: var(--bb-success); }
+.avs-license-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  margin-bottom: 24px;
+}
+.avs-stat {
+  padding: 18px 16px; border-radius: var(--bb-r-md); text-align: center;
+  background: var(--bb-accent-soft);
+  border: 1px solid var(--bb-accent-line);
+}
+.avs-stat b {
+  display: block; font-family: var(--bb-display);
+  font-size: 30px; font-weight: 700; line-height: 1.1;
+  font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+}
+.avs-stat span {
+  display: block; margin-top: 4px;
+  font-size: 11px; color: var(--bb-ink-muted);
+  text-transform: uppercase; letter-spacing: .05em; font-weight: 600;
+}
+.avs-brandkit-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+}
+.avs-brandkit-grid label {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px; border-radius: 6px;
+  background: var(--bb-bg-2);
+  border: 1px solid var(--bb-border);
+  font-size: 13px;
+}
+.avs-brandkit-grid input[type="color"] {
+  width: 40px; height: 28px; border: 0; background: transparent; cursor: pointer;
+}
+.avs-bk-row { display: inline-flex; align-items: center; gap: 8px; }
+.avs-bk-row code { font-size: 11px; opacity: .75; min-width: 60px; }
+
+.avs-dc-deviceicon {
+  font-size: 18px; line-height: 1; opacity: .85;
+  margin-left: 2px;
+}
+.avs-flex-row { display: flex; gap: 8px; align-items: center; }
+.avs-muted { opacity: .55; font-size: 12px; }
+
+/* ---------- Per-Display Drawer ---------- */
+.avs-drawer-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  z-index: 9100; opacity: 0; pointer-events: none;
+  transition: opacity 200ms ease;
+}
+.avs-drawer-backdrop.avs-on { opacity: 1; pointer-events: auto; }
+.avs-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(520px, 90vw);
+  background: var(--bb-bg-1);
+  border-left: 1px solid var(--bb-border);
+  z-index: 9101;
+  transform: translateX(100%); transition: transform 220ms ease;
+  display: flex; flex-direction: column;
+  box-shadow: -8px 0 24px rgba(0,0,0,.3);
+}
+.avs-drawer.avs-on { transform: translateX(0); }
+.avs-drawer-head {
+  padding: 16px 20px; border-bottom: 1px solid var(--bb-border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.avs-drawer-head h3 { margin: 0; font-size: 17px; }
+.avs-drawer-close {
+  background: none; border: 0; color: inherit; font-size: 22px;
+  cursor: pointer; opacity: .5;
+}
+.avs-drawer-close:hover { opacity: 1; }
+.avs-drawer-tabs {
+  display: flex; gap: 0; padding: 0 8px;
+  border-bottom: 1px solid var(--bb-border);
+  overflow-x: auto;
+}
+.avs-drawer-tab {
+  padding: 10px 14px; background: none; border: 0; cursor: pointer;
+  color: inherit; opacity: .6; font-size: 13px; white-space: nowrap;
+  border-bottom: 2px solid transparent;
+}
+.avs-drawer-tab:hover { opacity: .9; }
+.avs-drawer-tab.avs-on {
+  opacity: 1; border-bottom-color: var(--bb-accent);
+}
+.avs-drawer-body { padding: 18px 20px; overflow-y: auto; flex: 1; }
+.avs-drawer-body h4 {
+  margin: 16px 0 8px; font-size: 13px; text-transform: uppercase;
+  opacity: .55; letter-spacing: .04em;
+}
+.avs-drawer-body h4:first-child { margin-top: 0; }
+.avs-capbadges {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;
+}
+.avs-capbadge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 8px; border-radius: 12px; font-size: 11px;
+  background: var(--bb-fill-soft);
+  border: 1px solid var(--bb-border-strong);
+}
+
+/* ---------- Count chip in displays toolbar ---------- */
+.avs-disp-count {
+  display: inline-block; margin-left: 10px;
+  padding: 2px 10px; border-radius: 10px;
+  font-size: 11px; font-weight: 500; letter-spacing: .02em;
+  background: var(--bb-fill-soft); color: var(--bb-ink);
+  opacity: .75; vertical-align: middle;
+}
+
+/* ---------- Bulk-select in Displays dashboard ---------- */
+.avs-bulkbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px; margin: 12px 0;
+  background: color-mix(in srgb, var(--bb-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bb-accent) 35%, transparent);
+  border-radius: 8px;
+  /* Sticky-to-top while user scrolls a long display grid. */
+  position: sticky; top: 0; z-index: 5;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.avs-bulkbar-count { font-weight: 600; }
+.avs-bulkbar-actions { display: flex; gap: 8px; margin-left: auto; }
+.avs-display-filter {
+  display: flex; gap: 8px; padding: 10px 0; align-items: center; flex-wrap: wrap;
+}
+.avs-display-filter input:not([type="checkbox"]), .avs-display-filter select {
+  padding: 7px 11px; border-radius: var(--bb-r-sm);
+  background: var(--bb-bg-2);
+  border: 1px solid var(--bb-border);
+  color: var(--bb-ink); font-size: 13px; width: auto;
+  transition: border-color var(--bb-trans-fast), box-shadow var(--bb-trans-fast);
+}
+/* Search grows to fill; the status/lock selects stay at their natural width.
+   (A global `input { width: 100% }` + flex-wrap would otherwise stack each on
+   its own full-width row.) */
+.avs-display-filter input:not([type="checkbox"]) { flex: 1 1 200px; min-width: 160px; }
+.avs-display-filter select { flex: 0 0 auto; }
+.avs-display-filter input:not([type="checkbox"]):focus-visible, .avs-display-filter select:focus-visible {
+  outline: none; border-color: var(--bb-accent-line); box-shadow: var(--bb-focus-ring);
+}
+
+/* ---------- Slot-Binding inspector ---------- */
+.avs-binding-toggle {
+  background: none; border: 0; cursor: pointer;
+  color: inherit; opacity: .5; padding: 2px 6px;
+  font-size: 14px; border-radius: 4px;
+}
+.avs-binding-toggle:hover { opacity: 1; background: var(--bb-fill-soft); }
+.avs-binding-toggle.avs-bound { opacity: 1; color: var(--bb-accent); }
+.avs-binding-editor {
+  margin: 8px 0; padding: 10px;
+  background: var(--bb-accent-soft);
+  border-left: 3px solid var(--bb-accent);
+  border-radius: 4px;
+}
+.avs-binding-editor input {
+  display: block; width: 100%; margin-top: 4px;
+  padding: 5px 8px; border-radius: 3px;
+  background: var(--bb-bg-2); border: 1px solid var(--bb-border);
+  color: inherit; font-size: 12px;
+  font-family: var(--bb-mono, monospace);
+}
+.avs-binding-editor label { font-size: 11px; opacity: .7; margin-top: 6px; display: block; }
+
+/* ---------- Variants editor ---------- */
+.avs-variants {
+  margin-top: 12px; padding: 10px;
+  border: 1px dashed var(--bb-border-strong); border-radius: 6px;
+}
+.avs-variants h5 { margin: 0 0 6px; font-size: 12px; opacity: .7; text-transform: uppercase; letter-spacing: .04em; }
+.avs-variant-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 0; border-bottom: 1px solid var(--bb-border);
+}
+.avs-variant-row:last-child { border-bottom: 0; }
+
+/* ---------- Store-templates library tab ---------- */
+.avs-store-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  padding: 8px;
+}
+.avs-store-card {
+  padding: 10px; border-radius: 6px;
+  background: var(--bb-bg-2);
+  border: 1px solid var(--bb-border);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.avs-store-card h6 { margin: 0; font-size: 13px; }
+.avs-store-card-actions { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.avs-store-card-actions button {
+  flex: 1; font-size: 11px; padding: 4px 6px;
+  background: var(--bb-bg-2);
+  border: 1px solid var(--bb-border-strong); border-radius: 3px;
+  color: inherit; cursor: pointer;
+}
+.avs-store-card-actions button:hover { background: var(--bb-fill-softer); }
+
+/* ---------- 3-column responsive admin ---------- */
+@media (max-width: 800px) {
+  .avs-admin { grid-template-columns: 1fr; }
+  .avs-admin-nav { flex-direction: row; overflow-x: auto; gap: 4px; border-right: 0;
+                   border-bottom: 1px solid var(--bb-border); padding: 8px 10px; }
+  .avs-admin-tab { white-space: nowrap; }
+  .avs-admin-tab.avs-on::before { display: none; }
+  .avs-admin-body { padding: 18px 16px; }
+}
+
+/* ---------- v3: Variant-edit banner above the views ---------- */
+.avs-variant-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 16px; gap: 12px;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--bb-warn) 26%, transparent),
+    color-mix(in srgb, var(--bb-accent) 16%, transparent));
+  border-bottom: 1px solid color-mix(in srgb, var(--bb-warn) 50%, transparent);
+  color: color-mix(in srgb, var(--bb-warn) 45%, var(--bb-ink)); font-size: 13px;
+}
+.avs-variant-banner-label { font-weight: 600; }
+
+/* ---------- v3: Variants <details> in slide settings ---------- */
+.avs-variants-details {
+  margin-top: 12px; padding: 8px 12px;
+  background: var(--bb-fill-soft);
+  border: 1px solid var(--bb-border);
+  border-radius: 6px;
+}
+.avs-variants-details > summary {
+  cursor: pointer; font-size: 13px; padding: 4px 0;
+  user-select: none;
+}
+.avs-variants-details[open] > summary { margin-bottom: 8px; }
+.avs-variants-count {
+  display: inline-block; margin-left: 6px;
+  padding: 1px 8px; border-radius: 8px;
+  background: color-mix(in srgb, var(--bb-accent) 20%, transparent);
+  color: color-mix(in srgb, var(--bb-accent) 55%, var(--bb-ink));
+  font-size: 11px; font-weight: 600;
+}
+
+/* ---------- Bulk-checkbox in display card ---------- */
+.avs-dc-check {
+  width: 16px; height: 16px; cursor: pointer; accent-color: var(--bb-accent);
+}
+
+/* ---------- v3 Slide-Rail badges (lang/AB/brand/binding indicators) ---------- */
+.avs-slide-badge {
+  display: inline-block; margin-left: 2px;
+  font-size: 10px; opacity: .75; cursor: help;
+}
+.avs-slide-card:hover .avs-slide-badge { opacity: 1; }
+
+/* v3 surfaces are now theme-aware via the --avs-* → --bb-* token aliases
+   (see tokens.css). The former ~70-line :root[data-theme="light"] patch that
+   re-stated every nav/table/drawer/codeblock color was deleted: the base rules
+   already resolve to the correct light values, and body inherits --bb-ink. */
+
+/* ---------- v3 Plan badge inside connection chip ---------- */
+.avs-plan-badge {
+  display: inline-block; margin-left: 6px;
+  padding: 1px 6px; border-radius: 8px;
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .04em; line-height: 1.4;
+  background: var(--bb-fill-softer); color: inherit;
+}
+.avs-plan-badge.avs-plan-free { background: var(--bb-fill-softer); color: var(--bb-ink-muted); }
+.avs-plan-badge.avs-plan-premium {
+  background: color-mix(in srgb, var(--bb-warn) 25%, transparent);
+  color: color-mix(in srgb, var(--bb-warn) 45%, var(--bb-ink));
+}
+.avs-plan-badge.avs-plan-enterprise {
+  background: color-mix(in srgb, var(--bb-accent) 30%, transparent);
+  color: color-mix(in srgb, var(--bb-accent) 55%, var(--bb-ink));
+}

@@ -1,0 +1,83 @@
+/* Design tokens for the admin app. The player has its own themes (slide-themes.css). */
+
+:root {
+  --bb-bg-0: #07070b;
+  --bb-bg-1: #0d0d14;
+  --bb-bg-2: #14141c;
+  --bb-bg-3: #1c1c27;
+  --bb-ink: #f1f1f4;
+  --bb-ink-muted: #a3a3ad;
+  --bb-ink-faint: #6e6e7a;
+  --bb-border: rgba(255,255,255,0.08);
+  --bb-border-strong: rgba(255,255,255,0.16);
+  --bb-accent: #8b5cf6;
+  --bb-accent-2: #06b6d4;
+  --bb-success: #10b981;
+  --bb-warn: #f59e0b;
+  --bb-danger: #ef4444;
+
+  --bb-font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --bb-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  --bb-display: "Inter Tight", "Inter", system-ui, sans-serif;
+  --bb-serif: "Playfair Display", Georgia, serif;
+
+  --bb-r-sm: 6px;
+  --bb-r-md: 10px;
+  --bb-r-lg: 16px;
+  --bb-r-xl: 24px;
+
+  --bb-shadow-1: 0 1px 2px rgba(0,0,0,.4), 0 0 0 1px var(--bb-border) inset;
+  --bb-shadow-2: 0 12px 32px rgba(0,0,0,.5), 0 0 0 1px var(--bb-border) inset;
+  --bb-shadow-pop: 0 10px 26px -8px rgba(0,0,0,.55), 0 0 0 1px var(--bb-border-strong) inset;
+  --bb-shadow-glow: 0 0 0 1px var(--bb-accent), 0 10px 30px -10px color-mix(in srgb, var(--bb-accent) 50%, transparent);
+
+  --bb-trans-fast: 160ms cubic-bezier(.22,1,.36,1);
+  --bb-trans: 240ms cubic-bezier(.22,1,.36,1);
+
+  /* Accent-derived helpers — keep every tint anchored to --bb-accent so the
+     accent stays themeable (brand-kit / future re-skin) instead of being
+     duplicated as literal rgba(139,92,246,…) across the stylesheets. */
+  --bb-accent-soft: color-mix(in srgb, var(--bb-accent) 14%, transparent);
+  --bb-accent-line: color-mix(in srgb, var(--bb-accent) 32%, var(--bb-border));
+  /* Neutral fill keyed to ink — works on both light and dark surfaces, unlike
+     a fixed rgba(255,255,255,…) which vanishes in light mode. */
+  --bb-fill-soft: color-mix(in srgb, var(--bb-ink) 6%, transparent);
+  --bb-fill-softer: color-mix(in srgb, var(--bb-ink) 10%, transparent);
+  /* Shared focus ring for keyboard users (see :focus-visible in components). */
+  --bb-focus-ring: 0 0 0 3px color-mix(in srgb, var(--bb-accent) 35%, transparent);
+
+  /* Glass — applied to CHROME only (topbar, panels, modals, inspector). */
+  --bb-glass-bg: rgba(18,18,26,0.66);
+  --bb-glass-border: rgba(255,255,255,0.10);
+  --bb-glass-blur: 24px;
+  --bb-canvas-bg: #0a0a0f;
+
+  /* The v3 "Verwaltung" surfaces (admin view, per-display drawer, bindings,
+     store cards, org chip) were once written against an --avs-* vocabulary that
+     was never defined — every usage silently fell back to a hardcoded DARK
+     literal, which forced a parallel light-theme patch. Those usages now point
+     directly at the --bb-* tokens (which switch with [data-theme]), so the
+     --avs-* aliases are gone. The only surviving --avs-* var is
+     --avs-preview-aspect, a per-instance LAYOUT value set inline from JS
+     (see admin/preview-flow.js) — not a theme token, so it lives nowhere here. */
+
+  color-scheme: dark;
+}
+
+html[data-theme="light"] {
+  --bb-bg-0: #f8f8fb;
+  --bb-bg-1: #ffffff;
+  --bb-bg-2: #f0f0f4;
+  --bb-bg-3: #e5e5ec;
+  --bb-ink: #15151c;
+  --bb-ink-muted: #4a4a55;
+  --bb-ink-faint: #8a8a96;
+  --bb-border: rgba(0,0,0,0.08);
+  --bb-border-strong: rgba(0,0,0,0.16);
+  --bb-shadow-1: 0 1px 2px rgba(0,0,0,.06), 0 0 0 1px var(--bb-border) inset;
+  --bb-shadow-2: 0 16px 32px rgba(0,0,0,.06), 0 0 0 1px var(--bb-border) inset;
+  --bb-glass-bg: rgba(255,255,255,0.72);
+  --bb-glass-border: rgba(0,0,0,0.08);
+  --bb-canvas-bg: #e9e9ef;
+  color-scheme: light;
+}

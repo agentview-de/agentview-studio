@@ -1,0 +1,59 @@
+# CI gates for agentView Studio.
+#
+# The shipped app is dependency-free vanilla JS with native ES modules and no
+# build step — that philosophy is for the RUNTIME. The dev toolchain (ESLint,
+# Playwright) lives in devDependencies and never reaches shipped code.
+#
+#   headless — pure-function suites under Node, no install (fast first signal).
+#   lint     — ESLint flat config: dead imports, unused vars, == traps, etc.
+#   browser  — the DOM-dependent suites (sanitize, schema, slide round-trip,
+#              canvas z-order) in headless Chromium. The sanitizer + schema are
+#              security/data-loss critical and MUST be gated, not run by hand.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  headless:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run headless (DOM-free) test suite
+        run: node test/run-node.mjs
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dev tooling
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dev tooling
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run browser test suite (sanitize, schema, round-trip, canvas)
+        run: node test/run-browser.mjs

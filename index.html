@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/png" href="logo.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#0f1218" />
+  <title>agentView Studio</title>
+
+  <!-- Self-hosted fonts (no Google Fonts CDN — DSGVO/GDPR). -->
+  <link rel="stylesheet" href="styles/fonts.css" />
+
+  <!-- Slide-type runtime dependencies (loaded eagerly; widgets that need them work in admin previews too).
+       Self-hosted (vendored, see shared/vendor/) — no third-party CDN call, so display/viewer IPs stay
+       out of CDN logs (DSGVO/GDPR). License texts live in shared/vendor/LICENSES/. -->
+  <script src="shared/vendor/marked.min.js"></script>
+  <script src="shared/vendor/pdf.min.js"></script>
+  <script src="shared/vendor/prism.min.js"></script>
+  <link rel="stylesheet" href="shared/vendor/prism-tomorrow.min.css" />
+
+  <link rel="stylesheet" href="styles/tokens.css" />
+  <link rel="stylesheet" href="styles/components.css" />
+  <link rel="stylesheet" href="styles/slide-themes.css" />
+  <link rel="stylesheet" href="styles/studio.css" />
+</head>
+<body>
+  <div id="app"></div>
+
+  <script type="module" src="./admin/main.js"></script>
+</body>
+</html>
