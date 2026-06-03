@@ -9,7 +9,7 @@
 // Wording is deliberately unambiguous: only "Veröffentlichen" / "Publish".
 
 import { state } from './store.js';
-import { displays as displaysApi, slots, groups as groupsApi } from './api.js';
+import { displays as displaysApi, slots, groups as groupsApi, assets } from './api.js';
 import { bundlePlayer } from './publish.js';
 import { openModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
@@ -23,6 +23,80 @@ import { pairModal } from './views/displays.js';
 
 const slugFor = pl => 'avs-' + (pl?.id ?? 'data');
 const historySlugFor = pl => 'avs-' + (pl?.id ?? 'data') + '-history';
+
+// SHA-256 of an ArrayBuffer as lowercase hex. crypto.subtle needs a secure
+// context (https / localhost); callers tolerate a throw and fall back to no-hash.
+async function sha256Hex(buf) {
+  const digest = await crypto.subtle.digest('SHA-256', buf);
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// MIME for our runtime asset extensions — set explicitly so the asset host serves
+// vendor scripts with an executable type even under X-Content-Type-Options: nosniff.
+function mimeFor(name) {
+  if (/\.m?js$/i.test(name)) return 'text/javascript';
+  if (/\.woff2$/i.test(name)) return 'font/woff2';
+  if (/\.woff$/i.test(name)) return 'font/woff';
+  if (/\.css$/i.test(name)) return 'text/css';
+  return '';
+}
+
+// agentView list endpoints return a bare array or an {assets|items|data:[…]} wrap.
+function unwrapAssets(raw) {
+  if (Array.isArray(raw)) return raw;
+  for (const k of ['assets', 'items', 'data', 'results']) if (Array.isArray(raw?.[k])) return raw[k];
+  return [];
+}
+
+// Build a resolveAsset(absoluteUrl) -> assetUrl hook for bundlePlayer. The
+// published HTML lives on the content host, where relative shared/vendor and
+// /fonts paths 404; uploading those binaries (vendor scripts, fonts, pdf worker)
+// to the agentView asset store gives URLs the SAME displays can reach. Dedup is
+// content-addressed (sha256) with a stable-name fallback, so the immutable vendor
+// files upload once per account — repeat publishes reuse them. The in-flight
+// `cache` keys by source URL so each file is fetched/hashed once per publish.
+function makeAssetResolver() {
+  const cache = new Map();   // absoluteUrl → assetUrl (this publish)
+  let existing = null;       // lazily: { byHash, byName } from assets.list()
+  const ensureExisting = async () => {
+    if (existing) return existing;
+    existing = { byHash: new Map(), byName: new Map() };
+    try {
+      for (const a of unwrapAssets(await assets.list())) {
+        const url = a?.url || a?.publicUrl || a?.downloadUrl;
+        if (!url) continue;
+        if (a.sha256) existing.byHash.set(String(a.sha256).toLowerCase(), url);
+        if (a.name) existing.byName.set(a.name, url);
+      }
+    } catch { /* list unavailable — we'll just upload */ }
+    return existing;
+  };
+  return async (absoluteUrl) => {
+    if (cache.has(absoluteUrl)) return cache.get(absoluteUrl);
+    const name = 'avs-' + (absoluteUrl.split('/').pop().split(/[?#]/)[0] || 'asset');
+    const res = await fetch(absoluteUrl, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`asset fetch ${absoluteUrl} → ${res.status}`);
+    const buf = await res.arrayBuffer();
+    let hex = null;
+    try { hex = await sha256Hex(buf); } catch { /* insecure context — skip hash dedup */ }
+    const ex = await ensureExisting();
+    let url = (hex && ex.byHash.get(hex)) || ex.byName.get(name) || null;
+    if (!url) {
+      const file = new File([buf], name, { type: mimeFor(name) || res.headers.get('content-type') || 'application/octet-stream' });
+      const r = await assets.upload(file, ['agentView Studio runtime asset']);
+      const a = r?.assets?.[0];
+      url = a?.url || a?.publicUrl || r?.url || r?.assetUrl || null;
+      if (url) {
+        if (a?.sha256) ex.byHash.set(String(a.sha256).toLowerCase(), url);
+        else if (hex) ex.byHash.set(hex, url);
+        ex.byName.set(name, url);
+      }
+    }
+    if (!url) throw new Error(`asset upload returned no URL for ${name}`);
+    cache.set(absoluteUrl, url);
+    return url;
+  };
+}
 
 // Append a snapshot of the just-published playlist to a sidecar history slot.
 // FIFO cap = 20. Failures are non-blocking — versioning is best-effort.
@@ -94,11 +168,21 @@ async function buildBundle() {
   const baseUrl = `${location.protocol}//${location.host}/`;
   // v3 globals: org brand-kit (cascade root), display lang (set by per-display
   // publish call when supported), and the resolved slot endpoint map.
+  // Widget types whose lazy-loaded vendor libs must be inlined (each is large, so
+  // only inline what the playlist uses). Cheap structural check on the about-to-
+  // ship playlist.
+  const plBlob = JSON.stringify(plToShip ?? {});
+  const vendorTypes = ['pdf', 'stream-cam', 'map'].filter(t => plBlob.includes(`"type":"${t}"`));
   const html = await bundlePlayer({
     baseUrl, readUrl,
     windowGlobals: {
       BB_ORG_BRAND: state.admin?.brandKitOrg ?? null,
     },
+    // Fonts (woff2) upload fine as agentView assets and are repointed at those
+    // URLs (relative /fonts paths 404 on the content host); deduped per account by
+    // sha256. Vendor scripts are inlined instead (the asset store rejects .js).
+    resolveAsset: makeAssetResolver(),
+    vendorTypes,
   });
   return { html, slug, name: plToShip?.name ?? 'Playlist', shippedPlaylist: plToShip };
 }

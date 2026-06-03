@@ -1,14 +1,18 @@
 import { register } from './registry.js';
 import { composeDispose } from '../plugin-contract.js';
 import { escapeHtml } from '../utils/escape.js';
+import { inlinedVendorUrl } from '../inline-vendor.js';
 
 // pdf.js is loaded as a vendored script in both shells; we read from window.pdfjsLib.
 
-// The worker is self-hosted next to this module (shared/vendor/), so it's
-// same-origin: we can hand pdf.js the URL directly. (The old CDN version had to
-// fetch the worker with a Fetch `integrity` check and wrap it in a blob: URL to
-// SRI-pin a cross-origin CDN, unnecessary now that we control the bytes.)
-const PDF_WORKER_URL = new URL('../vendor/pdf.worker.min.js', import.meta.url).href;
+// The worker is self-hosted next to this module (shared/vendor/). In dev (native
+// ES modules) `import.meta.url` resolves it same-origin. In a published player the
+// content host can't serve that sibling and its CSP only allows `worker-src blob:`,
+// so the bundler inlines the worker SOURCE (see shared/inline-vendor.js) and we
+// resolve it to a blob: worker URL; pdf.js loads it as a blob worker (CSP-safe).
+const PDF_WORKER_URL =
+  inlinedVendorUrl('pdf.worker.min.js') ||
+  new URL('../vendor/pdf.worker.min.js', import.meta.url).href;
 let _workerSrcPromise = null;
 function resolveWorkerSrc() {
   if (!_workerSrcPromise) _workerSrcPromise = Promise.resolve(PDF_WORKER_URL);

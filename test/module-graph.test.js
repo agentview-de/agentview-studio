@@ -61,6 +61,15 @@ describe('module-graph · transformModule (supported forms)', () => {
     expect(transformModule('m', `export {};`).trim()).toBe('');
   });
 
+  test('import.meta.url → document.baseURI (classic-script parse fix)', () => {
+    // The real regression: pdf.js does `new URL('../vendor/x', import.meta.url)`.
+    // `import.meta` is a parse error in the classic bundle, so it MUST be rewritten.
+    const out = transformModule('shared/plugins/pdf.js',
+      `const W = new URL('../vendor/pdf.worker.min.js', import.meta.url).href;`);
+    expect(out).toContain('document.baseURI');
+    expect(out).notToContain('import.meta');
+  });
+
   test('non-module code passes through untouched', () => {
     const src = `const x = 1;\nfunction f() { return x; }\n`;
     expect(transformModule('m', src)).toBe(src);
@@ -85,6 +94,9 @@ describe('module-graph · transformModule (unsupported forms fail loudly)', () =
   });
   test('re-export (export … from) throws', () => {
     expect(() => transformModule('p.js', `export { y } from "/y.js";`)).toThrow(/unsupported module syntax/);
+  });
+  test('residual import.meta (other than .url) throws', () => {
+    expect(() => transformModule('p.js', `const e = import.meta.env;`)).toThrow(/import\.meta/);
   });
 });
 
@@ -129,5 +141,23 @@ describe('module-graph · rewriteImportSpecifiers', () => {
   test('a no-op mapper (returns spec unchanged) leaves source byte-identical', () => {
     const src = `import 'https://cdn.example/x.js';\nimport { a } from './keep.js';`;
     expect(rewriteImportSpecifiers(src, s => s)).toBe(src);
+  });
+
+  test('rewrites a MULTI-LINE named import (the weather-format.js regression)', () => {
+    // weather.js imports across lines; the old [^\n] regex skipped it, so the
+    // spec stayed relative while the module was keyed absolute → boot crash
+    // "Module not in bundle: ./weather-format.js".
+    const src = `import {\n  WMO, tempColor,\n  compassName,\n} from './weather-format.js';`;
+    const out = rewriteImportSpecifiers(src, () => '/shared/plugins/weather-format.js');
+    expect(out).toContain(`from '/shared/plugins/weather-format.js'`);
+    expect(out).notToContain('./weather-format.js');
+  });
+
+  test('a bare side-effect import does not swallow a later multi-line from', () => {
+    const src = `import './side.js';\nimport {\n  a,\n} from './named.js';`;
+    const seen = [];
+    rewriteImportSpecifiers(src, s => { seen.push(s); return s; });
+    expect(seen).toContain('./side.js');
+    expect(seen).toContain('./named.js');
   });
 });

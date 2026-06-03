@@ -26,9 +26,10 @@
 //   export function* NAME               generator export      → "
 //   export const|let|var NAME           named binding export  → decl + exports.NAME = NAME
 //   export {}                           bare module marker     → dropped
+//   import.meta.url                      module URL meta        → document.baseURI
 // NOT supported (guard throws): namespace imports (`import * as`), combined
-// default+named (`import x, { … }`), `export class`, and re-exports
-// (`export … from`).
+// default+named (`import x, { … }`), `export class`, re-exports
+// (`export … from`), and any `import.meta` other than `.url`.
 // parseImports() additionally recognises re-exports and dynamic import() for
 // GRAPH purposes — finding an edge is always safe; only transformModule is
 // restricted.
@@ -62,14 +63,19 @@ export function parseImports(code) {
 // Rewrite each static/bare/dynamic import specifier in `code` via mapSpec(spec).
 // Used by the bundler to turn relative specifiers into the absolute paths its
 // __require() registry is keyed by. mapSpec returning the spec unchanged is a
-// no-op (e.g. http(s) CDN specifiers are left live). The line-anchored static
-// regex keeps the `from` clause on ONE line (`[^\n]`, not `[\s\S]`) so a bare
-// side-effect `import '…';` can't greedily swallow lines down to the next
-// `from` — which would drop a module from the graph and leave it un-rewritten.
-// Specifier forms here mirror exactly what transformModule rewrites, so the two
-// stay consistent.
+// no-op (e.g. http(s) CDN specifiers are left live). The binding/`from` clause
+// uses `[^'"]*?` (NOT `[\s\S]`) so it spans a MULTI-LINE
+// `import {\n a,\n b\n} from '…'` — exactly like parseImports — yet still stops
+// at the first quote, so a bare side-effect `import '…';` can't greedily swallow
+// lines down to a later `from` (which would drop a module from the graph and
+// leave it un-rewritten). The earlier `[^\n]` form silently skipped multi-line
+// imports: parseImports/transformModule handled them (registering the module
+// under its absolute key and emitting __require with the RELATIVE spec), so the
+// bundle booted to a "Module not in bundle: ./x.js" runtime crash. Specifier
+// forms here mirror exactly what transformModule rewrites, so the two stay
+// consistent.
 export function rewriteImportSpecifiers(code, mapSpec) {
-  const importRe = /^\s*import\s+(?:[^\n]+?\s+from\s+)?["']([^"']+)["'];?\s*$/gm;
+  const importRe = /^[ \t]*import\s+(?:[^'"]*?\bfrom\s+)?["']([^"']+)["'][ \t]*;?[ \t]*$/gm;
   const dyImportRe = /import\(\s*["']([^"']+)["']\s*\)/g;
   const sub = (mAll, spec) => {
     const next = mapSpec(spec);
@@ -88,6 +94,14 @@ export function rewriteImportSpecifiers(code, mapSpec) {
 export function transformModule(path, code) {
   const named = [];
   let out = code
+    // `import.meta.url` → `document.baseURI`. `import.meta` is a SYNTAX ERROR in a
+    // classic <script>, and the bundle is one classic inline script — so without
+    // this rewrite the parser rejects the whole bundle before a line runs (the
+    // try/catch boot guard can't catch a parse error). document.baseURI is a
+    // parseable stand-in; callers that actually need a specific URL at runtime
+    // (e.g. pdf.js's worker) inject it via a window.BB_* global instead of relying
+    // on this value.
+    .replace(/\bimport\.meta\.url\b/g, 'document.baseURI')
     // `export {};` (bare module marker) → drop entirely
     .replace(/^[ \t]*export[ \t]*\{[ \t]*\}[ \t]*;?[ \t]*$/gm, '')
     // `export default EXPR` → `exports.default = EXPR` (EXPR may span lines)
@@ -122,6 +136,11 @@ export function transformModule(path, code) {
   // here — at publish time — rather than ship a player that can't boot.
   const leftover = out.match(/^[ \t]*(import[ \t]*[{"'*]|import[ \t]+[A-Za-z_$]|export[ \t]+(default|function|class|const|let|var|async)\b|export[ \t]*\{)/m);
   if (leftover) throw new Error(`publish bundler: unsupported module syntax in ${path}: "${leftover[0].trim()}…" — extend transformModule()`);
+
+  // Any `import.meta` that survived the rewrite above (e.g. `import.meta.env`)
+  // is a parse error in the classic bundle and would silently kill every player.
+  // Fail LOUDLY at publish time rather than ship an un-parseable bundle.
+  if (/\bimport\.meta\b/.test(out)) throw new Error(`publish bundler: unsupported import.meta usage in ${path} (only import.meta.url is rewritten) — extend transformModule()`);
 
   if (named.length) out += '\n' + named.map(n => `exports[${JSON.stringify(n)}] = ${n};`).join('\n');
   return out;
