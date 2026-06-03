@@ -4,6 +4,26 @@ import { textScaleField } from '../text-scale.js';
 import { colorOverrideDefaults, colorOverrideFields, applyColorOverrides } from '../widget-color.js';
 import { composeDispose, childSignal } from '../plugin-contract.js';
 import { escapeHtml } from '../utils/escape.js';
+import { fetchFeedItems } from '../feeds.js';
+import { isStored, DATAMODE_OPTIONS } from '../offline-data.js';
+
+// Map one <item>/<entry> node to the shape the widget renders. Shared by the
+// live fetch and offline provisioning so both store/show identical data.
+const rssMapItem = (it) => {
+  const dateStr = it.querySelector('pubDate, published, updated')?.textContent;
+  const date = dateStr ? new Date(dateStr) : null;
+  // Only append "…" when the description was actually truncated, and drop the
+  // line entirely when the feed gave no description — a lone "…" or a full
+  // sentence with a misleading ellipsis both looked broken.
+  const rawDesc = (it.querySelector('description, summary')?.textContent ?? '')
+    .replace(/<[^>]*>/g, '').trim();
+  return {
+    title: it.querySelector('title')?.textContent ?? '',
+    desc: rawDesc.slice(0, 240),
+    truncated: rawDesc.length > 240,
+    date: date && !isNaN(date) ? date.getTime() : 0,
+  };
+};
 
 // RSS Feed plugin, three layout modes for handling more items than the
 // widget can show at once:
@@ -38,7 +58,19 @@ export default register({
     note: 'Headlines and descriptions come from third-party news feeds; check the terms of each publisher before commercial display.',
   },
   schemaVersion: 1,
+  // Offline provisioning: the Studio fetches + parses the feeds on "Refresh data"
+  // and stores the merged item array; the display reads that (no live fetch, no
+  // internet needed on screen). Returns the same shape rssMapItem produces.
+  provisionOffline: async (content) => {
+    const { items, okCount, configured } = await fetchFeedItems(content?.url, {
+      mapItem: rssMapItem, maxItems: content?.maxItems ?? 10,
+    });
+    if (!configured) throw new Error('No feed configured');
+    if (!okCount) throw new Error('Feed unavailable');
+    return items;
+  },
   defaults: () => ({ ...colorOverrideDefaults(),
+    dataMode: 'live',
     url: ['https://www.heise.de/rss/heise-atom.xml'],
     theme: 'gradient-blue',
     textScale: 100,
@@ -50,6 +82,8 @@ export default register({
   }),
   schema: () => ({
     fields: [
+      { key: 'dataMode', type: 'select', label: 'Data source', default: 'live', options: DATAMODE_OPTIONS,
+        help: 'Offline: the Studio fetches the feeds on “Refresh data” and stores them; the display reads that — no live fetch on screen.' },
       // `url` is now an array; the feed-list control also accepts a legacy
       // single-string value (older widgets) and treats it as a one-element array.
       { key: 'url',  type: 'feed-list', label: 'RSS Feeds' },
@@ -184,56 +218,38 @@ export default register({
       }
     };
 
-    (async () => {
-      // Accept array (new) or single string (legacy) shape.
-      const urls = Array.isArray(c.url) ? c.url.filter(Boolean)
-                 : (typeof c.url === 'string' && c.url) ? [c.url]
-                 : [];
-      if (!urls.length) {
-        const errTarget = list ?? tickerTrack;
-        if (errTarget) errTarget.innerHTML = `<${list ? 'li' : 'span'} class="bb-rss-error">No feed configured</${list ? 'li' : 'span'}>`;
-        return;
-      }
-      // Fetch all in parallel; ignore individual failures so one dead feed
-      // doesn't blank the whole widget.
-      const responses = await Promise.allSettled(
-        urls.map(u => fetch(u, { signal: ctrl.signal }).then(r => r.text()))
-      );
-      if (ctrl.signal.aborted) return;
+    const showErr = (msg) => {
+      const errTarget = list ?? tickerTrack;
+      if (errTarget) errTarget.innerHTML = `<${list ? 'li' : 'span'} class="bb-rss-error">${escapeHtml(msg)}</${list ? 'li' : 'span'}>`;
+    };
 
-      const merged = [];
-      let okCount = 0;
-      for (const resp of responses) {
-        if (resp.status !== 'fulfilled') continue;
-        try {
-          const doc = new DOMParser().parseFromString(resp.value, 'application/xml');
-          const items = Array.from(doc.querySelectorAll('item, entry'));
-          if (!items.length) continue;
-          okCount++;
-          for (const it of items) {
-            const dateStr = it.querySelector('pubDate, published, updated')?.textContent;
-            const date = dateStr ? new Date(dateStr) : null;
-            const rawDesc = (it.querySelector('description, summary')?.textContent ?? '')
-              .replace(/<[^>]*>/g, '').trim();
-            merged.push({
-              title: it.querySelector('title')?.textContent ?? '',
-              desc: rawDesc.slice(0, 240),
-              truncated: rawDesc.length > 240,
-              date: date && !isNaN(date) ? date.getTime() : 0,
-            });
-          }
-        } catch { /* malformed feed body, skip */ }
-      }
-      if (!okCount) {
-        if (!ctx?.onError?.()) {
-          const errTarget = list ?? tickerTrack;
-          if (errTarget) errTarget.innerHTML = `<${list ? 'li' : 'span'} class="bb-rss-error">Feed unavailable</${list ? 'li' : 'span'}>`;
+    // Offline / provided mode: the Studio pre-fetched + parsed the feeds and the
+    // merged items live in a data slot, injected here as content._offline.data via
+    // a slot binding (set at publish). The display renders that — no live fetch.
+    const stored = isStored(c);
+
+    (async () => {
+      if (stored) {
+        const offlineItems = c._offline?.data;
+        if (offlineItems === undefined) {
+          const ph = list ?? tickerTrack;
+          if (ph) ph.innerHTML = `<${list ? 'li' : 'span'} class="bb-rss-loading">Provided offline — appears after “Refresh data”.</${list ? 'li' : 'span'}>`;
+          return;
         }
+        allItems = (Array.isArray(offlineItems) ? offlineItems : []).slice(0, c.maxItems ?? 10);
+        if (!allItems.length) { showErr('Empty feed'); return; }
+        layout();
         return;
       }
-      // Sort newest first; undated items go last (preserve relative order).
-      merged.sort((a, b) => b.date - a.date);
-      allItems = merged.slice(0, c.maxItems ?? 10);
+      // Live: fetch + parse every feed (shared pipeline; one dead feed doesn't
+      // blank the widget).
+      const { items, okCount, configured } = await fetchFeedItems(c.url, {
+        signal: ctrl.signal, mapItem: rssMapItem, maxItems: c.maxItems ?? 10,
+      });
+      if (ctrl.signal.aborted) return;
+      if (!configured) { showErr('No feed configured'); return; }
+      if (!okCount) { if (!ctx?.onError?.()) showErr('Feed unavailable'); return; }
+      allItems = items;
       layout();
     })();
 

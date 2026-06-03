@@ -3,6 +3,7 @@ import { themeField } from '../data/themes.js';
 import { colorOverrideDefaults, colorOverrideFields, applyColorOverrides } from '../widget-color.js';
 import { composeDispose, childSignal } from '../plugin-contract.js';
 import { escapeHtml } from '../utils/escape.js';
+import { isStored, DATAMODE_OPTIONS } from '../offline-data.js';
 import { WEATHER_SVG_DEFS, wmoToIconId } from '../data/weather-svg-icons.js';
 import {
   WMO, tempColor, tempBarGradient, windArrowSvg, formatTime, formatHour,
@@ -56,6 +57,32 @@ function fetchWeather(url) {
   return p;
 }
 
+// Build the Open-Meteo forecast URL for OFFLINE provisioning. Unlike the live
+// render (which requests only the params the enabled toggles need), this asks for
+// the UNION of every field any design/toggle might read, so whatever the display
+// has enabled, the stored payload already contains it. The API key — when set —
+// is used HERE, Studio-side, to route to the paid customer endpoint; it is stripped
+// from the shipped widget (STRIP_KEYS) and never reaches the display.
+function offlineForecastUrl(c) {
+  const loc = c?.location ?? {};
+  const unit = c?.unit === 'F' ? 'fahrenheit' : 'celsius';
+  const windUnit = ['kmh', 'mph', 'ms'].includes(c?.windUnit) ? c.windUnit : 'kmh';
+  const qs = new URLSearchParams({
+    latitude:  String(loc.lat),
+    longitude: String(loc.lng),
+    current:   'temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,apparent_temperature,wind_direction_10m',
+    daily:     'temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max,sunrise,sunset',
+    hourly:    'temperature_2m,weather_code,precipitation_probability',
+    temperature_unit: unit,
+    wind_speed_unit:  windUnit,
+    timezone:  'auto',
+  });
+  const apiKey = typeof c?.apiKey === 'string' ? c.apiKey.trim() : '';
+  const host = apiKey ? 'https://customer-api.open-meteo.com' : 'https://api.open-meteo.com';
+  if (apiKey) qs.set('apikey', apiKey);
+  return `${host}/v1/forecast?${qs.toString()}`;
+}
+
 export default register({
   type: 'weather',
   label: 'Live Weather',
@@ -76,7 +103,20 @@ export default register({
   // cards, section headers ("Hourly forecast · Next 12 hours"), HEUTE/Jetzt
   // highlights, and per-card subtitles. Pure-additive: no migration needed.
   schemaVersion: 5,
+  // Offline provisioning: the Studio fetches the full Open-Meteo forecast on
+  // "Refresh data" (using the API key here, never on the display) and stores the
+  // raw response; the display reads that — no live call, no key on screen.
+  provisionOffline: async (content) => {
+    const loc = content?.location ?? {};
+    if (!Number.isFinite(+loc.lat) || !Number.isFinite(+loc.lng)) throw new Error('No location set');
+    const r = await fetch(offlineForecastUrl(content), { cache: 'no-store' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  },
   defaults: () => ({
+    // 'live' (display fetches Open-Meteo) or 'stored' (Studio pre-fetches into a
+    // data slot, the display reads that — no live call, no key on screen).
+    dataMode: 'live',
     location: { name: 'Munich', lat: 48.137, lng: 11.575 },
     unit: 'C', windUnit: 'kmh',
     // Optional Open-Meteo API key. Empty = free public api.open-meteo.com
@@ -120,6 +160,8 @@ export default register({
     fields: [
       // ── Source ────────────────────────────────────────────────────────────
       { type: 'section', label: 'Source' },
+      { key: 'dataMode', type: 'select', label: 'Data source', default: 'live', options: DATAMODE_OPTIONS,
+        help: 'Offline: the Studio fetches the forecast on “Refresh data” (the API key is used here, never on screen) and stores it; the display reads that — no live call, works without internet on the screen.' },
       { key: 'location', type: 'place', label: 'Location' },
       { type: 'row', children: [
         { key: 'unit',     type: 'select', label: 'Temp', options: ['C','F'] },
@@ -339,46 +381,68 @@ export default register({
       return composeDispose(() => root.remove());
     }
 
+    // Offline / provided mode: the Studio pre-fetched the forecast and it lives in
+    // a data slot, injected here as content._offline via a slot binding (set at
+    // publish). The display reads that — no live call, no API key.
+    const stored = isStored(c);
+    if (stored && c._offline?.data === undefined) {
+      // Stored mode but nothing provisioned yet (editor preview before the first
+      // "Refresh data") — neutral placeholder, not an error.
+      root.querySelector('.bb-weather-desc').textContent = 'Provided offline — appears after “Refresh data”.';
+      return composeDispose(() => root.remove());
+    }
+
     const ctrl = childSignal(ctx?.signal);
     (async () => {
       try {
         const loc = c.location ?? {};
-        if (!Number.isFinite(+loc.lat) || !Number.isFinite(+loc.lng)) throw new Error('No location set');
-        const unit = c.unit === 'F' ? 'fahrenheit' : 'celsius';
+        // windUnit is read later (stats/hourly rendering) regardless of mode, so
+        // derive it up front in both the live and offline paths.
         const windUnit = ['kmh', 'mph', 'ms'].includes(c.windUnit) ? c.windUnit : 'kmh';
+        let w, fetchedAt;
+        if (stored) {
+          // Read the pre-fetched payload; no network, no key. fetchedAt comes from
+          // the slot's ISO stamp (when the Studio last refreshed).
+          w = c._offline.data;
+          const ts = Date.parse(c._offline.fetchedAt);
+          fetchedAt = Number.isFinite(ts) ? ts : Date.now();
+        } else {
+          if (!Number.isFinite(+loc.lat) || !Number.isFinite(+loc.lng)) throw new Error('No location set');
+          const unit = c.unit === 'F' ? 'fahrenheit' : 'celsius';
 
-        // Build the API URL: every section the user enabled adds its own
-        // params. Keeping the request lean when toggles are off avoids
-        // surprising Open-Meteo with kitchen-sink calls for users who just
-        // want the current temperature.
-        const currentParams = ['temperature_2m', 'relative_humidity_2m', 'wind_speed_10m', 'weather_code', 'apparent_temperature'];
-        if (showWindVec || showStats) currentParams.push('wind_direction_10m');
-        const dailyParams = [];
-        if (showForecast || showHiLo) dailyParams.push('temperature_2m_max', 'temperature_2m_min', 'weather_code');
-        if (showPrecip)               dailyParams.push('precipitation_probability_max');
-        if (showSunrise)              dailyParams.push('sunrise', 'sunset');
-        const hourlyParams = [];
-        if (showHourly) hourlyParams.push('temperature_2m', 'weather_code', 'precipitation_probability');
+          // Build the API URL: every section the user enabled adds its own
+          // params. Keeping the request lean when toggles are off avoids
+          // surprising Open-Meteo with kitchen-sink calls for users who just
+          // want the current temperature.
+          const currentParams = ['temperature_2m', 'relative_humidity_2m', 'wind_speed_10m', 'weather_code', 'apparent_temperature'];
+          if (showWindVec || showStats) currentParams.push('wind_direction_10m');
+          const dailyParams = [];
+          if (showForecast || showHiLo) dailyParams.push('temperature_2m_max', 'temperature_2m_min', 'weather_code');
+          if (showPrecip)               dailyParams.push('precipitation_probability_max');
+          if (showSunrise)              dailyParams.push('sunrise', 'sunset');
+          const hourlyParams = [];
+          if (showHourly) hourlyParams.push('temperature_2m', 'weather_code', 'precipitation_probability');
 
-        const qs = new URLSearchParams({
-          latitude:  String(loc.lat),
-          longitude: String(loc.lng),
-          current:   currentParams.join(','),
-          temperature_unit: unit,
-          wind_speed_unit:  windUnit,
-          timezone:  'auto',
-        });
-        if (dailyParams.length)  qs.set('daily',  dailyParams.join(','));
-        if (hourlyParams.length) qs.set('hourly', hourlyParams.join(','));
+          const qs = new URLSearchParams({
+            latitude:  String(loc.lat),
+            longitude: String(loc.lng),
+            current:   currentParams.join(','),
+            temperature_unit: unit,
+            wind_speed_unit:  windUnit,
+            timezone:  'auto',
+          });
+          if (dailyParams.length)  qs.set('daily',  dailyParams.join(','));
+          if (hourlyParams.length) qs.set('hourly', hourlyParams.join(','));
 
-        // Free public endpoint is non-commercial only; a configured key routes
-        // to the paid customer endpoint (different host, `apikey` param). See
-        // https://open-meteo.com/en/terms.
-        const apiKey = typeof c.apiKey === 'string' ? c.apiKey.trim() : '';
-        const host = apiKey ? 'https://customer-api.open-meteo.com' : 'https://api.open-meteo.com';
-        if (apiKey) qs.set('apikey', apiKey);
+          // Free public endpoint is non-commercial only; a configured key routes
+          // to the paid customer endpoint (different host, `apikey` param). See
+          // https://open-meteo.com/en/terms.
+          const apiKey = typeof c.apiKey === 'string' ? c.apiKey.trim() : '';
+          const host = apiKey ? 'https://customer-api.open-meteo.com' : 'https://api.open-meteo.com';
+          if (apiKey) qs.set('apikey', apiKey);
 
-        const { data: w, fetchedAt } = await fetchWeather(`${host}/v1/forecast?${qs.toString()}`);
+          ({ data: w, fetchedAt } = await fetchWeather(`${host}/v1/forecast?${qs.toString()}`));
+        }
         if (ctrl.signal.aborted) return;
 
         const cur = w.current ?? {};

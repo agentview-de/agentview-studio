@@ -35,6 +35,10 @@ const suites = [
   './publish.test.js',
   // Vendor-inline runtime resolver (DOM-free paths: null fallback + src/data lookup).
   './inline-vendor.test.js',
+  // "Provide data offline" pure helpers — slug, stored-widget walk, shipped copy.
+  './offline-data.test.js',
+  // Multi-feed fetch+parse pipeline (rss/news-photos live + offline provisioning).
+  './feeds.test.js',
   // Reactive store deep-Proxy: identity stability + path notification.
   // store.js touches localStorage/setTimeout only inside functions, not at load.
   './store.test.js',

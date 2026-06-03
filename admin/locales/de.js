@@ -283,6 +283,12 @@ export const de = {
   'pub.connectFirst': 'Zuerst mit agentView verbinden.', 'pub.publishing': 'Wird veröffentlicht…',
   'pub.modeHelp': 'Display = ein Bildschirm · Group = alle einer Kategorie · Mehrere = einzeln auswählen.',
   'pub.warnings': 'Veröffentlicht mit {n} Validierungs-Hinweis(en).',
+  'offline.refreshBtn': 'Daten', 'offline.refreshTip': 'Offline-Datenquellen — Übersicht & alle aktualisieren',
+  'offline.none': 'Keine Offline-Datenquellen in dieser Playlist.', 'offline.refreshing': 'Aktualisiere Datenquellen…',
+  'offline.refreshOk': '{n} Datenquelle(n) aktualisiert.', 'offline.refreshPartial': '{ok} aktualisiert, {fail} fehlgeschlagen.',
+  'offline.panelTitle': 'Offline-Datenquellen', 'offline.refreshNow': 'Jetzt alle aktualisieren',
+  'offline.panelHelp': 'Das Display liest diese hinterlegten Daten — kein Live-API-Aufruf, kein Schlüssel, kein Internet am Bildschirm nötig.',
+  'offline.lastUpdated': 'Stand: {when}', 'offline.neverYet': 'noch nicht hinterlegt',
   'pub.success': 'Veröffentlicht, Display aktualisiert in Sekunden.',
   'pub.successGroup': 'An die ganze Group veröffentlicht.', 'pub.failed': 'Veröffentlichen fehlgeschlagen: {msg}',
 

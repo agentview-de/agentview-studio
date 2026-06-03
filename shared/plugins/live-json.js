@@ -3,6 +3,7 @@ import { themeField } from '../data/themes.js';
 import { colorOverrideDefaults, colorOverrideFields, applyColorOverrides } from '../widget-color.js';
 import { composeDispose } from '../plugin-contract.js';
 import { liveSource } from '../live-source.js';
+import { isStored, offlineLiveOpts, DATAMODE_OPTIONS } from '../offline-data.js';
 import { escapeHtml } from '../utils/escape.js';
 
 function pretty(v, indent = 0) {
@@ -30,13 +31,15 @@ export default register({
   icon: '{ }',
   network: true,
   schemaVersion: 2,
-  defaults: () => ({ ...colorOverrideDefaults(), url: '', refreshSec: 30, theme: 'dark-minimal' }),
+  defaults: () => ({ ...colorOverrideDefaults(), dataMode: 'live', url: '', refreshSec: 30, theme: 'dark-minimal' }),
   schema: () => ({
     fields: [
+      { key: 'dataMode', type: 'select', label: 'Data source', default: 'live', options: DATAMODE_OPTIONS,
+        help: 'Offline: the Studio fetches the URL on "Refresh data" and stores the result in agentView; the display reads that — no live API call, no API key, works without internet on the screen.' },
       { key: 'url', type: 'url', label: 'JSON URL', test: 'json',
         placeholder: 'https://api.example.com/data.json',
-        help: 'Must return JSON and allow cross-origin requests (CORS). An agentView data-slot read URL works and is CORS-enabled.' },
-      { key: 'refreshSec', type: 'duration', label: 'Refresh interval', min: 1, default: 30 },
+        help: 'Live mode: fetched on the display. Offline mode: fetched only by the Studio when you click "Refresh data". Must return JSON and allow CORS for whichever side fetches it.' },
+      { key: 'refreshSec', type: 'duration', label: 'Refresh interval', min: 1, default: 30, showIf: c => c.dataMode !== 'stored' },
       themeField(),
       ...colorOverrideFields(),
     ],
@@ -50,8 +53,22 @@ export default register({
     container.appendChild(root);
     const out = root.querySelector('.bb-json');
 
-    if (!c.url) {
+    // Offline / provided mode: the data was pre-fetched by the Studio and lives in
+    // a data slot, injected here as `content._offline` via a slot binding (set at
+    // publish). The display reads that — no live fetch, no API key.
+    const stored = isStored(c);
+    const offlineData = c._offline?.data;
+
+    if (!stored && !c.url) {
       out.textContent = 'Set a JSON URL in the form.';
+      return composeDispose(() => root.remove());
+    }
+    // Stored mode but nothing provisioned yet (no slot data, e.g. editor preview
+    // before the first "Refresh data"): show a neutral placeholder, not an error.
+    if (stored && offlineData === undefined) {
+      out.textContent = c.url
+        ? 'Provided-offline data — appears on the display after “Refresh data”.'
+        : 'Set a JSON URL, then click “Refresh data” to provision it.';
       return composeDispose(() => root.remove());
     }
 
@@ -60,19 +77,20 @@ export default register({
     if (ctx?.mode === 'preview' && ctx?.thumbnail) {
       out.innerHTML =
         `<span class="bb-j-k">"url"</span>: <span class="bb-j-s">"${escapeHtml(c.url)}"</span>\n` +
-        `<span class="bb-j-k">"refreshSec"</span>: <span class="bb-j-num">${c.refreshSec ?? 30}</span>\n` +
-        `<span class="bb-j-k">"status"</span>: <span class="bb-j-s">"live · polls every ${c.refreshSec ?? 30}s"</span>`;
+        `<span class="bb-j-k">"source"</span>: <span class="bb-j-s">"${stored ? 'offline · from data slot' : 'live · polls every ' + (c.refreshSec ?? 30) + 's'}"</span>`;
       return composeDispose(() => root.remove());
     }
 
     out.textContent = 'Loading…';
     // The shared live-source seam owns the fetch, abort, poll timer and error
     // backoff (stop after 3 errors OR the first CORS-shaped failure); this
-    // plugin owns only the JSON rendering and the error copy.
+    // plugin owns only the JSON rendering and the error copy. In stored mode it
+    // renders the injected offline data and never touches the network.
     const stop = liveSource({
       url: c.url,
       signal: ctx?.signal,
-      intervalMs: (c.refreshSec ?? 30) * 1000,
+      intervalMs: stored ? 0 : (c.refreshSec ?? 30) * 1000,
+      ...offlineLiveOpts(c),
       fetchInit: { cache: 'no-store' },
       maxErrors: 3,
       onData: (data) => { out.innerHTML = pretty(data, 0); },

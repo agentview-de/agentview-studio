@@ -48,6 +48,16 @@ const CORS_RE = /fetch|cors|network/i;
 //   onError(err, info)  info = { consecutive, cors, gaveUp }. Called on every
 //                  failure; check info.gaveUp to tell a transient retry from a
 //                  terminal stop.
+//   offline        when true, do NOT touch the network at all. The data was
+//                  pre-fetched into an agentView data slot (by the Studio's
+//                  "Daten aktualisieren" action) and injected into the widget via
+//                  a slot binding — so the display needs no online access and no
+//                  API key. `offlineData` is rendered once via onData; later
+//                  updates arrive when the slide re-renders with fresh slot data
+//                  (the player polls slots independently). If offlineData is
+//                  absent (slot not yet populated) we stay SILENT — no error UI —
+//                  and let a later render show it.
+//   offlineData    the pre-fetched, raw value to render in offline mode.
 export function liveSource({
   url,
   signal,
@@ -59,10 +69,23 @@ export function liveSource({
   backoff = true,
   onData,
   onError,
+  offline = false,
+  offlineData,
   _fetch = (u, init) => fetch(u, init),
   _setTimer = (fn, ms) => setTimeout(fn, ms),
   _clearTimer = (id) => clearTimeout(id),
 } = {}) {
+  // Offline / pre-provisioned mode: render the supplied data, never fetch. A throw
+  // from onData is routed to onError exactly as in the network path; a missing
+  // value stays silent (the slide re-renders once the bound slot is populated).
+  if (offline) {
+    if (offlineData !== undefined && offlineData !== null) {
+      try { onData?.(offlineData); }
+      catch (e) { onError?.(e, { consecutive: 1, cors: false, gaveUp: true }); }
+    }
+    return () => {};
+  }
+
   const ctrl = childSignal(signal);
   let timer = null;
   let consecutive = 0;

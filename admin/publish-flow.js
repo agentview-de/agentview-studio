@@ -15,6 +15,8 @@ import { openModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { t } from './i18n.js';
 import { collectUniqueSlots } from '../shared/binding-resolver.js';
+import { offlineSlugFor, withOfflineBindings, offlineWidgets } from '../shared/offline-data.js';
+import { get as getPlugin } from '../shared/plugins/registry.js';
 import { buildSyncAnchor } from '../shared/sync-clock.js';
 import { isEditingVariant, exitVariantEdit } from './canvas/variant-ctx.js';
 // Reused at runtime only (publish-flow <-> displays is a module cycle; the
@@ -23,6 +25,119 @@ import { pairModal } from './views/displays.js';
 
 const slugFor = pl => 'avs-' + (pl?.id ?? 'data');
 const historySlugFor = pl => 'avs-' + (pl?.id ?? 'data') + '-history';
+
+// Fetch ONE "provided offline" widget's source (Studio-side — the API key is used
+// here and never leaves the Studio) and store the RAW response in its data slot,
+// with a fetchedAt stamp. The display reads this slot; no live call on screen.
+async function refreshWidgetData(w) {
+  const plugin = getPlugin(w?.type);
+  let data;
+  if (typeof plugin?.provisionOffline === 'function') {
+    // Widgets with a computed source (currency/weather build their URL from config
+    // + API key) provision themselves — the key is used HERE in the Studio and
+    // never ships to the display.
+    data = await plugin.provisionOffline(w.content ?? {});
+  } else {
+    const src = w?.content?.dataUrl ?? w?.content?.url;
+    if (!src) throw new Error('no source URL');
+    const res = await fetch(src, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    data = await res.json();
+  }
+  await slots.put(
+    offlineSlugFor(w),
+    { data, fetchedAt: new Date().toISOString() },
+    { label: `${w.content?.title || w.type || 'Offline data'} · ${offlineSlugFor(w)}` },
+  );
+}
+
+// Refresh ALL "provided offline" widgets in the CURRENT playlist in one action —
+// the "Daten aktualisieren" button. Each widget's data slot is rewritten; displays
+// pick up the new data on their next slot poll, so NO republish is needed. Resilient
+// (Promise.allSettled): one failing source doesn't block the others.
+export async function refreshAllOfflineData() {
+  const widgets = offlineWidgets(state.playlist);
+  if (!widgets.length) {
+    toast(t('offline.none') ?? 'No offline-data widgets in this playlist.', { kind: 'info' });
+    return { ok: 0, fail: 0, total: 0 };
+  }
+  toast((t('offline.refreshing') ?? 'Refreshing data…'), { kind: 'info', ttl: 2000 });
+  const results = await Promise.allSettled(widgets.map(refreshWidgetData));
+  const fail = results.filter(r => r.status === 'rejected').length;
+  const ok = results.length - fail;
+  toast(
+    fail
+      ? (t('offline.refreshPartial', { ok, fail }) ?? `${ok} refreshed, ${fail} failed.`)
+      : (t('offline.refreshOk', { n: ok }) ?? `${ok} data source(s) refreshed.`),
+    { kind: fail ? 'warn' : 'success' },
+  );
+  return { ok, fail, total: results.length };
+}
+
+// Does the current playlist have any offline-data widgets? (gates the toolbar button)
+export function hasOfflineData() {
+  return offlineWidgets(state.playlist).length > 0;
+}
+
+// "Datenquellen" overview — the toolbar button opens this. Lists every provided-
+// offline widget in the CURRENT playlist with its data slot and "last refreshed"
+// stamp (read live from each slot), plus the single "refresh all" action. Gives
+// the secretary-style workflow visibility: what's stored, how fresh it is, and
+// one click to update everything.
+export async function openOfflineDataPanel() {
+  const widgets = offlineWidgets(state.playlist);
+  const box = document.createElement('div');
+  box.className = 'avs-offline-panel';
+
+  if (!widgets.length) {
+    box.innerHTML = `<p class="bb-form-help">${esc(t('offline.none') ?? 'No offline data sources in this playlist.')}</p>`;
+    await openModal({ title: t('offline.panelTitle') ?? 'Offline data sources', body: box, actions: [{ label: t('common.close') ?? 'Close' }] });
+    return;
+  }
+
+  const fmtStamp = (iso) => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    return isNaN(d) ? null : d.toLocaleString();
+  };
+
+  // Read each slot's fetchedAt once, then paint. Re-run after a refresh.
+  const renderRows = async () => {
+    box.innerHTML = `<p class="bb-form-help">${esc(t('offline.panelHelp') ?? 'The display reads this stored data — no live API call, no key, no internet needed on screen.')}</p>
+      <div class="avs-ods-list" style="display:flex;flex-direction:column;gap:8px;margin:10px 0;">${
+        widgets.map(() => '<div class="avs-ods-row" style="opacity:.5;">…</div>').join('')}</div>
+      <button type="button" class="bb-btn bb-btn-primary avs-ods-refresh" style="width:100%;">⤓ ${esc(t('offline.refreshNow') ?? 'Refresh all now')}</button>`;
+    const list = box.querySelector('.avs-ods-list');
+    const stamps = await Promise.allSettled(widgets.map(w => slots.getValue(offlineSlugFor(w))));
+    list.innerHTML = widgets.map((w, i) => {
+      const plugin = getPlugin(w.type);
+      const icon = plugin?.icon ?? '◷';
+      const label = plugin?.label ?? w.type ?? 'Widget';
+      const slug = offlineSlugFor(w);
+      const val = stamps[i].status === 'fulfilled' ? stamps[i].value : null;
+      const when = fmtStamp(val?.fetchedAt);
+      const stand = when
+        ? (t('offline.lastUpdated', { when }) ?? `Last refreshed: ${when}`)
+        : (t('offline.neverYet') ?? 'not provisioned yet');
+      return `<div class="avs-ods-row" style="display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--bb-border,#2a2a35);border-radius:8px;">
+        <span style="font-size:20px;line-height:1;">${esc(String(icon))}</span>
+        <div style="min-width:0;flex:1;">
+          <div style="font-weight:600;">${esc(label)}${w.content?.title ? ' · ' + esc(w.content.title) : ''}</div>
+          <div class="bb-form-help" style="margin:2px 0 0;">${esc(slug)} · ${esc(stand)}</div>
+        </div>
+      </div>`;
+    }).join('');
+    box.querySelector('.avs-ods-refresh').addEventListener('click', async (e) => {
+      if (state.connection.status !== 'connected') { toast(t('pub.connectFirst'), { kind: 'warn' }); return; }
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      try { await refreshAllOfflineData(); }
+      finally { await renderRows(); }
+    });
+  };
+  await renderRows();
+  await openModal({ title: t('offline.panelTitle') ?? 'Offline data sources', body: box, actions: [{ label: t('common.close') ?? 'Close' }] });
+}
 
 // SHA-256 of an ArrayBuffer as lowercase hex. crypto.subtle needs a secure
 // context (https / localhost); callers tolerate a throw and fall back to no-hash.
@@ -150,13 +265,17 @@ async function buildBundle() {
   // dropped (the stash is in memory only).
   if (isEditingVariant()) exitVariantEdit();
   const pl = state.playlist;
+  // Prepare a SHIPPING copy: "provided offline" widgets get a binding to their
+  // data slot + their API keys stripped (deep clone — the editor copy keeps the
+  // full config). Resolve endpoints from THIS copy so the offline slots' read URLs
+  // are included for the player to poll.
+  const shipped = withOfflineBindings(pl);
   // v3: stamp the playlist with sync anchor + resolved slot endpoints so the
   // bundled player can sync via server-time math and poll bindings without
-  // re-querying agentView's API. Both are mutations on the about-to-be-
-  // uploaded copy, not on the editor's working copy — clone shallowly.
-  const slotEndpoints = await resolveSlotEndpoints(pl);
+  // re-querying agentView's API.
+  const slotEndpoints = await resolveSlotEndpoints(shipped);
   const plToShip = {
-    ...pl,
+    ...shipped,
     syncAnchor: buildSyncAnchor(pl),
     slotEndpoints,
   };
@@ -184,7 +303,9 @@ async function buildBundle() {
     resolveAsset: makeAssetResolver(),
     vendorTypes,
   });
-  return { html, slug, name: plToShip?.name ?? 'Playlist', shippedPlaylist: plToShip };
+  // sourcePlaylist (with keys intact) is snapshotted to history so a restore keeps
+  // the full config; the displays only ever see the key-stripped plToShip.
+  return { html, slug, name: plToShip?.name ?? 'Playlist', shippedPlaylist: plToShip, sourcePlaylist: pl };
 }
 
 export async function publishToDisplay(displayId) {
@@ -293,7 +414,7 @@ async function doPublish({ mode, displayIds = [], groupId }) {
   }
   toast(t('pub.publishing'), { kind: 'info', ttl: 2000 });
   try {
-    const { html, name, shippedPlaylist } = await buildBundle();
+    const { html, name, sourcePlaylist } = await buildBundle();
     // Pre-publish dry-run (warn only — never blocks shipping).
     try {
       const r = await displaysApi.testContent(html);
@@ -317,7 +438,7 @@ async function doPublish({ mode, displayIds = [], groupId }) {
       toast(mode === 'group' ? t('pub.successGroup') : t('pub.success'), { kind: 'success' });
     }
     // v3: best-effort version snapshot after a successful publish.
-    snapshotVersion(shippedPlaylist ?? state.playlist, ids).catch(() => {});
+    snapshotVersion(sourcePlaylist ?? state.playlist, ids).catch(() => {});
     // v3 comfort: remember the target so the Quick-Republish button works next.
     state.meta.lastPublish = { mode, displayIds: ids, groupId, at: Date.now() };
     confetti();

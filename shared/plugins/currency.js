@@ -3,10 +3,15 @@ import { themeField } from '../data/themes.js';
 import { colorOverrideDefaults, colorOverrideFields, applyColorOverrides } from '../widget-color.js';
 import { composeDispose } from '../plugin-contract.js';
 import { liveSource } from '../live-source.js';
+import { isStored, offlineLiveOpts, DATAMODE_OPTIONS } from '../offline-data.js';
 import { escapeHtml } from '../utils/escape.js';
 import { currencySymbol } from '../data/currencies.js';
 
 // Uses open.er-api.com (no key, CORS-enabled).
+
+// The exchange-rate endpoint for a base currency. One source of truth so live
+// render and offline provisioning fetch the same URL.
+const fxUrl = (base) => `https://open.er-api.com/v6/latest/${encodeURIComponent(base || 'EUR')}`;
 
 // FX rates span orders of magnitude (1 EUR ≈ 1.08 USD but ≈ 160 JPY). A flat
 // 4 decimals turns large rates into noise ("160.0000"), so scale the precision
@@ -29,9 +34,18 @@ export default register({
     note: 'Free open endpoint; attribution required, cache responses.',
   },
   schemaVersion: 1,
-  defaults: () => ({ ...colorOverrideDefaults(), base: 'EUR', symbols: ['USD','GBP','JPY','CHF'], theme: 'corporate-blue' }),
+  defaults: () => ({ ...colorOverrideDefaults(), dataMode: 'live', base: 'EUR', symbols: ['USD','GBP','JPY','CHF'], theme: 'corporate-blue' }),
+  // Offline provisioning: fetch the rates Studio-side and store the raw response.
+  // (No key here, but this is the generic seam currency/weather share.)
+  provisionOffline: async (content) => {
+    const r = await fetch(fxUrl(content?.base ?? 'EUR'), { cache: 'no-store' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  },
   schema: () => ({
     fields: [
+      { key: 'dataMode', type: 'select', label: 'Data source', default: 'live', options: DATAMODE_OPTIONS,
+        help: 'Offline: the Studio fetches the rates on “Refresh data” and stores them; the display reads that — no live call on screen.' },
       { key: 'base', type: 'currency', label: 'Base currency' },
       { key: 'symbols', type: 'list', label: 'Target currencies',
         itemShape: [{ key: 'code', type: 'currency', label: 'Currency' }] },
@@ -64,9 +78,14 @@ export default register({
     // 200 even on failure, signalling via the body ({ result:'error' }); onData
     // throws on that so it lands as an honest "unavailable" (routed to onError)
     // rather than a silent grid of em-dashes.
+    if (isStored(c) && c._offline?.data === undefined) {
+      root.querySelector('.bb-fx-grid').textContent = 'Provided offline — appears on the display after “Refresh data”.';
+      return composeDispose(() => root.remove());
+    }
     const stop = liveSource({
-      url: `https://open.er-api.com/v6/latest/${encodeURIComponent(c.base ?? 'EUR')}`,
+      url: fxUrl(c.base),
       signal: ctx?.signal,
+      ...offlineLiveOpts(c),
       onData: (j) => {
         if (j.result === 'error' || !j.rates) throw new Error('rates unavailable');
         const symbols = (Array.isArray(c.symbols) ? c.symbols : []).map(s => typeof s === 'string' ? s : s.code).filter(Boolean);

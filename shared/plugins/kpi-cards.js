@@ -3,6 +3,7 @@ import { themeField } from '../data/themes.js';
 import { colorOverrideDefaults, colorOverrideFields, applyColorOverrides } from '../widget-color.js';
 import { composeDispose } from '../plugin-contract.js';
 import { liveSource } from '../live-source.js';
+import { offlineLiveOpts, SOURCE_OPTIONS } from '../offline-data.js';
 import { escapeHtml } from '../utils/escape.js';
 
 function fmt(v, unit) {
@@ -59,9 +60,10 @@ export default register({
   }),
   schema: () => ({
     fields: [
-      { key: 'source', type: 'select', label: 'Data source', options: ['inline','url'] },
+      { key: 'source', type: 'select', label: 'Data source', options: SOURCE_OPTIONS,
+        help: 'Offline: the Studio fetches the JSON URL on “Refresh data” and stores it; the display reads that — no live call on screen.' },
       { key: 'dataUrl', type: 'url', label: 'Remote JSON URL', test: 'json',
-        showIf: c => c.source === 'url' },
+        showIf: c => c.source === 'url' || c.source === 'stored' },
       { key: 'cards', type: 'table', label: 'KPI cards',
         showIf: c => (c.source ?? 'inline') === 'inline',
         columns: [
@@ -117,10 +119,17 @@ export default register({
 
     // Inline cards paint immediately; a remote source fetches once through the
     // shared live-source seam and paints (or shows the load error) on arrival.
-    if (c.source === 'url' && c.dataUrl) {
+    const stored = c.source === 'stored';
+    if (stored || (c.source === 'url' && c.dataUrl)) {
+      // Offline with nothing provisioned yet → neutral placeholder.
+      if (stored && c._offline?.data === undefined) {
+        grid.innerHTML = '<div style="grid-column:1 / -1;color:currentColor;opacity:.6;font-size:14px;padding:16px;text-align:center;">Provided-offline — appears on the display after “Refresh data”.</div>';
+        return composeDispose(() => root.remove());
+      }
       const stop = liveSource({
         url: c.dataUrl,
         signal: ctx?.signal,
+        ...offlineLiveOpts(c),
         onData: (data) => paint(data),
         onError: (e) => {
           if (ctx?.onError?.()) return;

@@ -27,7 +27,7 @@ import * as assetLibrary from './ui/asset-library.js';
 import { mountEditor } from './views/editor.js';
 import { mountDisplays, refreshFleet } from './views/displays.js';
 import { mountAdmin, refreshAdmin } from './views/admin.js';
-import { openPublishPicker, publishLast, refreshRunning } from './publish-flow.js';
+import { openPublishPicker, publishLast, refreshRunning, openOfflineDataPanel, hasOfflineData } from './publish-flow.js';
 import { orgs as orgsApi } from './api.js';
 import { openPreview } from './preview-flow.js';
 import { addWidget, applyActiveDesign, deleteSelected, duplicateSelected, renderSlide as canvasRender, zoomToFit as canvasFit, resetLivePreviews } from './canvas/canvas.js';
@@ -87,6 +87,7 @@ function mountShell() {
         <button class="avs-iconbtn" id="t-undo" title="${t('tb.undo')} (${kbd('mod+z')})">↶</button>
         <button class="avs-iconbtn" id="t-redo" title="${t('tb.redo')} (${kbd('mod+shift+z')})">↷</button>
         <button class="avs-iconbtn" id="t-preview" title="${t('preview.go')} (${kbd('shift+p')})">▶</button>
+        <button class="bb-btn bb-btn-secondary avs-refresh-data-btn" id="t-refresh-data" title="${t('offline.refreshTip')}" style="display:none">⤓ ${t('offline.refreshBtn')}</button>
         <button class="bb-btn bb-btn-primary avs-publish-btn" id="t-publish">${t('pub.go')}</button>
         <button class="avs-iconbtn avs-republish-btn" id="t-republish" title="${t('pub.republish')}" hidden>↻</button>
         <button class="avs-iconbtn avs-langbtn" id="t-lang" title="${t('tb.language')}">${getLocale() === 'de' ? 'EN' : 'DE'}</button>
@@ -107,6 +108,23 @@ function mountShell() {
   document.getElementById('t-undo').addEventListener('click', doUndo);
   document.getElementById('t-redo').addEventListener('click', doRedo);
   document.getElementById('t-publish').addEventListener('click', tryPublish);
+  // "Daten": open the Datenquellen overview — lists every provided-offline widget
+  // with its last-refreshed stamp and a single "refresh all" action (fetches each
+  // source Studio-side, key stays here, stores it in agentView; displays pick it up
+  // on their next slot poll — no republish). Shown only when the playlist has such
+  // widgets (toggled via the store subscription below).
+  document.getElementById('t-refresh-data').addEventListener('click', () => {
+    if (state.connection.status !== 'connected') { tryPublish(); return; }
+    openOfflineDataPanel();
+  });
+  const reflectOfflineBtn = () => {
+    const b = document.getElementById('t-refresh-data');
+    // style.display (not the [hidden] attr) — .bb-btn sets `display`, which would
+    // override the UA [hidden] rule at equal specificity and leak the button.
+    if (b) b.style.display = hasOfflineData() ? '' : 'none';
+  };
+  reflectOfflineBtn();
+  subscribe('playlist', reflectOfflineBtn);
   document.getElementById('t-republish').addEventListener('click', () => {
     if (state.connection.status !== 'connected') { tryPublish(); return; }
     publishLast();
