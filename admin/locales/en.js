@@ -281,6 +281,8 @@ export const en = {
   'offline.panelTitle': 'Offline data sources', 'offline.refreshNow': 'Refresh all now',
   'offline.panelHelp': 'The display reads this stored data — no live API call, no key, no internet needed on screen.',
   'offline.lastUpdated': 'Last refreshed: {when}', 'offline.neverYet': 'not provisioned yet',
+  'offline.refreshingOne': 'Fetching data…', 'offline.refreshOneOk': 'Offline data stored — shown below.',
+  'offline.refreshOneFail': 'Could not fetch data: {msg}',
   'pub.success': 'Published, display refreshes within seconds.',
   'pub.successGroup': 'Published to the whole group.', 'pub.failed': 'Publish failed: {msg}',
 
