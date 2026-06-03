@@ -115,7 +115,21 @@ button { font-family: inherit; }
 .avs-viewswitch button.avs-on { background: var(--bb-bg-3); color: var(--bb-ink); box-shadow: var(--bb-shadow-1); }
 
 .avs-top-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-.avs-publish-btn { padding: 7px 16px; border-radius: var(--bb-r-md); font-weight: 600; }
+/* One consistent header action system. Every control in the row is exactly 32px
+   tall and shares the same corner radius, so the toolbar reads as one family:
+   the icon buttons (.avs-iconbtn) are a uniform square; the two action pills —
+   Daten (secondary) + Veröffentlichen (primary) — share one geometry and differ
+   only by fill/weight (the visual tier); the connection chip aligns to the same
+   height + radius. Scoped to .avs-top-actions so these win over the generic
+   .bb-btn / .avs-conn base styles regardless of stylesheet order. */
+.avs-top-actions .avs-iconbtn { border-radius: var(--bb-r-md); }
+.avs-top-actions .bb-btn {
+  height: 32px; padding: 0 14px; border-radius: var(--bb-r-md);
+  font-size: 13px; font-weight: 600;
+}
+.avs-top-actions .avs-publish-btn { padding: 0 16px; }
+.avs-top-actions .avs-conn { height: 32px; padding: 0 12px; border-radius: var(--bb-r-md); }
+.avs-top-actions .avs-orgchip { height: 32px; padding: 0 10px; border-radius: var(--bb-r-md); }
 .avs-savechip { font-size: 11px; color: var(--bb-ink-faint); min-width: 26px; text-align: right; }
 .avs-conn {
   display: inline-flex; align-items: center; gap: 7px; max-width: 200px;
