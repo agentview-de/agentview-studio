@@ -562,6 +562,7 @@ export const en = {
   'pub.emptyPlaylist': 'Add at least one slide before publishing.',
   'conn.loginDenied': 'Login denied.',
   'conn.loginTimedOut': 'Login timed out.',
+  'conn.handoffFailed': 'Could not connect from the dashboard. Please try again.',
 
 
   'sched.dow': 'Days of week',

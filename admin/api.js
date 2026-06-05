@@ -75,6 +75,9 @@ export const auth = {
   apiKeyRevoke: (id) => request('DELETE', `/api/v1/agent/api-keys/${encodeURIComponent(id)}`),
   licenseInfo: () => request('GET', '/api/v1/agent/license-info'),
   rotateApprovalSecret: () => request('POST', '/api/v1/agent/account/approval-secret/rotate'),
+  // Exchange a one-time dashboard handoff code for a fresh, scoped API key so
+  // a user arriving from the agentView dashboard lands already connected.
+  redeemHandoff: (code) => request('POST', '/api/v1/studio/handoff/redeem', { code }),
 };
 
 // ---------- Displays ----------
