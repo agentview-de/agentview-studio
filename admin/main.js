@@ -413,11 +413,17 @@ async function maybeAutoConnect() {
   if (state.connection.apiKey) { try { await connect(); } catch {} }
 }
 
-// Boot-time connection: a dashboard handoff (?handoff=...) takes precedence
-// over any stored key — it delivers a fresh, scoped key and connects. Only when
-// there is no handoff in the URL do we fall back to the stored connection.
+// Boot-time connection: when the user arrives via a dashboard handoff
+// (?handoff=...), that path OWNS the outcome — it delivers a fresh, scoped key
+// and connects. We deliberately do NOT fall back to a stored connection on
+// handoff failure: a stale/expired avs_conn key would otherwise surface a
+// confusing second "connection failed" error on top of the handoff error.
+// Only when there is no handoff in the URL do we try the stored connection.
 async function bootConnect() {
-  if (await maybeHandoff()) return;
+  if (new URLSearchParams(location.search).has('handoff')) {
+    await maybeHandoff();
+    return;
+  }
   await maybeAutoConnect();
 }
 
