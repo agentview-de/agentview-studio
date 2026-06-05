@@ -570,6 +570,7 @@ export const de = {
   'pub.emptyPlaylist': 'Mindestens eine Folie hinzufügen, bevor veröffentlicht wird.',
   'conn.loginDenied': 'Anmeldung abgelehnt.',
   'conn.loginTimedOut': 'Zeitüberschreitung bei der Anmeldung.',
+  'conn.handoffFailed': 'Verbindung vom Dashboard fehlgeschlagen. Bitte erneut versuchen.',
 
 
   'sched.dow': 'Wochentage',

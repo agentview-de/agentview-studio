@@ -52,7 +52,7 @@ registerAllCommands();
 installShortcuts();
 bindGlobalShortcuts();
 reflectConnectionUi();
-maybeAutoConnect();
+bootConnect();
 maybeWelcome();
 
 function ensureSlide() {
@@ -411,6 +411,43 @@ function reflectConnectionUi() {
 
 async function maybeAutoConnect() {
   if (state.connection.apiKey) { try { await connect(); } catch {} }
+}
+
+// Boot-time connection: a dashboard handoff (?handoff=...) takes precedence
+// over any stored key — it delivers a fresh, scoped key and connects. Only when
+// there is no handoff in the URL do we fall back to the stored connection.
+async function bootConnect() {
+  if (await maybeHandoff()) return;
+  await maybeAutoConnect();
+}
+
+// Single-use handoff from the agentView dashboard: the dashboard mints a code
+// and opens studio.agentview.de/?handoff=<code>. We redeem it for a fresh,
+// revocable API key, store it, and connect — without the credential ever
+// sitting in the URL.
+async function maybeHandoff() {
+  const params = new URLSearchParams(location.search);
+  const code = params.get('handoff');
+  if (!code) return false;
+
+  // Strip the code from the URL immediately so it never lingers in history,
+  // the back button, the referrer, or a copied link.
+  params.delete('handoff');
+  const qs = params.toString();
+  history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+
+  try {
+    const res = await auth.redeemHandoff(code);
+    if (res?.apiKey) {
+      state.connection.apiKey = res.apiKey;
+      persistConn();
+      await connect();
+      return true;
+    }
+  } catch (e) {
+    toast(t('conn.handoffFailed'), { kind: 'error' });
+  }
+  return false;
 }
 
 // First-run welcome: a one-time, dismissible explainer with a connect CTA.
