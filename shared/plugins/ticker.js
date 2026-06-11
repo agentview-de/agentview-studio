@@ -31,7 +31,9 @@ const FONT_STACK = {
 const WEIGHTS = { regular: '400', medium: '500', semibold: '600', bold: '700' };
 const TRACKING = { normal: '0', wide: '0.06em', wider: '0.12em' };
 // Vertical placement of the strip inside the widget box (only relevant when the
-// bar doesn't fill the whole box). Maps to the root's align-items.
+// bar doesn't fill the whole box). `.bb-slide` is a flex COLUMN, so vertical
+// placement is justify-content (the main axis) — NOT align-items, which would
+// only move the strip horizontally. Same gotcha text.js documents.
 const VPOS = { top: 'flex-start', middle: 'center', bottom: 'flex-end' };
 // Strip thickness. 'full' (default) fills the box exactly like before; the
 // others make an intrinsic-height strip whose padding sets the thickness and
@@ -148,12 +150,13 @@ export default register({
     const root = document.createElement('div');
     applyColorOverrides(root, c);
     root.className = `bb-slide bb-slide-ticker bb-theme-${c.theme ?? 'minimal-dark'}`;
-    // The strip is placed inside the box via the root's align-items. In the
-    // legacy 'full' mode the bar fills the box and solidBackground lets the
-    // bb-theme-* background paint the whole root (exactly as before); in the
-    // strip modes the root stays clear and the bar itself carries the fill.
-    root.style.cssText += 'width:100%;height:100%;display:flex;overflow:hidden;'
-      + 'align-items:' + (VPOS[c.barPosition] ?? 'center') + ';'
+    // The strip is placed inside the box via the root's justify-content (the
+    // root is an explicit flex COLUMN). In the legacy 'full' mode the bar fills
+    // the box and solidBackground lets the bb-theme-* background paint the whole
+    // root (exactly as before); in the strip modes the root stays clear and the
+    // bar itself carries the fill.
+    root.style.cssText += 'width:100%;height:100%;display:flex;flex-direction:column;overflow:hidden;'
+      + 'justify-content:' + (VPOS[c.barPosition] ?? 'center') + ';'
       + ((fullHeight && solid) ? '' : 'background:transparent;')
       + 'color:var(--bb-st-fg,#f1f1f4);';
     root.style.containerType = 'size';
