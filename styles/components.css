@@ -389,17 +389,25 @@ textarea { resize: vertical; min-height: 100px; }
 
 /* Segmented button group — small enums (select + buttons:true) and the
    alignment picker. Every option visible, one click to switch. */
-.bb-seg { display: inline-flex; border: 1px solid var(--bb-border); border-radius: var(--bb-r-sm); overflow: hidden; width: fit-content; }
+/* Text segmented control fills the row with equal columns so a 2–5 option
+   group can never out-grow the narrow inspector and force a horizontal
+   scrollbar; long labels wrap inside their button instead of overflowing. */
+.bb-seg { display: flex; width: 100%; max-width: 100%; border: 1px solid var(--bb-border); border-radius: var(--bb-r-sm); overflow: hidden; }
 .bb-seg-btn {
+  flex: 1 1 0; min-width: 0;
   display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-  background: var(--bb-bg-2); border: 0; padding: 6px 10px;
+  background: var(--bb-bg-2); border: 0; padding: 6px 8px;
   color: var(--bb-ink-muted); font-size: 12px; font-weight: 500; cursor: pointer;
+  text-align: center; line-height: 1.2; white-space: normal; overflow-wrap: anywhere;
   transition: background var(--bb-trans-fast), color var(--bb-trans-fast);
 }
 .bb-seg-btn + .bb-seg-btn { border-left: 1px solid var(--bb-border); }
 .bb-seg-btn:hover { background: var(--bb-bg-3); color: var(--bb-ink); }
 .bb-seg-btn.bb-on { background: var(--bb-bg-3); color: var(--bb-ink); box-shadow: inset 0 -2px 0 var(--bb-accent); }
-.bb-align-field .bb-seg-btn { padding: 6px 12px; }
+/* The alignment picker is a compact icon row — stay intrinsic-width, don't
+   stretch its three glyph buttons across the whole panel. */
+.bb-align-field { width: fit-content; }
+.bb-align-field .bb-seg-btn { flex: 0 0 auto; padding: 6px 12px; }
 
 /* Datetime + timezone */
 .bb-datetime { display: flex; flex-direction: column; gap: 8px; }
