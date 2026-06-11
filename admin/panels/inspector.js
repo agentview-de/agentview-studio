@@ -379,14 +379,72 @@ async function openSlideSettings() {
 // ---------- Widget inspector ----------
 let debounceTimer = null;
 const debounce = (fn, ms = 200) => { clearTimeout(debounceTimer); debounceTimer = setTimeout(fn, ms); };
+// Geometry commits get their own debounce channel so a burst of typed digits
+// becomes one undo entry without cancelling a pending content/bindings commit
+// on the shared timer above. Canvas updates stay immediate — only commit()
+// is deferred, mirroring the content onChange path.
+let geoDebounceTimer = null;
+const geoDebounce = (fn, ms = 200) => { clearTimeout(geoDebounceTimer); geoDebounceTimer = setTimeout(fn, ms); };
+
+// The previously-built schema form. Disposed before every inspector rebuild so
+// controls holding document-level listeners (rich-text selectionchange /
+// mousedown) or timers don't leak one instance per re-render. Optional
+// chaining keeps this a no-op until buildForm actually returns dispose().
+let prevForm = null;
+
+// Local fold helper for the below-form inspector blocks (onError, Background,
+// Animation, Bindings). Mirrors the bb-form-section fold the schema form above
+// uses — same CSS classes, same `avs_section_<widgetType>_<key>` localStorage
+// convention — so the whole panel has ONE consistent fold interaction. All
+// blocks default to open; keys are prefixed with `_` so they can never collide
+// with a schema section key.
+function foldSection(widgetType, key, title, defaultCollapsed = false) {
+  const storeKey = `avs_section_${widgetType}_${key}`;
+  let collapsed = defaultCollapsed;
+  try {
+    const v = localStorage.getItem(storeKey);
+    if (v !== null) collapsed = v === '1';
+  } catch {}
+  const section = document.createElement('section');
+  section.className = 'avs-inspector-section bb-form-section';
+  if (collapsed) section.classList.add('bb-form-section-closed');
+  const head = document.createElement('button');
+  head.type = 'button';
+  head.className = 'bb-form-section-head';
+  head.innerHTML = `<span class="bb-form-section-chev">▾</span> <span class="bb-form-section-label">${esc(title ?? '')}</span>`;
+  const body = document.createElement('div');
+  body.className = 'bb-form-section-body';
+  head.addEventListener('click', () => {
+    const nowClosed = section.classList.toggle('bb-form-section-closed');
+    try { localStorage.setItem(storeKey, nowClosed ? '1' : '0'); } catch {}
+  });
+  section.append(head, body);
+  return { section, body };
+}
 
 export function renderWidgetInspector(host) {
   host.classList.add('avs-inspector');
+  // Dispose the previous form before wiping the DOM — its controls may hold
+  // document-level listeners that would otherwise survive the innerHTML swap.
+  prevForm?.dispose?.();
+  prevForm = null;
   const slide = activeSlide();
   const id = state.ui.selectedWidgetId;
   const widget = slide?.widgets.find(w => w.id === id);
   if (!widget) { host.innerHTML = `<div class="avs-inspector-empty">${t('insp.noWidget')}</div>`; return; }
   const plugin = getPlugin(widget.type);
+
+  // Geometry inputs — X/Y/W/H are % of the slide, R is degrees, Z is the
+  // stacking order. Units live as a tiny muted suffix in the label plus a
+  // title tooltip so the single-letter labels stay compact.
+  const GEO_FIELDS = [
+    { k: 'x',   label: 'X', unit: '%', hint: tx('X — horizontal position (% of slide width)'), attrs: 'min="0" max="100" step="0.5"', val: widget.rect.x },
+    { k: 'y',   label: 'Y', unit: '%', hint: tx('Y — vertical position (% of slide height)'),  attrs: 'min="0" max="100" step="0.5"', val: widget.rect.y },
+    { k: 'w',   label: 'W', unit: '%', hint: tx('W — width (% of slide width)'),               attrs: 'min="0" max="100" step="0.5"', val: widget.rect.w },
+    { k: 'h',   label: 'H', unit: '%', hint: tx('H — height (% of slide height)'),             attrs: 'min="0" max="100" step="0.5"', val: widget.rect.h },
+    { k: 'z',   label: 'Z', unit: '',  hint: tx('Z — stacking order (higher = in front)'),     attrs: 'min="0" step="1"',             val: widget.z ?? 0 },
+    { k: 'rot', label: 'R', unit: '°', hint: tx('R — rotation in degrees'),                    attrs: 'min="-180" max="180" step="1"', val: widget.rotation ?? 0 },
+  ];
 
   host.innerHTML = `
     <div class="avs-inspector-head">
@@ -403,12 +461,11 @@ export function renderWidgetInspector(host) {
     </div>
     <div class="avs-inspector-body">
       <div class="avs-geo-grid">
-        ${['x', 'y', 'w', 'h'].map(k => `
-          <label>${k.toUpperCase()}
-            <input type="number" data-geo="${k}" min="0" max="100" step="0.5" value="${widget.rect[k]}">
+        ${GEO_FIELDS.map(g => `
+          <label title="${esc(g.hint)}">
+            <span>${g.label}${g.unit ? `<span class="avs-geo-unit">${g.unit}</span>` : ''}</span>
+            <input type="number" data-geo="${g.k}" ${g.attrs} value="${g.val}" title="${esc(g.hint)}">
           </label>`).join('')}
-        <label>Z<input type="number" data-geo="z" min="0" step="1" value="${widget.z ?? 0}"></label>
-        <label>R<input type="number" data-geo="rot" min="-180" max="180" step="1" value="${widget.rotation ?? 0}"></label>
       </div>
       <div class="avs-geo-presets" aria-label="${t('insp.layoutPresets')}">
         <button class="avs-geo-preset" data-preset="full"  title="${t('insp.preset.full')}">▣</button>
@@ -482,12 +539,17 @@ export function renderWidgetInspector(host) {
     if (k === 'z') { widget.z = +inp.value || 0; setWidgetGeometry(widget.id, widget.rect); }
     else if (k === 'rot') { setWidgetRotation(widget.id, +inp.value || 0); }
     else setWidgetGeometry(widget.id, { ...widget.rect, [k]: +inp.value });
-    commit('widget-geo');
+    // Canvas already moved above; defer only the undo snapshot so typing
+    // "120" is one history entry, not three.
+    geoDebounce(() => commit('widget-geo'));
   }));
 
   const form = buildForm({
     schema: plugin.schema(),
     value: widget.content ?? plugin.defaults(),
+    // Per-field reset baseline. Consumed once buildForm supports it; an older
+    // buildForm simply ignores the extra param, so this is safe either way.
+    defaults: plugin.defaults?.(),
     // Used as a storage-key prefix so each widget type remembers its own
     // collapsed-section state. Without it, every inspector re-render would
     // reset the user's folding.
@@ -522,6 +584,8 @@ export function renderWidgetInspector(host) {
     assetsPicker: async accept => await pickAssets(accept),
   });
   host.querySelector('#ins-content').appendChild(form.root);
+  // Remember the live form so the NEXT rebuild can dispose its controls.
+  prevForm = form;
 
   // Usage / licensing note. The library shows a quiet corner glyph BEFORE the
   // widget is picked; here — once it's placed — we repeat the full constraint
@@ -601,11 +665,11 @@ export function renderWidgetInspector(host) {
 
   // On-error fallback (live/network widgets only) — what the display shows at
   // runtime if this widget can't load its data. Player-side only by design.
+  // Foldable like the form sections above; the fold head replaces the old
+  // .avs-section-title line.
   if (plugin?.network) {
-    const errWrap = document.createElement('div');
-    errWrap.className = 'avs-inspector-section';
-    errWrap.innerHTML = `<div class="avs-section-title">${t('err.title')}</div>
-      <p class="bb-form-help">${t('err.help')}</p>`;
+    const { section: errWrap, body: errBody } = foldSection(widget.type, '_onerror', t('err.title'));
+    errBody.innerHTML = `<p class="bb-form-help">${t('err.help')}</p>`;
     const modeGroup = document.createElement('div');
     modeGroup.className = 'bb-form-group';
     const modeSel = document.createElement('select');
@@ -644,15 +708,14 @@ export function renderWidgetInspector(host) {
       renderExtra(); commit('widget-onerror');
     });
     renderExtra();
-    errWrap.append(modeGroup, extra);
+    errBody.append(modeGroup, extra);
     host.querySelector('.avs-inspector-body').appendChild(errWrap);
   }
 
   // Background section (the general background tool) — repaints the bg layer
-  // live, no plugin re-render.
-  const bgWrap = document.createElement('div');
-  bgWrap.className = 'avs-inspector-section';
-  bgWrap.innerHTML = `<div class="avs-section-title">${t('bg.widgetTitle')}</div><div id="ins-bg"></div>`;
+  // live, no plugin re-render. Foldable, default open.
+  const { section: bgWrap, body: bgBody } = foldSection(widget.type, '_bg', t('bg.widgetTitle'));
+  bgBody.innerHTML = '<div id="ins-bg"></div>';
   host.querySelector('.avs-inspector-body').appendChild(bgWrap);
   // The widget's own theme drives the "Theme background" fallback shown in the
   // bg editor — same UX as the slide editor.
@@ -674,10 +737,9 @@ export function renderWidgetInspector(host) {
   const delayS = Math.round(((anim.delay ?? 0) / 1000) * 100) / 100;
   const durS = Math.round(((anim.duration ?? BUILD_DEFAULT_MS) / 1000) * 100) / 100;
   const loopId = widget.loop ?? 'none';
-  const animWrap = document.createElement('div');
-  animWrap.className = 'avs-inspector-section avs-anim-section';
-  animWrap.innerHTML = `
-    <div class="avs-section-title">${t('insp.animation')}</div>
+  const { section: animWrap, body: animBody } = foldSection(widget.type, '_anim', t('insp.animation'));
+  animWrap.classList.add('avs-anim-section');
+  animBody.innerHTML = `
     <div class="bb-form-group">
       <label>${t('insp.anim.build')}</label>
       <div class="avs-anim-row">
@@ -734,11 +796,10 @@ export function renderWidgetInspector(host) {
   syncBuildEnabled();
 
   // v3: Slot-Bindings section. Lets the editor wire any widget.content field
-  // (by field-path) to a data slot. Player resolves at render time.
-  const bindWrap = document.createElement('div');
-  bindWrap.className = 'avs-inspector-section';
-  bindWrap.innerHTML = `<div class="avs-section-title">🔗 ${t('binding.sectionTitle')}</div>
-    <p class="bb-form-help">${t('binding.help')}</p>
+  // (by field-path) to a data slot. Player resolves at render time. Foldable
+  // like its siblings, default open.
+  const { section: bindWrap, body: bindBody } = foldSection(widget.type, '_bindings', `🔗 ${t('binding.sectionTitle')}`);
+  bindBody.innerHTML = `<p class="bb-form-help">${t('binding.help')}</p>
     <div id="bind-list"></div>
     <div class="avs-flex-row" style="margin-top:6px;">
       <button class="bb-btn" id="bind-add">+ ${t('binding.link')}</button>
@@ -790,21 +851,30 @@ export function renderWidgetInspector(host) {
         <button class="bb-btn bb-btn-danger" data-bind-del="${esc(field)}" style="margin-top:6px;">${t('binding.unlink')}</button>
       </div>`).join('');
     list.querySelectorAll('.avs-binding-editor').forEach(row => {
-      const field = row.dataset.field;
+      // The key this row currently owns in widget.bindings. Mutable: it
+      // follows each successful rename so a char-by-char edit deletes its own
+      // PREVIOUS key, not the long-gone original — which used to orphan one
+      // stale binding per keystroke ('title' → 'titleX' → 'titleXY' left
+      // 'titleX' behind forever).
+      let prevKey = row.dataset.field;
       row.querySelectorAll('[data-bk]').forEach(inp => inp.addEventListener('input', () => {
         const fld = row.querySelector('[data-bk="field"]').value.trim();
         const slot = row.querySelector('[data-bk="slot"]').value.trim();
         const jsonPath = row.querySelector('[data-bk="jsonPath"]').value.trim();
         const fallback = row.querySelector('[data-bk="fallback"]').value;
         const next = { ...(widget.bindings ?? {}) };
-        delete next[field];
-        if (fld && slot) next[fld] = { slot, ...(jsonPath && { jsonPath }), ...(fallback !== '' && { fallback }) };
+        delete next[prevKey];
+        if (fld && slot) {
+          next[fld] = { slot, ...(jsonPath && { jsonPath }), ...(fallback !== '' && { fallback }) };
+          prevKey = fld;
+          row.dataset.field = fld;
+        }
         widget.bindings = Object.keys(next).length ? next : undefined;
         debounce(() => { commit('widget-bindings'); refreshWidget(widget.id); });
       }));
       row.querySelector('[data-bind-del]').addEventListener('click', () => {
         const next = { ...(widget.bindings ?? {}) };
-        delete next[field];
+        delete next[prevKey];
         widget.bindings = Object.keys(next).length ? next : undefined;
         commit('widget-bindings'); refreshWidget(widget.id); renderBindings();
       });

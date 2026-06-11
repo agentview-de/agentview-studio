@@ -1,13 +1,16 @@
 import { register } from './registry.js';
-import { themeField } from '../data/themes.js';
-import { colorOverrideDefaults, colorOverrideFields, applyColorOverrides } from '../widget-color.js';
+import { themeColorSection, colorOverrideDefaults, applyColorOverrides } from '../widget-color.js';
 import { composeDispose, childSignal } from '../plugin-contract.js';
 import { escapeHtml } from '../utils/escape.js';
-import { isStored, DATAMODE_OPTIONS } from '../offline-data.js';
+import { isStored, dataModeField } from '../offline-data.js';
+import { refreshSecField } from '../refresh-field.js';
+import { localeField } from '../locale-field.js';
+import { textScaleField } from '../text-scale.js';
 import { WEATHER_SVG_DEFS, wmoToIconId } from '../data/weather-svg-icons.js';
 import {
   WMO, tempColor, tempBarGradient, windArrowSvg, formatTime, formatHour,
   compassName, windDesc, humidityDesc, feelsLikeDesc, dayLength, designSupports, relativeAge,
+  isSevereWmo, uvDesc,
 } from './weather-format.js';
 
 // ── Open-Meteo response cache ───────────────────────────────────────────────
@@ -70,8 +73,8 @@ function offlineForecastUrl(c) {
   const qs = new URLSearchParams({
     latitude:  String(loc.lat),
     longitude: String(loc.lng),
-    current:   'temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,apparent_temperature,wind_direction_10m',
-    daily:     'temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max,sunrise,sunset',
+    current:   'temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,apparent_temperature,wind_direction_10m,uv_index',
+    daily:     'temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max,sunrise,sunset,uv_index_max',
     hourly:    'temperature_2m,weather_code,precipitation_probability',
     temperature_unit: unit,
     wind_speed_unit:  windUnit,
@@ -102,7 +105,13 @@ export default register({
   // v5: added 'dashboard' design, a premium full-canvas variant with stat
   // cards, section headers ("Hourly forecast · Next 12 hours"), HEUTE/Jetzt
   // highlights, and per-card subtitles. Pure-additive: no migration needed.
-  schemaVersion: 5,
+  // v6: inspector-polish wave — sectioned schema (Location / Appearance /
+  // Show on this widget / Data / Theme & colours), live auto-refresh
+  // (refreshSec), audience locale + 12/24h time format, severe-weather alert
+  // banner (showAlerts), UV index stat card (showUv), text-size control
+  // (textScale). Pure-additive: every new key has a safe default and stored
+  // content without them renders exactly as before, no migrate() needed.
+  schemaVersion: 6,
   // Offline provisioning: the Studio fetches the full Open-Meteo forecast on
   // "Refresh data" (using the API key here, never on the display) and stores the
   // raw response; the display reads that — no live call, no key on screen.
@@ -123,6 +132,15 @@ export default register({
     // (non-commercial only). Setting a key routes to the commercial
     // customer-api.open-meteo.com endpoint instead.
     apiKey: '',
+    // Live-mode polling interval in seconds. 15 minutes is generous headroom
+    // (Open-Meteo updates roughly hourly) while keeping permanently-mounted
+    // widgets from going stale. Existing stored widgets without the key keep
+    // the old fetch-once behaviour (0). Offline mode ignores it.
+    refreshSec: 900,
+    // Audience language for weekday/date/time formatting ('' = device locale)
+    // and the 12/24h clock preference ('auto' follows the locale).
+    locale: '',
+    timeFormat: 'auto',
     // What to show, granular toggles, customer picks per widget.
     // showCity/showTemp/showIcon let the user hide the "core" hero elements
     // so they can stack multiple weather widgets (e.g. one with just the
@@ -143,10 +161,15 @@ export default register({
     forecastDays: 7,
     showHourly: false,
     hourlyHours: 12,
+    // Opt-in extras: severe-weather banner (heavy rain/snow, storms — shows
+    // even when condition text is off) and a UV-index stat card.
+    showAlerts: false,
+    showUv: false,
     // Visual treatment
     colorTemperature: true,
     design: 'classic',
     theme: 'gradient-blue',
+    textScale: 100,
     // Optional text/accent overrides (shared shape). Empty = use the theme's
     // default; a hex sets --bb-st-fg/-accent on the root, cascading to city,
     // temp, desc, stats, forecast — every text element in the widget.
@@ -158,22 +181,51 @@ export default register({
   }),
   schema: () => ({
     fields: [
-      // ── Source ────────────────────────────────────────────────────────────
-      { type: 'section', label: 'Source' },
-      { key: 'dataMode', type: 'select', label: 'Data source', default: 'live', options: DATAMODE_OPTIONS,
-        help: 'Offline: the Studio fetches the forecast on “Refresh data” (the API key is used here, never on screen) and stores it; the display reads that — no live call, works without internet on the screen.' },
-      { key: 'location', type: 'place', label: 'Location' },
+      // ── Location — the primary input comes first ──────────────────────────
+      { type: 'section', key: 'place', label: 'Location' },
+      { key: 'location', type: 'place', label: 'Location',
+        validate: (v) => (!Number.isFinite(+v?.lat) || !Number.isFinite(+v?.lng))
+          ? { level: 'error', message: 'Pick a location — weather cannot load without coordinates.' }
+          : null },
       { type: 'row', children: [
-        { key: 'unit',     type: 'select', label: 'Temp', options: ['C','F'] },
+        { key: 'unit', type: 'select', label: 'Temperature', options: [
+          { value: 'C', label: '°C (Celsius)' },
+          { value: 'F', label: '°F (Fahrenheit)' },
+        ] },
         { key: 'windUnit', type: 'select', label: 'Wind', options: [
           { value: 'kmh', label: 'km/h' },
           { value: 'mph', label: 'mph' },
           { value: 'ms',  label: 'm/s' },
         ] },
       ] },
-      { key: 'apiKey', type: 'text', label: 'Open-Meteo API key (optional)',
-        placeholder: 'business use only',
-        help: 'Open-Meteo’s free tier is non-commercial only. Business users should add their own Open-Meteo API key, it routes requests to the paid customer-api.open-meteo.com endpoint.' },
+
+      // ── Appearance — the design select sits ABOVE the toggles it gates via
+      // designSupports() so switching designs never makes fields appear or
+      // disappear off-screen above the user's scroll position. ──────────────
+      { type: 'section', key: 'appearance', label: 'Appearance' },
+      { key: 'design', type: 'select', label: 'Design', options: [
+        { value: 'classic',   label: 'Classic, icon · temp · forecast strip' },
+        { value: 'minimal',   label: 'Minimal, temp + city only' },
+        { value: 'hero',      label: 'Hero, huge temperature' },
+        { value: 'forecast',  label: 'Forecast, multi-day tiles dominate' },
+        { value: 'split',     label: 'Split, current left, forecast right' },
+        { value: 'hourly',    label: 'Hourly, next 12–24 hours strip' },
+        { value: 'dashboard', label: 'Dashboard, premium full-canvas, all data' },
+      ] },
+      { key: 'iconSet', type: 'select', label: 'Icon style', options: [
+        { value: 'auto',  label: 'Auto (Dashboard = SVG, others = Emoji)' },
+        { value: 'svg',   label: 'SVG, custom illustrated icons' },
+        { value: 'emoji', label: 'Emoji, system color icons (☀️ ⛅ 🌧️)' },
+      ] },
+      { key: 'colorTemperature', type: 'toggle', label: 'Colour-code temperature',
+        help: 'Tints the current temperature and forecast hi/lo by °C, blue for cold, amber for warm, red for hot.' },
+      textScaleField(),
+      localeField(),
+      { key: 'timeFormat', type: 'select', label: 'Time format', buttons: true, options: [
+        { value: 'auto', label: 'Auto' },
+        { value: '12h',  label: '12 h (AM/PM)' },
+        { value: '24h',  label: '24 h' },
+      ], help: 'Clock format for sunrise/sunset times and the hourly strip. Auto follows the language above.' },
 
       // ── Data the customer wants on this widget ────────────────────────────
       // Each toggle is gated by `designSupports(design, slot)` so the inspector
@@ -184,7 +236,8 @@ export default register({
       // City/Temp/Icon are always available, they're the visual primitives
       // and the user opts out to build composite layouts (stack two weather
       // widgets, one showing just the temp, another just the forecast strip).
-      { type: 'section', label: 'Show on this widget' },
+      { type: 'section', key: 'show', label: 'Show on this widget',
+        help: 'Only options the selected design can display are offered here.' },
       { type: 'row', children: [
         { key: 'showCity', type: 'toggle', label: 'City' },
         { key: 'showTemp', type: 'toggle', label: 'Temperature' },
@@ -200,45 +253,56 @@ export default register({
         { key: 'showStats',      type: 'toggle', label: 'Wind / Humidity / Feels-like',
           showIf: c => designSupports(c.design, 'stats') },
       ] },
-      { key: 'showWindVector', type: 'toggle', label: 'Wind direction arrow',
-        showIf: c => designSupports(c.design, 'stats') && c.showStats !== false,
-        help: 'Adds a small compass arrow next to the wind speed.' },
+      { type: 'row', children: [
+        { key: 'showWindVector', type: 'toggle', label: 'Wind direction arrow',
+          showIf: c => designSupports(c.design, 'stats') && c.showStats !== false,
+          help: 'Adds a small compass arrow next to the wind speed.' },
+        { key: 'showUv', type: 'toggle', label: 'UV index card',
+          showIf: c => designSupports(c.design, 'stats') && c.showStats !== false,
+          help: 'Adds a UV index card (Low / Moderate / High) to the stats row.' },
+      ] },
       { type: 'row', children: [
         { key: 'showPrecip',     type: 'toggle', label: 'Precipitation chance',
           showIf: c => designSupports(c.design, 'precip') },
         { key: 'showSunrise',    type: 'toggle', label: 'Sunrise / Sunset',
           showIf: c => designSupports(c.design, 'sunrise') },
       ] },
-      { key: 'showForecast', type: 'toggle', label: 'Daily forecast',
-        showIf: c => designSupports(c.design, 'forecast') },
-      { key: 'forecastDays', type: 'number', label: 'Forecast days', min: 1, max: 7, step: 1, slider: true,
-        showIf: c => designSupports(c.design, 'forecast') && c.showForecast !== false,
-        help: 'Portrait screens often want 3–5, landscape can take all 7.' },
-      { key: 'showHourly', type: 'toggle', label: 'Hourly strip (next N hours)',
-        showIf: c => designSupports(c.design, 'hourly') },
-      { key: 'hourlyHours', type: 'number', label: 'Hours to show', min: 4, max: 24, step: 1, slider: true,
-        showIf: c => designSupports(c.design, 'hourly') && c.showHourly === true },
+      { type: 'row', children: [
+        { key: 'showForecast', type: 'toggle', label: 'Daily forecast',
+          showIf: c => designSupports(c.design, 'forecast') },
+        { key: 'forecastDays', type: 'number', label: 'Forecast days', min: 1, max: 7, step: 1, slider: true, suffix: ' days',
+          showIf: c => designSupports(c.design, 'forecast') && c.showForecast !== false,
+          help: 'Portrait screens often want 3–5, landscape can take all 7.' },
+      ] },
+      { type: 'row', children: [
+        { key: 'showHourly', type: 'toggle', label: 'Hourly strip (next N hours)',
+          showIf: c => designSupports(c.design, 'hourly') },
+        { key: 'hourlyHours', type: 'number', label: 'Hours to show', min: 4, max: 24, step: 1, slider: true, suffix: ' h',
+          showIf: c => designSupports(c.design, 'hourly') && c.showHourly === true },
+      ] },
+      { key: 'showAlerts', type: 'toggle', label: 'Severe-weather banner',
+        help: 'Shows a warning banner when current or upcoming conditions are severe (heavy rain or snow, storms) — even when the condition text is off.' },
 
-      // ── Visual treatment ──────────────────────────────────────────────────
-      { type: 'section', label: 'Visual' },
-      { key: 'colorTemperature', type: 'toggle', label: 'Colour-code temperature',
-        help: 'Tints the current temperature and forecast hi/lo by °C, blue for cold, amber for warm, red for hot.' },
-      { key: 'iconSet', type: 'select', label: 'Icon style', options: [
-        { value: 'auto',  label: 'Auto (Dashboard = SVG, others = Emoji)' },
-        { value: 'svg',   label: 'SVG, custom illustrated icons' },
-        { value: 'emoji', label: 'Emoji, system color icons (☀️ ⛅ 🌧️)' },
-      ] },
-      { key: 'design', type: 'select', label: 'Design', options: [
-        { value: 'classic',   label: 'Classic, icon · temp · forecast strip' },
-        { value: 'minimal',   label: 'Minimal, temp + city only' },
-        { value: 'hero',      label: 'Hero, huge temperature' },
-        { value: 'forecast',  label: 'Forecast, multi-day tiles dominate' },
-        { value: 'split',     label: 'Split, current left, forecast right' },
-        { value: 'hourly',    label: 'Hourly, next 12–24 hours strip' },
-        { value: 'dashboard', label: 'Dashboard, premium full-canvas, all data' },
-      ] },
-      themeField(),
-      ...colorOverrideFields(),
+      // ── Data plumbing — rarely touched, folded by default ─────────────────
+      { type: 'section', key: 'data', label: 'Data', collapsed: true,
+        summary: (c) => {
+          if (isStored(c)) return 'Offline';
+          const r = Number(c?.refreshSec) || 0;
+          const every = r <= 0 ? '1×' : r % 60 === 0 ? `${r / 60} min` : `${r} s`;
+          return `Live · ${every}${c?.apiKey ? ' · API key' : ''}`;
+        } },
+      dataModeField({
+        help: 'Offline: the Studio fetches the forecast on “Refresh data” (the API key is used here, never on screen) and stores it; the display reads that — no live call, works without internet on the screen.',
+      }),
+      refreshSecField({
+        help: 'Open-Meteo updates its forecast roughly hourly — 15 minutes is plenty. 0 fetches once and keeps that forecast until the slide re-renders.',
+        showIf: c => !isStored(c),
+      }),
+      { key: 'apiKey', type: 'text', label: 'Open-Meteo API key (optional)',
+        placeholder: 'Leave empty for the free non-commercial tier',
+        help: 'Open-Meteo’s free tier is non-commercial only. Business users should add their own Open-Meteo API key, it routes requests to the paid customer-api.open-meteo.com endpoint.' },
+
+      ...themeColorSection(),
     ],
   }),
   render(slide, container, ctx) {
@@ -255,6 +319,10 @@ export default register({
     // otherwise win over any inline color).
     applyColorOverrides(root, c);
     if (typeof c.textColor === 'string' && c.textColor.trim()) root.classList.add('bb-weather-textcolor-on');
+    // Text-size multiplier — consumed by the weather cqmin clamps in
+    // styles/slide-themes.css (calc(clamp(…) * var(--bb-weather-text-scale, 1)))
+    // and by the inline attribution / alert-banner sizes below.
+    root.style.setProperty('--bb-weather-text-scale', String((Number(c.textScale) || 100) / 100));
 
     // Pre-compute visibility flags. The render output omits sections entirely
     // when their toggle is off, keeps the DOM lean and lets CSS rely on
@@ -276,6 +344,14 @@ export default register({
     const showTemp     = c.showTemp !== false;
     const showIcon     = c.showIcon !== false;
     const showDesc     = c.showDescription === true;
+    const showAlerts   = c.showAlerts === true;
+    const showUv       = c.showUv === true;
+    // Audience-language formatting: '' / missing = device default. `||`
+    // semantics (never `??`) so the empty string falls through to the device
+    // locale. hour12 undefined keeps the locale's own clock convention.
+    const locale = (typeof c.locale === 'string' && c.locale.trim()) ? c.locale.trim() : undefined;
+    const hour12 = c.timeFormat === '12h' ? true : c.timeFormat === '24h' ? false : undefined;
+    const timeOpts = { locale, hour12 };
     // Toggle a marker class so the dashboard's CSS can paint lo/hi with
     // vivid semantic colours (blue=cold, red=hot) when colour-coding is on.
     // Other designs continue to tint by actual temperature via inline styles.
@@ -315,6 +391,7 @@ export default register({
     root.innerHTML = `
       ${useSvgIcons ? WEATHER_SVG_DEFS : ''}
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
+      ${showAlerts ? `<div class="bb-weather-alert" role="status" style="display:none;grid-column:1 / -1;align-items:center;justify-content:center;gap:.5em;font-size:calc(clamp(13px, 2.4cqmin, 28px) * var(--bb-weather-text-scale, 1));font-weight:600;line-height:1.3;padding:.35em .9em;border:2px solid var(--bb-st-accent, #f5a85a);border-radius:.5em;background:color-mix(in srgb, var(--bb-st-accent, #f5a85a) 16%, transparent);"></div>` : ''}
       <div class="bb-weather-current">
         <div class="bb-weather-icon">${iconHero}</div>
         <div class="bb-weather-meta">
@@ -335,7 +412,7 @@ export default register({
           <span class="bb-stat-sub bb-stat-wind-sub"></span>
         </div>
         <div class="bb-stat-card bb-stat-card-hum">
-          <span class="bb-stat-icon" aria-hidden="true">${statIcon('i-drop', '#79b6ff') ?? '💧'}</span>
+          <span class="bb-stat-icon" aria-hidden="true">${statIcon('i-drop', 'var(--bb-st-accent, #79b6ff)') ?? '💧'}</span>
           <span class="bb-stat-label">Humidity</span>
           <b class="bb-stat-hum">—</b>
           <span class="bb-stat-sub bb-stat-hum-sub"></span>
@@ -346,6 +423,12 @@ export default register({
           <b class="bb-stat-feels">—</b>
           <span class="bb-stat-sub bb-stat-feels-sub"></span>
         </div>
+        ${showUv ? `<div class="bb-stat-card bb-stat-card-uv">
+          <span class="bb-stat-icon" aria-hidden="true">${statIcon('i-sun-small') ?? '🔆'}</span>
+          <span class="bb-stat-label">UV</span>
+          <b class="bb-stat-uv">—</b>
+          <span class="bb-stat-sub bb-stat-uv-sub"></span>
+        </div>` : ''}
         ${isDashboard && showSunrise ? `<div class="bb-stat-card bb-stat-card-sun">
           <span class="bb-stat-icon" aria-hidden="true">${statIcon('i-sunrise') ?? '🌅'}</span>
           <span class="bb-stat-label">Sun</span>
@@ -365,7 +448,7 @@ export default register({
         <span class="bb-weather-section-title">${forecastCap}-day forecast</span>
         <span class="bb-weather-section-meta bb-weather-coords"></span>
       </div>` : ''}<div class="bb-weather-forecast"></div>` : ''}
-      <div class="bb-weather-attribution" style="font-size:clamp(10px, 1.4cqmin, 18px);line-height:1.4;opacity:.55;margin-top:6px;text-align:center;">
+      <div class="bb-weather-attribution" style="font-size:calc(clamp(10px, 1.4cqmin, 18px) * var(--bb-weather-text-scale, 1));line-height:1.4;opacity:.55;margin-top:6px;text-align:center;">
         Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;">Open-Meteo.com</a>
       </div>
     `;
@@ -393,7 +476,10 @@ export default register({
     }
 
     const ctrl = childSignal(ctx?.signal);
-    (async () => {
+    // Named loader (not an anonymous IIFE) so live mode can re-poll it on a
+    // timer. Repainting is idempotent: every section fills its elements by
+    // selector, so a second pass simply overwrites the previous values.
+    async function loadAndPaint() {
       try {
         const loc = c.location ?? {};
         // windUnit is read later (stats/hourly rendering) regardless of mode, so
@@ -416,12 +502,16 @@ export default register({
           // want the current temperature.
           const currentParams = ['temperature_2m', 'relative_humidity_2m', 'wind_speed_10m', 'weather_code', 'apparent_temperature'];
           if (showWindVec || showStats) currentParams.push('wind_direction_10m');
+          if (showUv && showStats)      currentParams.push('uv_index');
           const dailyParams = [];
           if (showForecast || showHiLo) dailyParams.push('temperature_2m_max', 'temperature_2m_min', 'weather_code');
           if (showPrecip)               dailyParams.push('precipitation_probability_max');
           if (showSunrise)              dailyParams.push('sunrise', 'sunset');
           const hourlyParams = [];
           if (showHourly) hourlyParams.push('temperature_2m', 'weather_code', 'precipitation_probability');
+          // The alert banner scans the upcoming hours for severe codes even
+          // when the hourly strip itself is off — request just the codes then.
+          else if (showAlerts) hourlyParams.push('weather_code');
 
           const qs = new URLSearchParams({
             latitude:  String(loc.lat),
@@ -468,6 +558,40 @@ export default register({
         // when that class is present, so this inline colour wins.
         if (colorTemp) tempEl.style.color = tempColor(tempVal) ?? '';
         root.querySelector('.bb-weather-desc').textContent = desc;
+
+        // Severe-weather banner: current code OR any severe code in the next
+        // ~6 hours lights it up — independent of showDescription, safety
+        // information should not depend on a cosmetic toggle. Accent border +
+        // tint so it survives light themes (no hardcoded white-on-dark).
+        if (showAlerts) {
+          const alertEl = root.querySelector('.bb-weather-alert');
+          if (alertEl) {
+            let severe = isSevereWmo(code) ? code : null;
+            if (severe == null && Array.isArray(w.hourly?.time) && Array.isArray(w.hourly?.weather_code)) {
+              // Same "first hour at/after now" heuristic as the hourly strip.
+              const nowMs = Date.now();
+              let si = 0;
+              for (let i = 0; i < w.hourly.time.length; i++) {
+                if (new Date(w.hourly.time[i]).getTime() >= nowMs - 30 * 60 * 1000) { si = i; break; }
+              }
+              for (let i = si; i < Math.min(si + 6, w.hourly.time.length); i++) {
+                if (isSevereWmo(w.hourly.weather_code[i])) { severe = w.hourly.weather_code[i]; break; }
+              }
+            }
+            if (severe != null) {
+              const [aIcon, aDesc] = WMO[severe] ?? ['⚠️', 'Severe weather'];
+              const aIconHtml = useSvgIcons
+                ? `<svg class="bb-weather-icon-svg" aria-hidden="true"><use href="#${wmoToIconId(severe, { small: true })}"/></svg>`
+                : aIcon;
+              alertEl.innerHTML = `<span aria-hidden="true">${aIconHtml}</span><span>${escapeHtml(aDesc)}</span>`;
+              alertEl.style.display = 'flex';
+            } else {
+              // A later poll can clear a previously shown banner.
+              alertEl.style.display = 'none';
+              alertEl.innerHTML = '';
+            }
+          }
+        }
 
         // Hi/Lo: comes from today's row in the daily payload (always index 0).
         // Dashboard uses universal ↑/↓ arrows (international); other designs
@@ -530,14 +654,27 @@ export default register({
             (Number.isFinite(feels) ? Math.round(feels) : '—') + ` <i class="bb-stat-unit">${escapeHtml(tempUnitSym)}</i>`;
           const feelsSubEl = root.querySelector('.bb-stat-feels-sub');
           if (feelsSubEl) feelsSubEl.textContent = feelsLikeDesc(actual, feels);
+
+          // UV index card (opt-in 4th/5th card). Live mode reads the current
+          // uv_index; stored payloads provisioned before the field existed
+          // fall back to today's daily max so older slots keep working.
+          if (showUv) {
+            const uvEl = root.querySelector('.bb-stat-uv');
+            if (uvEl) {
+              const uvRaw = Number.isFinite(+cur.uv_index) ? +cur.uv_index : +(w.daily?.uv_index_max?.[0]);
+              uvEl.textContent = Number.isFinite(uvRaw) ? String(Math.round(uvRaw)) : '—';
+              const uvSubEl = root.querySelector('.bb-stat-uv-sub');
+              if (uvSubEl) uvSubEl.textContent = uvDesc(uvRaw);
+            }
+          }
         }
 
         // Sunrise / Sunset, today's row only (index 0).
         // Dashboard renders these inside a 4th stat card with a day-length
         // subtitle; other designs render the inline .bb-weather-sun strip.
         if (showSunrise && w.daily?.sunrise?.[0]) {
-          const sunriseStr = formatTime(w.daily.sunrise[0]);
-          const sunsetStr  = formatTime(w.daily.sunset?.[0]);
+          const sunriseStr = formatTime(w.daily.sunrise[0], timeOpts);
+          const sunsetStr  = formatTime(w.daily.sunset?.[0], timeOpts);
           const dayLen     = dayLength(w.daily.sunrise[0], w.daily.sunset?.[0]);
           const sunCard = root.querySelector('.bb-stat-card-sun');
           if (sunCard) {
@@ -591,7 +728,7 @@ export default register({
               // First tile keeps its actual time, the amber accent border
               // already signals "this is now" without needing a localized
               // "Now" / "Jetzt" word. International-friendly.
-              const timeLabel = formatHour(w.hourly.time[idx]);
+              const timeLabel = formatHour(w.hourly.time[idx], timeOpts);
               const iconHtml = useSvgIcons
                 ? `<svg class="bb-weather-icon-svg"><use href="#${wmoToIconId(wcode, { small: true })}"/></svg>`
                 : hicon;
@@ -670,8 +807,10 @@ export default register({
             // "this is today" without needing a localized "Today" / "Heute"
             // word. Keeps the dashboard international-friendly.
             const isToday = i === 0;
-            const dayLabel = d.toLocaleDateString(undefined, { weekday: 'short' });
-            const dateLabel = d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' });
+            // Weekday/date follow the configured audience language (locale
+            // field), falling back to the device locale when unset.
+            const dayLabel = d.toLocaleDateString(locale, { weekday: 'short' });
+            const dateLabel = d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
             const iconHtml = useSvgIcons
               ? `<svg class="bb-weather-icon-svg"><use href="#${wmoToIconId(dcode, { small: true })}"/></svg>`
               : ic;
@@ -705,8 +844,17 @@ export default register({
           root.querySelector('.bb-weather-icon').textContent = '🌐';
         }
       }
-    })();
+    }
+    loadAndPaint();
 
-    return composeDispose(() => { ctrl.abort(); root.remove(); });
+    // Live-mode auto-refresh so permanently-mounted widgets (layout regions,
+    // single-slide playlists) don't show stale data forever. 0 keeps the old
+    // fetch-once behaviour; positive values are clamped to the 5-second player
+    // floor (the 5-minute response cache rate-limits actual network calls
+    // anyway). Offline mode reads a pre-fetched slot, nothing to poll.
+    const refreshSec = stored ? 0 : Math.max(0, Number(c.refreshSec) || 0);
+    const timer = refreshSec > 0 ? setInterval(loadAndPaint, Math.max(5000, refreshSec * 1000)) : 0;
+
+    return composeDispose(() => { if (timer) clearInterval(timer); ctrl.abort(); root.remove(); });
   },
 });

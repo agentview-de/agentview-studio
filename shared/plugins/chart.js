@@ -1,9 +1,9 @@
 import { register } from './registry.js';
-import { themeField } from '../data/themes.js';
-import { colorOverrideDefaults, colorOverrideFields, applyColorOverrides } from '../widget-color.js';
+import { colorOverrideDefaults, themeColorSection, applyColorOverrides } from '../widget-color.js';
 import { composeDispose } from '../plugin-contract.js';
 import { liveSource } from '../live-source.js';
-import { offlineLiveOpts, SOURCE_OPTIONS } from '../offline-data.js';
+import { offlineLiveOpts } from '../offline-data.js';
+import { remoteJsonFields } from '../remote-json-fields.js';
 import { escapeHtml } from '../utils/escape.js';
 
 // Tiny pure-canvas charts (line, bar, pie). No external lib, keeps dispose simple.
@@ -87,10 +87,37 @@ function drawLegend(ctx, w, items, opts) {
   ctx.textBaseline = 'alphabetic';
 }
 
+// Dashed horizontal target line at `frac` (0..1 of the plot height), labelled
+// at the right edge — combined with a fixed yMax this makes fundraising/sales
+// target charts honest. Skipped when the goal falls outside the plot.
+function drawGoalLine(ctx, p, plotW, plotH, frac, opts) {
+  if (!(frac >= 0 && frac <= 1)) return;
+  const s = opts.s || 1;
+  const y = p.top + plotH - plotH * frac;
+  ctx.save();
+  ctx.strokeStyle = withAlpha(opts.ink, 0.7);
+  ctx.lineWidth = Math.max(1, 1.5 * s);
+  ctx.setLineDash([6 * s, 5 * s]);
+  ctx.beginPath();
+  ctx.moveTo(p.left, y);
+  ctx.lineTo(p.left + plotW, y);
+  ctx.stroke();
+  ctx.restore();
+  const label = opts.goalLabel || formatValue(opts.goalValue, opts);
+  ctx.font = axisLabelFont(s);
+  ctx.fillStyle = withAlpha(opts.ink, 0.85);
+  const tw = ctx.measureText(label).width;
+  ctx.fillText(label, p.left + plotW - tw, y - 6 * s);
+}
+
 function drawLine(ctx, series, w, h, opts) {
   if (series.length < 2) return;
   const p = plotPadding(opts);
-  const valMax = Math.max(...series.map(s => s.value)) || 1;
+  let dataMax = Math.max(...series.map(s => s.value));
+  // The goal line participates in auto-scaling so a target above today's data
+  // stays on-plot instead of silently clipping away.
+  if (opts.goalValue > 0) dataMax = Math.max(dataMax, opts.goalValue);
+  const valMax = dataMax || 1;
   const valMin = Math.min(...series.map(s => s.value), 0);
   const max = Number.isFinite(opts.yMax) && opts.yMax > 0 ? opts.yMax : valMax;
   const min = valMin;
@@ -120,7 +147,7 @@ function drawLine(ctx, series, w, h, opts) {
   [0, 0.5, 1].forEach(t => {
     const v = min + t * span;
     const y = p.top + plotH - plotH * t;
-    ctx.fillText(formatTick(v), 6 * s, y + 4 * s);
+    ctx.fillText(formatValue(v, opts), 6 * s, y + 4 * s);
   });
   // X-axis labels
   series.forEach((d, i) => {
@@ -135,11 +162,12 @@ function drawLine(ctx, series, w, h, opts) {
     series.forEach((d, i) => {
       const x = p.left + plotW * (i / (series.length - 1));
       const y = p.top + plotH - plotH * ((d.value - min) / span);
-      const txt = formatTick(d.value);
+      const txt = formatValue(d.value, opts);
       const tw = ctx.measureText(txt).width;
       ctx.fillText(txt, x - tw / 2, y - 8 * s);
     });
   }
+  if (opts.goalValue > 0) drawGoalLine(ctx, p, plotW, plotH, (opts.goalValue - min) / span, opts);
   drawAxisLabels(ctx, w, h, p, opts);
   if (opts.showLegend) drawLegend(ctx, w, [{ label: opts.seriesLabel || 'Value', color: lineColor }], opts);
 }
@@ -147,7 +175,10 @@ function drawLine(ctx, series, w, h, opts) {
 function drawBar(ctx, series, w, h, opts) {
   const s = opts.s || 1;
   const p = plotPadding(opts);
-  const valMax = Math.max(...series.map(d => d.value)) || 1;
+  let dataMax = Math.max(...series.map(d => d.value));
+  // Auto-fit includes the goal so the target line never lands off-plot.
+  if (opts.goalValue > 0) dataMax = Math.max(dataMax, opts.goalValue);
+  const valMax = dataMax || 1;
   const max = Number.isFinite(opts.yMax) && opts.yMax > 0 ? opts.yMax : valMax;
   const gap = 8 * s;
   const plotW = w - p.left - p.right;
@@ -164,7 +195,7 @@ function drawBar(ctx, series, w, h, opts) {
   [0, 0.5, 1].forEach(t => {
     const v = t * max;
     const y = p.top + plotH - plotH * t;
-    ctx.fillText(formatTick(v), 6 * s, y + 4 * s);
+    ctx.fillText(formatValue(v, opts), 6 * s, y + 4 * s);
   });
   series.forEach((d, i) => {
     const bh = plotH * Math.max(0, Math.min(1, d.value / max));
@@ -179,11 +210,12 @@ function drawBar(ctx, series, w, h, opts) {
     ctx.fillText(labelTxt, x + bw / 2 - lw / 2, p.top + plotH + 16 * s);
     if (opts.showValues) {
       ctx.fillStyle = withAlpha(opts.ink, 0.85);
-      const vt = formatTick(d.value);
+      const vt = formatValue(d.value, opts);
       const vw = ctx.measureText(vt).width;
       ctx.fillText(vt, x + bw / 2 - vw / 2, y - 4 * s);
     }
   });
+  if (opts.goalValue > 0) drawGoalLine(ctx, p, plotW, plotH, opts.goalValue / max, opts);
   drawAxisLabels(ctx, w, h, p, opts);
   if (opts.showLegend) drawLegend(ctx, w, [{ label: opts.seriesLabel || 'Value', color: grad0 }], opts);
 }
@@ -246,13 +278,29 @@ function withAlpha(color, alpha) {
 }
 
 // Compact tick formatter: 1234 → "1.2k", 1234567 → "1.2M".
-function formatTick(v) {
+function compactNum(v) {
   const a = Math.abs(v);
   if (a >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
   if (a >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'k';
   if (Number.isInteger(v)) return String(v);
   return v.toFixed(1);
 }
+
+// Tick/value-label formatter, parameterised by the valueFormat/valueUnit
+// content fields. 'compact' preserves the historical k/M abbreviation;
+// 'full' uses locale grouping (1,234); 'percent' appends % (unit n/a there).
+// A unit ('€', 'pcs', …) lets euro/percentage/count charts label honestly.
+function formatValue(v, opts = {}) {
+  const fmt = opts.valueFormat || 'compact';
+  if (fmt === 'percent') return (Number.isInteger(v) ? String(v) : v.toFixed(1)) + '%';
+  const txt = fmt === 'full'
+    ? Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })
+    : compactNum(v);
+  const unit = String(opts.valueUnit || '').trim();
+  return unit ? `${txt} ${unit}` : txt;
+}
+
+const notPie = c => (c.kind ?? 'bar') !== 'pie';
 
 export default register({
   type: 'chart',
@@ -269,48 +317,82 @@ export default register({
       { label: 'Thu', value: 9 }, { label: 'Fri', value: 6 },
     ],
     dataUrl: '',
+    refreshSec: 0,
+    sortOrder: 'none',
     theme: 'minimal-dark',
     xLabel: '',
     yLabel: '',
     yMax: 0,
+    goalValue: 0,
+    goalLabel: '',
     showLegend: true,
     showValues: false,
     seriesLabel: '',
+    valueFormat: 'compact',
+    valueUnit: '',
     palette: [],
   }),
   schema: () => ({
     fields: [
-      { type: 'section', label: 'Data' },
-      { key: 'kind', type: 'select', label: 'Chart type', options: ['line','bar','pie'] },
-      { key: 'source', type: 'select', label: 'Data source', options: SOURCE_OPTIONS,
-        help: 'Offline: the Studio fetches the JSON URL on “Refresh data” and stores it; the display reads that — no live call on screen.' },
+      { type: 'section', key: 'datasec', label: 'Data' },
+      { key: 'kind', type: 'select', label: 'Chart type', buttons: true, options: [
+        { value: 'line', label: 'Line' },
+        { value: 'bar', label: 'Bar' },
+        { value: 'pie', label: 'Pie' },
+      ] },
+      ...remoteJsonFields({
+        placeholder: 'https://api.example.com/series.json',
+        urlHelp: 'Accepts [{label, value}], {labels: […], values: […]} or an array of numbers. Must be CORS-enabled for whichever side fetches it (display in Live mode, Studio in Offline mode).',
+      }),
       { key: 'data', type: 'table', label: 'Data points',
         showIf: c => (c.source ?? 'inline') === 'inline',
-        columns: [{ key: 'label', label: 'Label' }, { key: 'value', label: 'Value', type: 'number' }] },
-      { key: 'dataUrl', type: 'url', label: 'Remote JSON URL', test: 'json',
-        showIf: c => c.source === 'url' || c.source === 'stored' },
+        columns: [
+          { key: 'label', label: 'Label' },
+          { key: 'value', label: 'Value', type: 'number', placeholder: '42' },
+        ] },
+      { key: 'sortOrder', type: 'select', label: 'Sort data points', options: [
+          { value: 'none', label: 'As entered' },
+          { value: 'desc', label: 'Largest first' },
+          { value: 'asc', label: 'Smallest first' },
+        ],
+        help: 'Orders the series before drawing — turns any bar or pie into a ranking, even for remote JSON you don’t control.' },
 
-      { type: 'section', label: 'Axes & labels', showIf: c => (c.kind ?? 'bar') !== 'pie' },
+      { type: 'section', key: 'axes', label: 'Axes & labels', showIf: notPie },
       { type: 'row', children: [
         { key: 'xLabel', type: 'text', label: 'X-axis label' },
         { key: 'yLabel', type: 'text', label: 'Y-axis label' },
-      ], showIf: c => (c.kind ?? 'bar') !== 'pie' },
-      { key: 'yMax', type: 'number', label: 'Y-axis max (0 = auto-fit data)', min: 0, step: 1,
-        showIf: c => (c.kind ?? 'bar') !== 'pie',
-        help: 'Set a fixed ceiling so e.g. a fundraising goal renders honestly rather than auto-scaling to the highest value.' },
+      ], showIf: notPie },
+      { key: 'yMax', type: 'number', label: 'Y-axis max', min: 0, step: 1,
+        showIf: notPie,
+        help: '0 = auto-fit data. Set a fixed ceiling so e.g. a fundraising goal renders honestly rather than auto-scaling to the highest value.' },
+      { key: 'goalValue', type: 'number', label: 'Goal line value', min: 0, step: 1,
+        showIf: notPie,
+        help: 'Draws a dashed target line across the plot at this value. 0 = off.' },
+      { key: 'goalLabel', type: 'text', label: 'Goal line label', placeholder: 'Target',
+        showIf: c => notPie(c) && Number(c.goalValue) > 0,
+        help: 'Shown at the right end of the goal line. Leave empty to show the value.' },
       { key: 'seriesLabel', type: 'text', label: 'Series name (for the legend)',
-        showIf: c => (c.kind ?? 'bar') !== 'pie' && c.showLegend !== false },
+        showIf: c => notPie(c) && c.showLegend !== false },
 
-      { type: 'section', label: 'Appearance' },
+      { type: 'section', key: 'appearance', label: 'Appearance' },
       { type: 'row', children: [
         { key: 'showLegend', type: 'toggle', label: 'Legend' },
         { key: 'showValues', type: 'toggle', label: 'Value labels' },
       ] },
+      { key: 'valueFormat', type: 'select', label: 'Value format', buttons: true,
+        showIf: notPie,
+        options: [
+          { value: 'compact', label: 'Compact (1.2k)' },
+          { value: 'full', label: 'Full (1,234)' },
+          { value: 'percent', label: 'Percent' },
+        ] },
+      { key: 'valueUnit', type: 'text', label: 'Value unit', placeholder: '€',
+        showIf: c => notPie(c) && (c.valueFormat ?? 'compact') !== 'percent',
+        help: 'Appended to tick and value labels, e.g. “1.2k €”.' },
       { key: 'palette', type: 'list', label: 'Color palette',
         itemShape: [{ key: 'color', type: 'color', label: 'Colour' }],
         help: 'Optional, override the default palette with brand colours. Bar/line use the first two for the gradient, pie cycles through all entries.' },
-      themeField(),
-      ...colorOverrideFields(),
+      ...themeColorSection(),
     ],
   }),
   render(slide, container, ctx) {
@@ -321,29 +403,46 @@ export default register({
     root.innerHTML = `
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
       <canvas class="bb-chart-canvas" width="1100" height="540"></canvas>
+      <div class="bb-chart-msg" style="display:none;align-items:center;justify-content:center;width:100%;flex:1 1 auto;min-height:0;color:currentColor;opacity:.65;font:13px/1.5 var(--bb-font, Inter, sans-serif);text-align:center;padding:16px;"></div>
     `;
     container.appendChild(root);
     const canvas = root.querySelector('.bb-chart-canvas');
+    const msg = root.querySelector('.bb-chart-msg');
     const dctx = canvas.getContext('2d');
+
+    // Empty/error states paint into a SIBLING message div instead of replacing
+    // canvas.parentElement.innerHTML — the old swap destroyed the canvas, so a
+    // recovered poll drew into a detached node and looked dead. Toggling keeps
+    // the canvas alive: the next successful tick repaints it.
+    const showMsg = (text) => { msg.textContent = text; msg.style.display = 'flex'; canvas.style.display = 'none'; };
+    const hideMsg = () => { msg.style.display = 'none'; canvas.style.display = ''; };
+
+    let lastPayload;
+    let painted = false;
     const draw = (payload) => {
       // payload may be a parsed JSON object/array, or a JSON string
       if (typeof payload === 'string') {
         try { payload = JSON.parse(payload); } catch { payload = []; }
       }
+      lastPayload = payload; painted = true;
       const series = parseSeries(payload);
+      // Optional ranking: sort the parsed series before drawing, so even
+      // remote JSON the user doesn't control becomes a largest-first chart.
+      const sort = c.sortOrder ?? 'none';
+      if (sort === 'desc') series.sort((a, b) => b.value - a.value);
+      else if (sort === 'asc') series.sort((a, b) => a.value - b.value);
       const kind = c.kind ?? 'bar';
       // An empty series (or a one-point line) draws nothing useful, show why
       // instead of a blank canvas the user can't tell apart from a load error.
       if (!series.length || (kind === 'line' && series.length < 2)) {
-        canvas.parentElement.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:currentColor;opacity:.6;font:13px/1.5 var(--bb-font, Inter, sans-serif);text-align:center;padding:16px;">${
-          series.length ? 'A line chart needs at least two data points.' : 'No data to chart yet.'
-        }</div>`;
+        showMsg(series.length ? 'A line chart needs at least two data points.' : 'No data to chart yet.');
         return;
       }
+      hideMsg();
       // High-DPI
       const dpr = window.devicePixelRatio || 1;
-      const cssW = canvas.parentElement.clientWidth * 0.92;
-      const cssH = canvas.parentElement.clientHeight * 0.72;
+      const cssW = root.clientWidth * 0.92;
+      const cssH = root.clientHeight * 0.72;
       canvas.width = cssW * dpr; canvas.height = cssH * dpr;
       canvas.style.width = cssW + 'px'; canvas.style.height = cssH + 'px';
       dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -372,9 +471,13 @@ export default register({
         xLabel: c.xLabel || '',
         yLabel: c.yLabel || '',
         yMax: Number(c.yMax) || 0,
+        goalValue: Math.max(0, Number(c.goalValue) || 0),
+        goalLabel: String(c.goalLabel ?? '').trim(),
         showLegend: c.showLegend !== false,
         showValues: !!c.showValues,
         seriesLabel: c.seriesLabel || '',
+        valueFormat: c.valueFormat || 'compact',
+        valueUnit: c.valueUnit || '',
         palette,
       };
       if (kind === 'line') drawLine(dctx, series, cssW, cssH, opts);
@@ -382,27 +485,65 @@ export default register({
       else drawBar(dctx, series, cssW, cssH, opts);
     };
 
-    // Inline data draws immediately; a remote source fetches once via the shared
-    // live-source seam. A load failure surfaces instead of a silently empty
-    // canvas, an unreachable URL would otherwise look identical to "no data".
+    // Redraw on container resize — the canvas is sized from the root's px
+    // dimensions inside draw(), so without this an inline-data chart froze at
+    // whatever size the slide had on first paint. rAF-debounced; only fires
+    // once data has actually been drawn (a "Loading…" state has nothing to
+    // re-lay-out and must not be overwritten by an empty redraw).
+    let raf = 0;
+    const ro = typeof ResizeObserver === 'function'
+      ? new ResizeObserver(() => {
+          if (!painted) return;
+          cancelAnimationFrame(raf);
+          raf = requestAnimationFrame(() => draw(lastPayload));
+        })
+      : null;
+    ro?.observe(root);
+    const cleanup = () => { ro?.disconnect(); cancelAnimationFrame(raf); root.remove(); };
+
+    // Inline data draws immediately; a remote source fetches via the shared
+    // live-source seam — once when refreshSec is 0, polling otherwise. A load
+    // failure surfaces instead of a silently empty canvas; an unreachable URL
+    // would otherwise look identical to "no data".
     const stored = c.source === 'stored';
-    if (stored || (c.source === 'url' && c.dataUrl)) {
-      // Offline with nothing provisioned yet → draw the empty-state hint.
-      if (stored && c._offline?.data === undefined) { draw([]); return composeDispose(() => root.remove()); }
+    if (stored || c.source === 'url') {
+      // Offline with nothing provisioned yet → neutral placeholder, not an error.
+      if (stored && c._offline?.data === undefined) {
+        showMsg('Provided-offline — appears on the display after “Refresh data”.');
+        return composeDispose(cleanup);
+      }
+      // URL mode but no URL yet → prompt for one. Previously this fell through
+      // to the inline sample, so picking "url" charted fake placeholder data
+      // (Mon…Fri) until a URL was entered, confusing.
+      if (!stored && !c.dataUrl) {
+        showMsg('Add a JSON URL in the inspector.');
+        return composeDispose(cleanup);
+      }
+      showMsg('Loading…');
+      // 0 = fetch once. Any positive value polls, clamped UP to a 5s floor so a
+      // stray "2" refreshes every 5s instead of silently never refreshing.
+      // maxErrors:0 + backoff:false + stopOnCorsError:false (data-table's exact
+      // pattern): a poll keeps retrying on the fixed interval, showing the
+      // error on each miss and recovering when the feed returns.
+      const refreshSec = Math.max(0, Number(c.refreshSec) || 0);
       const stop = liveSource({
         url: c.dataUrl,
         signal: ctx?.signal,
+        intervalMs: refreshSec > 0 ? Math.max(5000, refreshSec * 1000) : 0,
+        fetchInit: { cache: 'no-store' },
+        maxErrors: 0,
+        backoff: false,
+        stopOnCorsError: false,
         ...offlineLiveOpts(c),
         onData: (data) => draw(data),
         onError: (e) => {
           if (ctx?.onError?.()) return;
-          canvas.parentElement.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:currentColor;opacity:.65;font:13px/1.5 var(--bb-font, Inter, sans-serif);text-align:center;padding:16px;">⚠️ ${escapeHtml(e.message || 'Could not load chart data')}</div>`;
+          showMsg(`⚠️ ${e.message || 'Could not load chart data'}`);
         },
       });
-      return composeDispose(() => { stop(); root.remove(); });
+      return composeDispose(() => { stop(); cleanup(); });
     }
     draw(Array.isArray(c.data) ? c.data : []);
-    return composeDispose(() => root.remove());
+    return composeDispose(cleanup);
   },
 });
-

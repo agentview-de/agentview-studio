@@ -63,17 +63,48 @@ export function windArrowSvg(deg) {
   </svg>`;
 }
 
-export function formatTime(iso) {
+// Time formatting. The optional second argument threads the widget's audience
+// settings through: `locale` is a BCP-47 tag ('' / undefined = device default,
+// `||` semantics so an empty string falls through) and `hour12` forces AM/PM
+// (true) or 24h (false); undefined keeps the locale's own convention. The
+// 1-arg form keeps behaving exactly as before (additive change, tests rely
+// on the old signature).
+export function formatTime(iso, opts) {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const o = { hour: '2-digit', minute: '2-digit' };
+  if (opts && typeof opts.hour12 === 'boolean') o.hour12 = opts.hour12;
+  return d.toLocaleTimeString(opts?.locale || undefined, o);
 }
-export function formatHour(iso) {
+export function formatHour(iso, opts) {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const o = { hour: '2-digit', minute: '2-digit' };
+  if (opts && typeof opts.hour12 === 'boolean') o.hour12 = opts.hour12;
+  return d.toLocaleTimeString(opts?.locale || undefined, o);
+}
+
+// Severe-weather WMO codes (heavy rain/snow, violent showers, thunderstorms) —
+// drives the opt-in alert banner so safety-relevant conditions surface even
+// when the regular condition text is toggled off. Kept here (next to the WMO
+// table) so the two lists can't drift apart unnoticed.
+const SEVERE_WMO = new Set([65, 75, 82, 86, 95, 96, 99]);
+export function isSevereWmo(code) {
+  return SEVERE_WMO.has(Number(code));
+}
+
+// UV-index descriptor buckets (WHO scale). Subtitle for the opt-in UV stat
+// card; same cheap-by-design contract as the other stat-sub helpers above.
+export function uvDesc(uv) {
+  const u = +uv;
+  if (!Number.isFinite(u)) return '';
+  if (u < 3) return 'Low';
+  if (u < 6) return 'Moderate';
+  if (u < 8) return 'High';
+  if (u < 11) return 'Very high';
+  return 'Extreme';
 }
 
 // ── Stat-subtitle helpers ──────────────────────────────────────────────────

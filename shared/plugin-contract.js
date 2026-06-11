@@ -61,6 +61,7 @@ export const FIELD_TYPES = Object.freeze([
   'icon',             // curated SVG symbol via visual picker
   'rich-text',        // HTML string via the WYSIWYG editor (text.js, quote.js)
   'calendar-events',  // array of events with one-time .ics import (calendar.js)
+  'align',            // 'left'|'center'|'right' (or top/middle/bottom with vertical:true) via segmented buttons
   'section',          // visual section header — does NOT bind to a value; following fields render under it
   'row',              // wraps `children` array in a horizontal flex cluster — also valueless
 ]);

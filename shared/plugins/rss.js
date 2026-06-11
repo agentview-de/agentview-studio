@@ -1,11 +1,13 @@
 import { register } from './registry.js';
-import { themeField } from '../data/themes.js';
 import { textScaleField } from '../text-scale.js';
-import { colorOverrideDefaults, colorOverrideFields, applyColorOverrides } from '../widget-color.js';
+import { colorOverrideDefaults, themeColorSection, applyColorOverrides } from '../widget-color.js';
 import { composeDispose, childSignal } from '../plugin-contract.js';
 import { escapeHtml } from '../utils/escape.js';
 import { fetchFeedItems } from '../feeds.js';
-import { isStored, DATAMODE_OPTIONS } from '../offline-data.js';
+import { isStored, dataModeField } from '../offline-data.js';
+import { refreshSecField } from '../refresh-field.js';
+import { localeField } from '../locale-field.js';
+import { ensureTickerKeyframes } from '../ticker-keyframes.js';
 
 // Map one <item>/<entry> node to the shape the widget renders. Shared by the
 // live fetch and offline provisioning so both store/show identical data.
@@ -32,17 +34,17 @@ const rssMapItem = (it) => {
 //   ticker    : horizontal scrolling headline ticker (CSS-animated).
 // Fit + paginate recompute on resize via ResizeObserver; ticker rerenders
 // only when items or the speed change.
+//
+// Ticker keyframes come from the SHARED ensureTickerKeyframes() helper
+// (shared/ticker-keyframes.js) — the old local copy only defined the LTR
+// keyframe under the shared 'bb-ticker-kf' style id, which silently broke the
+// Ticker widget's right-to-left direction when an RSS widget rendered first.
 
-// Inject the ticker scroll keyframes once per document (works in admin
-// preview, fullscreen preview iframe, and the live player). Reuses the same
-// keyframe name as the Ticker plugin so we don't duplicate definitions.
-function ensureTickerKeyframes() {
-  if (document.getElementById('bb-ticker-kf')) return;
-  const style = document.createElement('style');
-  style.id = 'bb-ticker-kf';
-  style.textContent = '@keyframes bb-ticker-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }';
-  document.head.appendChild(style);
-}
+// Inline style for the per-item timestamp (sizes follow the same cqmin clamp ×
+// text-scale pattern as .bb-rss-title/.bb-rss-desc in the stylesheet).
+const DATE_STYLE = 'font-size:calc(clamp(11px, 1.9cqmin, 26px) * var(--bb-rss-text-scale, 1));color:var(--bb-st-accent);opacity:.9;';
+// Ticker variant inherits the track font size, so plain em works there.
+const TICKER_DATE_STYLE = 'font-size:.55em;color:var(--bb-st-accent);opacity:.9;margin-left:.6em;';
 
 export default register({
   type: 'rss',
@@ -75,43 +77,66 @@ export default register({
     theme: 'gradient-blue',
     textScale: 100,
     showDesc: true,
+    showDate: false,
+    dateFormat: 'relative',
+    locale: '',
     mode: 'fit',
     pageSec: 6,
     tickerSpeed: 80,
     maxItems: 10,
+    refreshSec: 300,
   }),
   schema: () => ({
     fields: [
-      { key: 'dataMode', type: 'select', label: 'Data source', default: 'live', options: DATAMODE_OPTIONS,
-        help: 'Offline: the Studio fetches the feeds on “Refresh data” and stores them; the display reads that — no live fetch on screen.' },
-      // `url` is now an array; the feed-list control also accepts a legacy
+      { type: 'section', key: 'content', label: 'Content' },
+      dataModeField({
+        help: 'Offline: the Studio fetches the feeds on “Refresh data” and stores them; the display reads that — no live fetch on screen.',
+      }),
+      // `url` is an array; the feed-list control also accepts a legacy
       // single-string value (older widgets) and treats it as a one-element array.
-      { key: 'url',  type: 'feed-list', label: 'RSS Feeds' },
-      themeField(),
-      ...colorOverrideFields(),
-      textScaleField(),
-      { key: 'showDesc', type: 'toggle', label: 'Show descriptions',
-        showIf: c => c.mode !== 'ticker' },
+      { key: 'url', type: 'feed-list', label: 'RSS Feeds',
+        help: 'Add one or more feeds — items from all feeds merge into one list, newest first.' },
+      { key: 'maxItems', type: 'number', label: 'Maximum items',
+        min: 1, max: 30, slider: true,
+        help: 'Total items kept after merging all feeds.' },
+
+      { type: 'section', key: 'layout', label: 'Layout' },
+      // The mode select gates showDesc / pageSec / tickerSpeed below it.
       { key: 'mode', type: 'select', label: 'When too many items', options: [
         { value: 'fit',      label: 'Auto-fit (show as many as fit)' },
         { value: 'paginate', label: 'Paginate (rotate through pages)' },
         { value: 'ticker',   label: 'Live ticker (scroll horizontally)' },
       ]},
+      { key: 'showDesc', type: 'toggle', label: 'Show descriptions',
+        showIf: c => c.mode !== 'ticker' },
+      { key: 'showDate', type: 'toggle', label: 'Show item date',
+        help: 'Shows each item’s publication time as a small accent-coloured label.' },
+      { key: 'dateFormat', type: 'select', label: 'Date format', options: [
+        { value: 'relative', label: 'Relative (2 hr ago)' },
+        { value: 'time',     label: 'Time (14:05)' },
+        { value: 'date',     label: 'Weekday + time (Mon 14:05)' },
+      ], showIf: c => !!c.showDate },
+      { ...localeField(), showIf: c => !!c.showDate },
+      textScaleField(),
+
+      { type: 'section', key: 'behavior', label: 'Behavior' },
       { key: 'pageSec', type: 'duration', label: 'Time per page',
-        min: 2, max: 30, default: 6,
+        min: 2, max: 30,
         showIf: c => c.mode === 'paginate' },
       { key: 'tickerSpeed', type: 'number', label: 'Ticker speed',
         min: 20, max: 300, step: 10, slider: true, suffix: ' px/s',
         showIf: c => c.mode === 'ticker' },
-      { key: 'maxItems', type: 'number', label: 'Maximum items',
-        min: 1, max: 30, slider: true,
-        help: 'How many items to fetch from the feed.' },
+      refreshSecField({ showIf: c => c.dataMode !== 'stored' }),
+
+      ...themeColorSection(),
     ],
   }),
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const mode = c.mode ?? 'fit';
     const showDesc = c.showDesc !== false;
+    const showDate = !!c.showDate;
+    const dateFormat = c.dateFormat ?? 'relative';
     const isTicker = mode === 'ticker';
     const root = document.createElement('div');
     applyColorOverrides(root, c);
@@ -149,32 +174,65 @@ export default register({
     const tickerTrack = root.querySelector('.bb-rss-ticker-track');
     let allItems = [];
     let pageTimer = null;
+    let refreshTimer = null;
+    let dateTimer = null;
     let currentPage = 0;
+
+    // Format one item's epoch-ms timestamp for the audience. `c.locale || undefined`
+    // (never ??) so the '' = browser-default sentinel falls through to the device.
+    const fmtDate = (ts) => {
+      if (!showDate || !ts) return '';
+      const loc = c.locale || undefined;
+      try {
+        if (dateFormat === 'time') {
+          return new Intl.DateTimeFormat(loc, { hour: '2-digit', minute: '2-digit' }).format(ts);
+        }
+        if (dateFormat === 'date') {
+          return new Intl.DateTimeFormat(loc, { weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(ts);
+        }
+        // relative ("2 hr ago") — minutes, then hours, then days.
+        const rtf = new Intl.RelativeTimeFormat(loc, { numeric: 'auto', style: 'short' });
+        const min = Math.round((ts - Date.now()) / 60000);
+        if (Math.abs(min) < 60) return rtf.format(min, 'minute');
+        const hrs = Math.round(min / 60);
+        if (Math.abs(hrs) < 24) return rtf.format(hrs, 'hour');
+        return rtf.format(Math.round(hrs / 24), 'day');
+      } catch { return ''; }
+    };
 
     const renderItems = (items) => {
       // Only append "…" when the description was actually truncated, and drop
       // the line entirely when the feed gave no description, a lone "…" or a
       // full sentence with a misleading ellipsis both looked broken.
-      list.innerHTML = items.map(it => `
+      list.innerHTML = items.map(it => {
+        const dt = fmtDate(it.date);
+        return `
         <li class="bb-rss-item">
           <div class="bb-rss-title">${escapeHtml(it.title)}</div>
           ${it.desc ? `<div class="bb-rss-desc">${escapeHtml(it.desc)}${it.truncated ? '…' : ''}</div>` : ''}
-        </li>`).join('') || '<li class="bb-rss-loading">Empty feed</li>';
+          ${dt ? `<div class="bb-rss-date" data-ts="${it.date}" style="${DATE_STYLE}">${escapeHtml(dt)}</div>` : ''}
+        </li>`;
+      }).join('') || '<li class="bb-rss-loading">Empty feed</li>';
     };
 
     const layoutTicker = () => {
       ensureTickerKeyframes();
       if (!tickerTrack) return;
-      const titles = allItems.map(i => i.title).filter(Boolean);
-      if (!titles.length) { tickerTrack.innerHTML = '<span class="bb-rss-loading">Empty feed</span>'; return; }
+      const entries = allItems.filter(i => i.title);
+      if (!entries.length) { tickerTrack.innerHTML = '<span class="bb-rss-loading">Empty feed</span>'; return; }
       const sep = '•';
       // Two copies of the sequence so translateX(-50%) loops seamlessly.
-      const buildCopy = () => titles
-        .map(t => `<span class="bb-rss-ticker-item">${escapeHtml(t)}</span>`)
+      const buildCopy = () => entries
+        .map(i => {
+          const dt = fmtDate(i.date);
+          return `<span class="bb-rss-ticker-item">${escapeHtml(i.title)}${dt ? `<span data-ts="${i.date}" style="${TICKER_DATE_STYLE}">${escapeHtml(dt)}</span>` : ''}</span>`;
+        })
         .join(`<span class="bb-rss-ticker-sep">${sep}</span>`);
       tickerTrack.innerHTML = buildCopy() + `<span class="bb-rss-ticker-sep">${sep}</span>` + buildCopy();
       // Approximate width-per-character (no layout read needed). speed = px/s.
-      const cycleChars = titles.join('   ' + sep + '   ').length;
+      const cycleChars = entries
+        .map(i => i.title + (showDate ? '  ' + fmtDate(i.date) : ''))
+        .join('   ' + sep + '   ').length;
       const approxPx = Math.max(240, cycleChars * 16);
       const speed = Math.max(20, Math.min(300, c.tickerSpeed ?? 80));
       const dur = Math.max(6, approxPx / speed);
@@ -228,30 +286,53 @@ export default register({
     // a slot binding (set at publish). The display renders that — no live fetch.
     const stored = isStored(c);
 
-    (async () => {
-      if (stored) {
-        const offlineItems = c._offline?.data;
-        if (offlineItems === undefined) {
-          const ph = list ?? tickerTrack;
-          if (ph) ph.innerHTML = `<${list ? 'li' : 'span'} class="bb-rss-loading">Provided offline — appears after “Refresh data”.</${list ? 'li' : 'span'}>`;
-          return;
-        }
-        allItems = (Array.isArray(offlineItems) ? offlineItems : []).slice(0, c.maxItems ?? 10);
-        if (!allItems.length) { showErr('Empty feed'); return; }
-        layout();
-        return;
-      }
-      // Live: fetch + parse every feed (shared pipeline; one dead feed doesn't
-      // blank the widget).
+    // Live fetch + parse of every feed (shared pipeline; one dead feed doesn't
+    // blank the widget). Re-runs on the refresh timer; refresh failures keep the
+    // last good items on screen instead of blanking to an error.
+    const loadLive = async (first) => {
       const { items, okCount, configured } = await fetchFeedItems(c.url, {
         signal: ctrl.signal, mapItem: rssMapItem, maxItems: c.maxItems ?? 10,
       });
       if (ctrl.signal.aborted) return;
-      if (!configured) { showErr('No feed configured'); return; }
-      if (!okCount) { if (!ctx?.onError?.()) showErr('Feed unavailable'); return; }
+      if (!configured) { if (first) showErr('No feed configured'); return; }
+      if (!okCount) { if (first && !ctx?.onError?.()) showErr('Feed unavailable'); return; }
       allItems = items;
       layout();
-    })();
+    };
+
+    if (stored) {
+      const offlineItems = c._offline?.data;
+      if (offlineItems === undefined) {
+        const ph = list ?? tickerTrack;
+        if (ph) ph.innerHTML = `<${list ? 'li' : 'span'} class="bb-rss-loading">Provided offline — appears after “Refresh data”.</${list ? 'li' : 'span'}>`;
+      } else {
+        allItems = (Array.isArray(offlineItems) ? offlineItems : []).slice(0, c.maxItems ?? 10);
+        if (!allItems.length) showErr('Empty feed');
+        else layout();
+      }
+    } else {
+      loadLive(true);
+      // Poll the feeds so a slide pinned on screen for hours doesn't show stale
+      // headlines. 0 = fetch once; positive values floor at the 5 s player minimum.
+      const refreshSec = c.refreshSec ?? 300;
+      if (refreshSec > 0) {
+        refreshTimer = setInterval(() => {
+          if (!ctrl.signal.aborted) loadLive(false);
+        }, Math.max(5000, refreshSec * 1000));
+      }
+    }
+
+    // Relative timestamps drift ("2 min ago" → "3 min ago") — update the date
+    // labels in place once a minute without re-running the full layout (which
+    // would reset the pagination rotation).
+    if (showDate && dateFormat === 'relative') {
+      dateTimer = setInterval(() => {
+        if (ctrl.signal.aborted) return;
+        root.querySelectorAll('[data-ts]').forEach(el => {
+          el.textContent = fmtDate(Number(el.dataset.ts));
+        });
+      }, 60000);
+    }
 
     // Re-layout whenever the widget box changes size. Ticker rerendering is
     // cheap (just one innerHTML + style assignment), so this is fine.
@@ -261,6 +342,8 @@ export default register({
     return composeDispose(() => {
       ctrl.abort();
       clearInterval(pageTimer);
+      clearInterval(refreshTimer);
+      clearInterval(dateTimer);
       ro.disconnect();
       root.remove();
     });
@@ -295,4 +378,3 @@ function drawDots(host, total, current) {
     `<span class="bb-rss-dot${i === current ? ' bb-on' : ''}"></span>`
   ).join('');
 }
-

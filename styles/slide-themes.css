@@ -30,7 +30,8 @@
 .bb-body { font-size: clamp(18px, 4.4cqmin, 64px); line-height: 1.5; }
 /* Text widget — full-width body so WYSIWYG text-align inside has something
    to align against, centred by default until inline alignment overrides. */
-.bb-slide-text .bb-body { width: 100%; text-align: center; }
+.bb-slide-text .bb-h1 { font-size: calc(clamp(28px, 8cqmin, 96px) * var(--bb-text-text-scale, 1)); }
+.bb-slide-text .bb-body { width: 100%; text-align: center; font-size: calc(clamp(18px, 4.4cqmin, 64px) * var(--bb-text-text-scale, 1)); }
 
 /* Rich-text rendering inside the Announcement (.bb-slide-text .bb-body).
    The WYSIWYG can produce headings, blockquotes, lists, tables, links, code,
@@ -38,11 +39,11 @@
    theme without needing per-theme overrides. Colours come from currentColor
    and the theme's --bb-st-accent, so every theme inherits sensible defaults. */
 .bb-slide-text .bb-body h2 {
-  font: 700 clamp(20px, 4.6cqmin, 56px)/1.25 var(--bb-st-font, inherit);
+  font: 700 calc(clamp(20px, 4.6cqmin, 56px) * var(--bb-text-text-scale, 1))/1.25 var(--bb-st-font, inherit);
   margin: .4em 0 .3em;
 }
 .bb-slide-text .bb-body h3 {
-  font: 600 clamp(18px, 4cqmin, 44px)/1.25 var(--bb-st-font, inherit);
+  font: 600 calc(clamp(18px, 4cqmin, 44px) * var(--bb-text-text-scale, 1))/1.25 var(--bb-st-font, inherit);
   margin: .35em 0 .25em;
 }
 .bb-slide-text .bb-body blockquote {
@@ -241,23 +242,23 @@
    Max-clamps cap the scale on ultra-large displays so the type doesn't grow
    into "billboard" territory beyond what looks intentional. */
 .bb-slide-weather .bb-weather-icon {
-  font-size: clamp(64px, 20cqmin, 320px);
+  font-size: calc(clamp(64px, 20cqmin, 320px) * var(--bb-weather-text-scale, 1));
   line-height: 1;
   filter: drop-shadow(0 6px 30px color-mix(in srgb, #000 50%, transparent));
 }
 .bb-slide-weather .bb-weather-temp {
-  font: 800 clamp(56px, 22cqmin, 360px)/1 var(--bb-display);
+  font: 800 calc(clamp(56px, 22cqmin, 360px) * var(--bb-weather-text-scale, 1))/1 var(--bb-display);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.03em;
 }
 .bb-slide-weather .bb-weather-city {
-  font-size: clamp(20px, 5.4cqmin, 72px);
+  font-size: calc(clamp(20px, 5.4cqmin, 72px) * var(--bb-weather-text-scale, 1));
   font-weight: 600;
   letter-spacing: -.005em;
   opacity: .9;
 }
 .bb-slide-weather .bb-weather-desc {
-  font-size: clamp(14px, 3cqmin, 36px);
+  font-size: calc(clamp(14px, 3cqmin, 36px) * var(--bb-weather-text-scale, 1));
   text-transform: uppercase;
   letter-spacing: .18em;
   opacity: .75;
@@ -267,7 +268,7 @@
   display: flex; flex-wrap: wrap;
   gap: 0;
   margin-top: var(--w-gap-md);
-  font-size: clamp(16px, 3.4cqmin, 40px);
+  font-size: calc(clamp(16px, 3.4cqmin, 40px) * var(--bb-weather-text-scale, 1));
 }
 /* Stat card — keep selector to (0,2,0) specificity so design-specific
    overrides below (`.bb-weather-design-dashboard .bb-stat-card`) tie and win
@@ -288,7 +289,7 @@
    `.bb-stat-icon` and `.bb-stat-sub` siblings introduced for the dashboard
    design (which are hidden by default in non-dashboard designs). */
 .bb-slide-weather .bb-weather-stats .bb-stat-label {
-  font-size: clamp(12px, 2.2cqmin, 22px);
+  font-size: calc(clamp(12px, 2.2cqmin, 22px) * var(--bb-weather-text-scale, 1));
   text-transform: uppercase;
   letter-spacing: .14em;
   opacity: .65;
@@ -349,18 +350,18 @@
   text-align: center;
   display: flex; flex-direction: column;
   gap: var(--w-gap-sm); align-items: center;
-  font-size: clamp(15px, 2.8cqmin, 30px);
+  font-size: calc(clamp(15px, 2.8cqmin, 30px) * var(--bb-weather-text-scale, 1));
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .bb-slide-weather .bb-forecast-day > span:first-child {
-  font-size: clamp(13px, 2.2cqmin, 22px);
+  font-size: calc(clamp(13px, 2.2cqmin, 22px) * var(--bb-weather-text-scale, 1));
   text-transform: uppercase;
   letter-spacing: .12em;
   opacity: .75;
   font-weight: 500;
 }
-.bb-slide-weather .bb-forecast-icon { font-size: clamp(30px, 5.6cqmin, 72px); filter: drop-shadow(0 2px 6px rgba(0,0,0,.25)); }
+.bb-slide-weather .bb-forecast-icon { font-size: calc(clamp(30px, 5.6cqmin, 72px) * var(--bb-weather-text-scale, 1)); filter: drop-shadow(0 2px 6px rgba(0,0,0,.25)); }
 .bb-slide-weather .bb-forecast-temps { opacity: .92; }
 
 /* ── Design: classic ── Newsroom. Three sections (current / stats / forecast)
@@ -378,11 +379,11 @@
   flex-wrap: wrap;
 }
 .bb-weather-design-classic .bb-weather-icon {
-  font-size: clamp(56px, 18cqmin, 280px);
+  font-size: calc(clamp(56px, 18cqmin, 280px) * var(--bb-weather-text-scale, 1));
   opacity: .95;
 }
 .bb-weather-design-classic .bb-weather-temp {
-  font-size: clamp(72px, 28cqmin, 420px);
+  font-size: calc(clamp(72px, 28cqmin, 420px) * var(--bb-weather-text-scale, 1));
   letter-spacing: -0.035em;
   line-height: .95;
 }
@@ -404,7 +405,7 @@
    the same .bb-weather-icon container; the nested .bb-weather-icon-svg
    rule below sizes the actual SVG to fill the box. */
 .bb-weather-design-minimal .bb-weather-icon {
-  font-size: clamp(56px, 14cqmin, 180px);
+  font-size: calc(clamp(56px, 14cqmin, 180px) * var(--bb-weather-text-scale, 1));
   width: clamp(56px, 14cqmin, 180px);
   height: clamp(56px, 14cqmin, 180px);
   line-height: 1;
@@ -415,12 +416,12 @@
   width: 100%; height: 100%;
 }
 .bb-weather-design-minimal .bb-weather-temp {
-  font-size: clamp(96px, 38cqmin, 380px);
+  font-size: calc(clamp(96px, 38cqmin, 380px) * var(--bb-weather-text-scale, 1));
   letter-spacing: -0.045em;
   line-height: .95;
 }
 .bb-weather-design-minimal .bb-weather-city {
-  font-size: clamp(16px, 2.8cqmin, 32px);
+  font-size: calc(clamp(16px, 2.8cqmin, 32px) * var(--bb-weather-text-scale, 1));
   text-transform: uppercase;
   letter-spacing: .25em;
   font-weight: 500;
@@ -459,7 +460,7 @@
   gap: var(--w-gap-xs);
 }
 .bb-weather-design-hero .bb-weather-icon {
-  font-size: clamp(56px, 22cqmin, 220px);
+  font-size: calc(clamp(56px, 22cqmin, 220px) * var(--bb-weather-text-scale, 1));
   margin-bottom: calc(-1 * var(--w-gap-sm));
   opacity: .95;
 }
@@ -468,13 +469,13 @@
    reading order. */
 .bb-weather-design-hero .bb-weather-temp {
   order: 1;
-  font-size: clamp(96px, 38cqmin, 380px);
+  font-size: calc(clamp(96px, 38cqmin, 380px) * var(--bb-weather-text-scale, 1));
   letter-spacing: -0.05em;
   line-height: .92;
 }
 .bb-weather-design-hero .bb-weather-city {
   order: 2;
-  font-size: clamp(13px, 2.6cqmin, 28px);
+  font-size: calc(clamp(13px, 2.6cqmin, 28px) * var(--bb-weather-text-scale, 1));
   text-transform: uppercase;
   letter-spacing: .22em;
   font-weight: 600;
@@ -483,7 +484,7 @@
 }
 .bb-weather-design-hero .bb-weather-desc {
   order: 3;
-  font-size: clamp(10px, 1.7cqmin, 16px);
+  font-size: calc(clamp(10px, 1.7cqmin, 16px) * var(--bb-weather-text-scale, 1));
   letter-spacing: .18em;
   opacity: .55;
 }
@@ -515,13 +516,13 @@
   border-bottom: 1px solid var(--w-divider);
   flex-wrap: nowrap;
 }
-.bb-weather-design-forecast .bb-weather-icon { font-size: clamp(56px, 10cqmin, 96px); }
-.bb-weather-design-forecast .bb-weather-temp { font-size: clamp(48px, 9cqmin, 96px); letter-spacing: -.04em; }
-.bb-weather-design-forecast .bb-weather-city { font-size: clamp(16px, 2.4cqmin, 26px); }
-.bb-weather-design-forecast .bb-weather-desc { font-size: clamp(13px, 1.8cqmin, 18px); }
+.bb-weather-design-forecast .bb-weather-icon { font-size: calc(clamp(56px, 10cqmin, 96px) * var(--bb-weather-text-scale, 1)); }
+.bb-weather-design-forecast .bb-weather-temp { font-size: calc(clamp(48px, 9cqmin, 96px) * var(--bb-weather-text-scale, 1)); letter-spacing: -.04em; }
+.bb-weather-design-forecast .bb-weather-city { font-size: calc(clamp(16px, 2.4cqmin, 26px) * var(--bb-weather-text-scale, 1)); }
+.bb-weather-design-forecast .bb-weather-desc { font-size: calc(clamp(13px, 1.8cqmin, 18px) * var(--bb-weather-text-scale, 1)); }
 .bb-weather-design-forecast .bb-weather-stats {
   margin-top: var(--w-gap-xs);
-  font-size: clamp(13px, 1.8cqmin, 18px);
+  font-size: calc(clamp(13px, 1.8cqmin, 18px) * var(--bb-weather-text-scale, 1));
   flex: 1;
 }
 .bb-weather-design-forecast .bb-weather-stats > div { padding: 0 var(--w-gap-sm); }
@@ -536,7 +537,7 @@
   background: var(--w-surface);
   padding: var(--w-gap-md) var(--w-gap-sm);
   gap: var(--w-gap-sm);
-  font-size: clamp(14px, 1.9cqmin, 18px);
+  font-size: calc(clamp(14px, 1.9cqmin, 18px) * var(--bb-weather-text-scale, 1));
 }
 .bb-weather-design-forecast .bb-forecast-day:first-child {
   /* "Today" highlight — subtle accent border so the first card reads as the
@@ -544,10 +545,10 @@
   background: var(--w-surface-strong);
   border-color: color-mix(in srgb, var(--bb-st-accent) 50%, transparent);
 }
-.bb-weather-design-forecast .bb-forecast-day > span:first-child { font-size: clamp(13px, 1.6cqmin, 15px); }
-.bb-weather-design-forecast .bb-forecast-icon { font-size: clamp(34px, 5cqmin, 52px); }
+.bb-weather-design-forecast .bb-forecast-day > span:first-child { font-size: calc(clamp(13px, 1.6cqmin, 15px) * var(--bb-weather-text-scale, 1)); }
+.bb-weather-design-forecast .bb-forecast-icon { font-size: calc(clamp(34px, 5cqmin, 52px) * var(--bb-weather-text-scale, 1)); }
 .bb-weather-design-forecast .bb-forecast-temps {
-  font-size: clamp(16px, 2.4cqmin, 24px);
+  font-size: calc(clamp(16px, 2.4cqmin, 24px) * var(--bb-weather-text-scale, 1));
   font-weight: 700;
 }
 
@@ -572,9 +573,9 @@
   align-items: flex-start;
   justify-content: center;
 }
-.bb-weather-design-split .bb-weather-icon { font-size: clamp(64px, 18cqmin, 180px); }
-.bb-weather-design-split .bb-weather-temp { font-size: clamp(72px, 16cqmin, 160px); letter-spacing: -0.035em; }
-.bb-weather-design-split .bb-weather-city { font-size: clamp(18px, 3cqmin, 32px); }
+.bb-weather-design-split .bb-weather-icon { font-size: calc(clamp(64px, 18cqmin, 180px) * var(--bb-weather-text-scale, 1)); }
+.bb-weather-design-split .bb-weather-temp { font-size: calc(clamp(72px, 16cqmin, 160px) * var(--bb-weather-text-scale, 1)); letter-spacing: -0.035em; }
+.bb-weather-design-split .bb-weather-city { font-size: calc(clamp(18px, 3cqmin, 32px) * var(--bb-weather-text-scale, 1)); }
 .bb-weather-design-split .bb-weather-stats {
   grid-column: 1; grid-row: 2;
   align-self: end;
@@ -603,13 +604,13 @@
   background: transparent;
   border: 0;
   border-radius: var(--w-radius-sm);
-  font-size: clamp(15px, 2cqmin, 20px);
+  font-size: calc(clamp(15px, 2cqmin, 20px) * var(--bb-weather-text-scale, 1));
   text-align: left;
   gap: var(--w-gap-md);
 }
 .bb-weather-design-split .bb-forecast-day:hover { background: var(--w-surface); }
 .bb-weather-design-split .bb-forecast-day > span:first-child { flex: 0 0 3em; opacity: .75; }
-.bb-weather-design-split .bb-forecast-icon { font-size: clamp(26px, 3.6cqmin, 36px); flex: 0 0 auto; }
+.bb-weather-design-split .bb-forecast-icon { font-size: calc(clamp(26px, 3.6cqmin, 36px) * var(--bb-weather-text-scale, 1)); flex: 0 0 auto; }
 .bb-weather-design-split .bb-forecast-precip { flex: 0 0 auto; font-size: .85em; opacity: .75; }
 .bb-weather-design-split .bb-forecast-temps {
   flex: 1; display: flex; align-items: center; gap: var(--w-gap-sm);
@@ -650,11 +651,11 @@
   padding-bottom: var(--w-gap-md);
   border-bottom: 1px solid var(--w-divider);
 }
-.bb-weather-design-hourly .bb-weather-icon { font-size: clamp(48px, 9cqmin, 88px); }
-.bb-weather-design-hourly .bb-weather-temp { font-size: clamp(48px, 9cqmin, 96px); }
-.bb-weather-design-hourly .bb-weather-city { font-size: clamp(16px, 2.4cqmin, 26px); }
-.bb-weather-design-hourly .bb-weather-desc { font-size: clamp(13px, 1.8cqmin, 18px); }
-.bb-weather-design-hourly .bb-weather-stats { font-size: clamp(13px, 1.8cqmin, 18px); margin-top: var(--w-gap-xs); }
+.bb-weather-design-hourly .bb-weather-icon { font-size: calc(clamp(48px, 9cqmin, 88px) * var(--bb-weather-text-scale, 1)); }
+.bb-weather-design-hourly .bb-weather-temp { font-size: calc(clamp(48px, 9cqmin, 96px) * var(--bb-weather-text-scale, 1)); }
+.bb-weather-design-hourly .bb-weather-city { font-size: calc(clamp(16px, 2.4cqmin, 26px) * var(--bb-weather-text-scale, 1)); }
+.bb-weather-design-hourly .bb-weather-desc { font-size: calc(clamp(13px, 1.8cqmin, 18px) * var(--bb-weather-text-scale, 1)); }
+.bb-weather-design-hourly .bb-weather-stats { font-size: calc(clamp(13px, 1.8cqmin, 18px) * var(--bb-weather-text-scale, 1)); margin-top: var(--w-gap-xs); }
 .bb-weather-design-hourly .bb-weather-hourly { flex: 1; }
 .bb-weather-design-hourly .bb-weather-forecast {
   margin-top: 0;
@@ -806,7 +807,7 @@
 .bb-weather-design-dashboard .bb-weather-city {
   /* Bumped past the reference (3.2u ≈ 36px @ 1080p) so the city carries
      more visual weight at TV viewing distance. */
-  font-size: clamp(30px, 5.5cqmin, 88px);
+  font-size: calc(clamp(30px, 5.5cqmin, 88px) * var(--bb-weather-text-scale, 1));
   font-weight: 600;
   letter-spacing: -.01em;
   color: var(--w-ink);
@@ -817,7 +818,7 @@
      ignores colorTemperature for the main temp.
      Sized to match the reference's 13u ≈ 147px at 1080p so the temp doesn't
      swallow the supporting text. */
-  font-size: clamp(84px, 13cqmin, 240px);
+  font-size: calc(clamp(84px, 13cqmin, 240px) * var(--bb-weather-text-scale, 1));
   font-weight: 700;
   line-height: .85;
   letter-spacing: -.04em;
@@ -847,7 +848,7 @@
 /* Dashboard's desc styling — visible only when the showDescription toggle is
    on. Hide rule is in the global `.bb-weather-no-desc` block above. */
 .bb-weather-design-dashboard .bb-weather-desc {
-  font-size: clamp(13px, 2.2cqmin, 26px);
+  font-size: calc(clamp(13px, 2.2cqmin, 26px) * var(--bb-weather-text-scale, 1));
   margin-top: 0;
   font-weight: 500;
   text-transform: uppercase;
@@ -855,7 +856,7 @@
   opacity: 1;
 }
 .bb-weather-design-dashboard .bb-weather-hilo {
-  font-size: clamp(22px, 3.5cqmin, 52px);
+  font-size: calc(clamp(22px, 3.5cqmin, 52px) * var(--bb-weather-text-scale, 1));
   margin-top: 0;
   font-weight: 600;
   gap: clamp(6px, 1cqmin, 14px);
@@ -917,7 +918,7 @@
   /* Bumped large — it's now the only visual identifier (label hidden). */
   width: clamp(36px, 4.5cqmin, 72px);
   height: clamp(36px, 4.5cqmin, 72px);
-  font-size: clamp(36px, 4.5cqmin, 72px);
+  font-size: calc(clamp(36px, 4.5cqmin, 72px) * var(--bb-weather-text-scale, 1));
   opacity: .85;
   color: var(--w-ink-dim);
 }
@@ -936,7 +937,7 @@
 .bb-weather-design-dashboard .bb-stat-card b {
   grid-area: value;
   /* Bumped — with labels hidden, value is the prominent text and can grow. */
-  font-size: clamp(28px, 4.4cqmin, 64px);
+  font-size: calc(clamp(28px, 4.4cqmin, 64px) * var(--bb-weather-text-scale, 1));
   font-weight: 600;
   line-height: 1;
   letter-spacing: -.01em;
@@ -971,7 +972,7 @@
    smaller than numeric stats so two times fit on a single line, and force
    nowrap so the "·" separator doesn't break onto its own line. */
 .bb-weather-design-dashboard .bb-stat-card-sun b {
-  font-size: clamp(20px, 2.5cqmin, 38px);
+  font-size: calc(clamp(20px, 2.5cqmin, 38px) * var(--bb-weather-text-scale, 1));
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -984,7 +985,7 @@
   display: none;
 }
 .bb-weather-design-dashboard .bb-weather-section-title {
-  font-size: clamp(19px, 2.5cqmin, 38px);
+  font-size: calc(clamp(19px, 2.5cqmin, 38px) * var(--bb-weather-text-scale, 1));
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: .16em;
@@ -992,7 +993,7 @@
   opacity: 1;
 }
 .bb-weather-design-dashboard .bb-weather-section-meta {
-  font-size: clamp(17px, 2.2cqmin, 32px);
+  font-size: calc(clamp(17px, 2.2cqmin, 32px) * var(--bb-weather-text-scale, 1));
   color: var(--w-ink-faint);
   font-weight: 500;
   font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
@@ -1036,7 +1037,7 @@
   font-weight: 600;
 }
 .bb-weather-design-dashboard .bb-hour-time {
-  font-size: clamp(19px, 2.5cqmin, 36px);
+  font-size: calc(clamp(19px, 2.5cqmin, 36px) * var(--bb-weather-text-scale, 1));
   font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
   color: var(--w-ink-dim);
   letter-spacing: .04em;
@@ -1044,7 +1045,7 @@
 .bb-weather-design-dashboard .bb-hour-icon {
   width: clamp(40px, 5cqmin, 80px);
   height: clamp(40px, 5cqmin, 80px);
-  font-size: clamp(36px, 4.5cqmin, 72px);
+  font-size: calc(clamp(36px, 4.5cqmin, 72px) * var(--bb-weather-text-scale, 1));
   line-height: 1;
   display: inline-flex; align-items: center; justify-content: center;
   margin: clamp(2px, .3cqmin, 6px) 0;
@@ -1053,12 +1054,12 @@
   width: 100%; height: 100%;
 }
 .bb-weather-design-dashboard .bb-hour-temp {
-  font-size: clamp(24px, 3.3cqmin, 52px);
+  font-size: calc(clamp(24px, 3.3cqmin, 52px) * var(--bb-weather-text-scale, 1));
   font-weight: 600;
   color: var(--w-ink);
 }
 .bb-weather-design-dashboard .bb-hour-precip {
-  font-size: clamp(17px, 2cqmin, 30px);
+  font-size: calc(clamp(17px, 2cqmin, 30px) * var(--bb-weather-text-scale, 1));
   color: var(--w-rain);
   min-height: clamp(20px, 2.1cqmin, 32px);
   display: flex; align-items: center; gap: clamp(2px, .25cqmin, 4px);
@@ -1126,7 +1127,7 @@
 .bb-weather-design-dashboard .bb-forecast-day > span:first-child {
   display: flex; align-items: center; justify-content: space-between;
   gap: clamp(4px, .8cqmin, 10px);
-  font-size: clamp(22px, 2.9cqmin, 44px);
+  font-size: calc(clamp(22px, 2.9cqmin, 44px) * var(--bb-weather-text-scale, 1));
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: .12em;
@@ -1151,7 +1152,7 @@
 .bb-weather-design-dashboard .bb-forecast-icon {
   width: clamp(48px, 7cqmin, 108px);
   height: clamp(48px, 7cqmin, 108px);
-  font-size: clamp(42px, 6.2cqmin, 96px);
+  font-size: calc(clamp(42px, 6.2cqmin, 96px) * var(--bb-weather-text-scale, 1));
   line-height: 1;
   display: inline-flex; align-items: center; justify-content: center;
   filter: none;
@@ -1162,7 +1163,7 @@
 }
 .bb-weather-design-dashboard .bb-forecast-precip {
   color: var(--w-rain);
-  font-size: clamp(20px, 2.5cqmin, 38px);
+  font-size: calc(clamp(20px, 2.5cqmin, 38px) * var(--bb-weather-text-scale, 1));
   font-weight: 500;
   display: inline-flex; align-items: center; gap: clamp(3px, .4cqmin, 6px);
   opacity: 1;
@@ -1182,7 +1183,7 @@
 .bb-weather-design-dashboard .bb-forecast-hi {
   /* TV-distance daily lo/hi — most-glanced numbers in the 7-day strip, sized
      to read clearly across the room. */
-  font-size: clamp(24px, 3.2cqmin, 56px);
+  font-size: calc(clamp(24px, 3.2cqmin, 56px) * var(--bb-weather-text-scale, 1));
   font-weight: 700;
   flex: 0 0 auto;
   letter-spacing: -.01em;
@@ -1574,7 +1575,7 @@
 .bb-slide-calendar .bb-h2 { font-size: clamp(13px, 3.6cqmin, 28px); margin: 0 0 .2em; line-height: 1.2; }
 .bb-cal-view { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .bb-cal-loading, .bb-cal-empty-big { opacity: .6; padding: clamp(8px, 3cqmin, 24px); font-family: var(--bb-font, Inter, sans-serif); }
-.bb-cal-empty-big { font-size: clamp(13px, 4cqmin, 32px); text-align: center; margin: auto; }
+.bb-cal-empty-big { font-size: calc(clamp(13px, 4cqmin, 32px) * var(--bb-cal-text-scale, 1)); text-align: center; margin: auto; }
 
 /* Agenda + Today — list */
 .bb-cal-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: clamp(4px, 1.4cqmin, 12px); min-height: 0; overflow: hidden; }
@@ -1585,8 +1586,8 @@
   background: rgba(255,255,255,.06); border-radius: clamp(6px, 1.4cqmin, 12px);
   border-left: clamp(2px, .6cqmin, 4px) solid var(--bb-st-accent);
 }
-.bb-cal-date { font-family: var(--bb-mono); color: var(--bb-st-accent); font-size: clamp(11px, 2.4cqmin, 22px); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.bb-cal-desc { font-size: clamp(12px, 2.8cqmin, 26px); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bb-cal-date { font-family: var(--bb-mono); color: var(--bb-st-accent); font-size: calc(clamp(11px, 2.4cqmin, 22px) * var(--bb-cal-text-scale, 1)); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bb-cal-desc { font-size: calc(clamp(12px, 2.8cqmin, 26px) * var(--bb-cal-text-scale, 1)); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @container cal (max-width: 360px) {
   .bb-cal-item { grid-template-columns: 1fr; gap: 2px; }
   .bb-cal-desc { white-space: normal; }
@@ -1594,39 +1595,44 @@
 
 /* Now & Next (room) */
 .bb-cal-nownext { display: flex; flex-direction: column; gap: clamp(6px, 2cqmin, 18px); justify-content: center; height: 100%; }
-.bb-cal-status { align-self: flex-start; font-size: clamp(10px, 2.2cqmin, 20px); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: clamp(2px, .6cqmin, 6px) clamp(8px, 1.6cqmin, 16px); border-radius: 999px; }
+.bb-cal-status { align-self: flex-start; font-size: calc(clamp(10px, 2.2cqmin, 20px) * var(--bb-cal-text-scale, 1)); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: clamp(2px, .6cqmin, 6px) clamp(8px, 1.6cqmin, 16px); border-radius: 999px; }
 .bb-cal-status.bb-busy { color: #fca5a5; background: rgba(239,68,68,.16); }
 .bb-cal-status.bb-free { color: #86efac; background: rgba(16,185,129,.16); }
-.bb-cal-now-label { font-size: clamp(10px, 1.8cqmin, 18px); text-transform: uppercase; letter-spacing: .14em; opacity: .6; }
-.bb-cal-now-title { font: 800 clamp(22px, 12cqmin, 96px)/1.05 var(--bb-display); margin-top: 2px; overflow-wrap: anywhere; }
+.bb-cal-now-label { font-size: calc(clamp(10px, 1.8cqmin, 18px) * var(--bb-cal-text-scale, 1)); text-transform: uppercase; letter-spacing: .14em; opacity: .6; }
+.bb-cal-now-title { font: 800 calc(clamp(22px, 12cqmin, 96px) * var(--bb-cal-text-scale, 1))/1.05 var(--bb-display); margin-top: 2px; overflow-wrap: anywhere; }
 .bb-cal-free-big { color: var(--bb-st-accent); }
-.bb-cal-now-time { font-size: clamp(12px, 3cqmin, 30px); opacity: .8; margin-top: 4px; font-variant-numeric: tabular-nums; }
-.bb-cal-next { font-size: clamp(12px, 3cqmin, 28px); opacity: .85; margin-top: 4px; }
+.bb-cal-now-time { font-size: calc(clamp(12px, 3cqmin, 30px) * var(--bb-cal-text-scale, 1)); opacity: .8; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.bb-cal-next { font-size: calc(clamp(12px, 3cqmin, 28px) * var(--bb-cal-text-scale, 1)); opacity: .85; margin-top: 4px; }
 .bb-cal-next-label { color: var(--bb-st-accent); font-weight: 700; text-transform: uppercase; font-size: .68em; letter-spacing: .1em; margin-right: 8px; }
 .bb-cal-next-none { opacity: .5; }
 
+/* Room-screen header — room name + optional live clock in the Now & Next view */
+.bb-cal-room-head { display: flex; align-items: baseline; justify-content: space-between; gap: clamp(8px, 2cqmin, 20px); margin-bottom: clamp(2px, 1cqmin, 8px); }
+.bb-cal-room-name { font: 800 calc(clamp(16px, 5cqmin, 56px) * var(--bb-cal-text-scale, 1))/1.1 var(--bb-display); overflow-wrap: anywhere; }
+.bb-cal-room-clock { font-variant-numeric: tabular-nums; font-size: calc(clamp(14px, 4cqmin, 44px) * var(--bb-cal-text-scale, 1)); color: var(--bb-st-accent); opacity: .85; white-space: nowrap; }
+
 /* Week grid — fills available height; columns clip excess events */
-.bb-cal-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: clamp(3px, 1cqmin, 10px); height: 100%; }
+.bb-cal-week { display: grid; grid-template-columns: repeat(var(--bb-cal-week-days, 7), minmax(0, 1fr)); gap: clamp(3px, 1cqmin, 10px); height: 100%; }
 .bb-cal-col { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: rgba(255,255,255,.05); border-radius: clamp(4px, 1cqmin, 12px); padding: clamp(4px, 1cqmin, 10px); overflow: hidden; }
 .bb-cal-col.bb-today { background: color-mix(in srgb, var(--bb-st-accent) 14%, transparent); outline: 1px solid var(--bb-st-accent); }
 .bb-cal-colhead { display: flex; flex-direction: column; align-items: center; margin-bottom: clamp(2px, 1cqmin, 8px); flex: 0 0 auto; }
-.bb-cal-colhead span { font-size: clamp(9px, 1.4cqmin, 12px); text-transform: uppercase; letter-spacing: .08em; opacity: .6; }
-.bb-cal-colhead b { font: 700 clamp(12px, 2.6cqmin, 24px) var(--bb-display); }
+.bb-cal-colhead span { font-size: calc(clamp(9px, 1.4cqmin, 12px) * var(--bb-cal-text-scale, 1)); text-transform: uppercase; letter-spacing: .08em; opacity: .6; }
+.bb-cal-colhead b { font: 700 calc(clamp(12px, 2.6cqmin, 24px) * var(--bb-cal-text-scale, 1)) var(--bb-display); }
 .bb-cal-colbody { display: flex; flex-direction: column; gap: clamp(2px, .6cqmin, 6px); min-height: 0; overflow: hidden; }
-.bb-cal-ev { font-size: clamp(9px, 1.4cqmin, 14px); background: rgba(255,255,255,.07); border-left: 3px solid var(--bb-st-accent); border-radius: 4px; padding: clamp(1px, .4cqmin, 4px) clamp(3px, 1cqmin, 6px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bb-cal-ev { font-size: calc(clamp(9px, 1.4cqmin, 14px) * var(--bb-cal-text-scale, 1)); background: rgba(255,255,255,.07); border-left: 3px solid var(--bb-st-accent); border-radius: 4px; padding: clamp(1px, .4cqmin, 4px) clamp(3px, 1cqmin, 6px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bb-cal-ev-time { font-variant-numeric: tabular-nums; opacity: .7; margin-right: 4px; }
-.bb-cal-ev-none { opacity: .3; text-align: center; font-size: clamp(9px, 1.4cqmin, 12px); }
+.bb-cal-ev-none { opacity: .3; text-align: center; font-size: calc(clamp(9px, 1.4cqmin, 12px) * var(--bb-cal-text-scale, 1)); }
 @container cal (max-width: 480px) { .bb-cal-ev-time { display: none; } }
 
 /* Month grid — fills the box (no aspect-ratio overflow) */
-.bb-cal-monthtitle { font: 700 clamp(13px, 3cqmin, 28px) var(--bb-display); margin: 0 0 clamp(4px, 1cqmin, 10px); color: var(--bb-st-accent); flex: 0 0 auto; }
+.bb-cal-monthtitle { font: 700 calc(clamp(13px, 3cqmin, 28px) * var(--bb-cal-text-scale, 1)) var(--bb-display); margin: 0 0 clamp(4px, 1cqmin, 10px); color: var(--bb-st-accent); flex: 0 0 auto; }
 .bb-cal-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-template-rows: auto repeat(6, minmax(0, 1fr)); gap: clamp(3px, .8cqmin, 6px); flex: 1 1 auto; min-height: 0; }
-.bb-cal-mhead { text-align: center; font-size: clamp(9px, 1.4cqmin, 12px); text-transform: uppercase; opacity: .5; letter-spacing: .06em; align-self: center; }
+.bb-cal-mhead { text-align: center; font-size: calc(clamp(9px, 1.4cqmin, 12px) * var(--bb-cal-text-scale, 1)); text-transform: uppercase; opacity: .5; letter-spacing: .06em; align-self: center; }
 .bb-cal-daycell { background: rgba(255,255,255,.05); border-radius: clamp(4px, 1cqmin, 10px); padding: clamp(2px, .8cqmin, 6px) clamp(3px, 1cqmin, 8px); display: flex; flex-direction: column; gap: 2px; overflow: hidden; min-width: 0; min-height: 0; }
 .bb-cal-daycell.bb-cal-out { opacity: .35; }
 .bb-cal-daycell.bb-today { outline: 2px solid var(--bb-st-accent); background: color-mix(in srgb, var(--bb-st-accent) 14%, transparent); }
-.bb-cal-daynum { font: 700 clamp(10px, 1.8cqmin, 16px) var(--bb-display); }
-.bb-cal-mev { font-size: clamp(8px, 1.2cqmin, 12px); opacity: .85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bb-cal-daynum { font: 700 calc(clamp(10px, 1.8cqmin, 16px) * var(--bb-cal-text-scale, 1)) var(--bb-display); }
+.bb-cal-mev { font-size: calc(clamp(8px, 1.2cqmin, 12px) * var(--bb-cal-text-scale, 1)); opacity: .85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bb-cal-dots { display: flex; gap: 3px; margin-top: auto; }
 .bb-cal-dot { width: clamp(3px, .7cqmin, 6px); height: clamp(3px, .7cqmin, 6px); border-radius: 50%; background: var(--bb-st-accent); }
 @container cal (max-width: 360px) { .bb-cal-mev { display: none; } }
@@ -1650,45 +1656,45 @@
 /* World clock */
 .bb-slide-worldclock .bb-wc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
 .bb-wc-card { background: rgba(255,255,255,.06); border-radius: 16px; padding: 22px; text-align: center; }
-.bb-wc-city { font-size: clamp(14px, 2.2cqmin, 22px); letter-spacing: .12em; text-transform: uppercase; opacity: .7; }
-.bb-wc-time { font: 800 clamp(48px, 10cqmin, 96px)/1 var(--bb-mono); margin-top: 8px; font-variant-numeric: tabular-nums; }
-.bb-wc-date { font-size: clamp(12px, 1.6cqmin, 22px); opacity: .6; margin-top: 4px; }
+.bb-wc-city { font-size: calc(clamp(14px, 2.2cqmin, 22px) * var(--bb-wc-text-scale, 1)); letter-spacing: .12em; text-transform: uppercase; opacity: .7; }
+.bb-wc-time { font: 800 calc(clamp(48px, 10cqmin, 96px) * var(--bb-wc-text-scale, 1))/1 var(--bb-mono); margin-top: 8px; font-variant-numeric: tabular-nums; }
+.bb-wc-date { font-size: calc(clamp(12px, 1.6cqmin, 22px) * var(--bb-wc-text-scale, 1)); opacity: .6; margin-top: 4px; }
 
 /* Countdown */
 .bb-slide-countdown { align-items: center; text-align: center; }
-.bb-cd-heading { font-size: clamp(20px, 3.2cqmin, 32px); opacity: .85; margin-bottom: 24px; }
+.bb-cd-heading { font-size: calc(clamp(20px, 3.2cqmin, 32px) * var(--bb-countdown-text-scale, 1)); opacity: .85; margin-bottom: 24px; }
 .bb-cd-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
 .bb-cd-grid > div { background: rgba(255,255,255,.06); border-radius: 16px; padding: 20px; min-width: 140px; }
-.bb-cd-grid b { display: block; font: 800 clamp(48px, 13cqmin, 120px)/1 var(--bb-display); font-variant-numeric: tabular-nums; }
-.bb-cd-grid span { display: block; font-size: clamp(12px, 1.8cqmin, 26px); text-transform: uppercase; letter-spacing: .12em; opacity: .6; margin-top: 4px; }
+.bb-cd-grid b { display: block; font: 800 calc(clamp(48px, 13cqmin, 120px) * var(--bb-countdown-text-scale, 1))/1 var(--bb-display); font-variant-numeric: tabular-nums; }
+.bb-cd-grid span { display: block; font-size: calc(clamp(12px, 1.8cqmin, 26px) * var(--bb-countdown-text-scale, 1)); text-transform: uppercase; letter-spacing: .12em; opacity: .6; margin-top: 4px; }
 
 /* Quote */
 .bb-slide-quote { align-items: center; justify-content: center; }
 .bb-quote-card { display: flex; align-items: center; gap: 40px; max-width: 1100px; }
 .bb-quote-portrait { width: 220px; height: 220px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-.bb-quote-mark { font: 900 clamp(48px, 10cqmin, 160px)/0.8 var(--bb-serif); color: var(--bb-st-accent); display: block; margin-bottom: 4px; }
-.bb-quote-text blockquote { margin: 0; font: 600 clamp(24px, 5.6cqmin, 88px)/1.2 var(--bb-serif); }
-.bb-quote-text cite { display: block; margin-top: 12px; opacity: .7; font-style: normal; font-size: clamp(14px, 2.4cqmin, 32px); }
+.bb-quote-mark { font: 900 calc(clamp(48px, 10cqmin, 160px) * var(--bb-quote-text-scale, 1))/0.8 var(--bb-serif); color: var(--bb-st-accent); display: block; margin-bottom: 4px; }
+.bb-quote-text blockquote { margin: 0; font: 600 calc(clamp(24px, 5.6cqmin, 88px) * var(--bb-quote-text-scale, 1))/1.2 var(--bb-serif); }
+.bb-quote-text cite { display: block; margin-top: 12px; opacity: .7; font-style: normal; font-size: calc(clamp(14px, 2.4cqmin, 32px) * var(--bb-quote-text-scale, 1)); }
 
 /* Code */
 /* Code is always a dark "terminal" box with its own light text, independent of
    the slide theme's --bb-st-fg. Without this, a light theme (editorial-mono sets
    --bb-st-fg:#1c1c1c) renders near-black code on a dark box = unreadable. */
-.bb-slide-code .bb-code { background: #0c0c14; color: #e4e4e7; padding: 24px; border-radius: 12px; overflow: auto; font-size: clamp(14px, 2.4cqmin, 32px); }
+.bb-slide-code .bb-code { background: #0c0c14; color: #e4e4e7; padding: 24px; border-radius: 12px; overflow: auto; font-size: calc(clamp(14px, 2.4cqmin, 32px) * var(--bb-code-text-scale, 1)); }
 
 /* KPI cards */
 .bb-slide-kpi .bb-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
 .bb-kpi-card { background: rgba(255,255,255,.06); border-radius: 16px; padding: 22px; }
-.bb-kpi-label { font-size: clamp(12px, 1.6cqmin, 24px); text-transform: uppercase; letter-spacing: .14em; opacity: .6; }
-.bb-kpi-value { font: 800 clamp(36px, 6.5cqmin, 120px)/1 var(--bb-display); margin-top: 6px; }
-.bb-kpi-delta { font-size: clamp(14px, 1.8cqmin, 28px); opacity: .9; margin-top: 4px; }
+.bb-kpi-label { font-size: calc(clamp(12px, 1.6cqmin, 24px) * var(--bb-kpi-text-scale, 1)); text-transform: uppercase; letter-spacing: .14em; opacity: .6; }
+.bb-kpi-value { font: 800 calc(clamp(36px, 6.5cqmin, 120px) * var(--bb-kpi-text-scale, 1))/1 var(--bb-display); margin-top: 6px; }
+.bb-kpi-delta { font-size: calc(clamp(14px, 1.8cqmin, 28px) * var(--bb-kpi-text-scale, 1)); opacity: .9; margin-top: 4px; }
 .bb-kpi-up { color: #10b981; }
 .bb-kpi-down { color: #ef4444; }
 .bb-kpi-spark { margin-top: 8px; opacity: .8; }
 .bb-kpi-target { margin-top: 10px; }
 .bb-kpi-targetbar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; }
 .bb-kpi-targetfill { height: 100%; border-radius: inherit; transition: width .6s ease; }
-.bb-kpi-targettext { margin-top: 4px; font-size: clamp(11px, 1.5cqmin, 22px); opacity: .65; }
+.bb-kpi-targettext { margin-top: 4px; font-size: calc(clamp(11px, 1.5cqmin, 22px) * var(--bb-kpi-text-scale, 1)); opacity: .65; }
 .bb-quote-text cite .bb-quote-source { opacity: .65; font-style: italic; }
 
 /* Chart */
@@ -1792,13 +1798,13 @@
 
 /* Menu / pricelist */
 .bb-slide-menu .bb-menu-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 32px; }
-.bb-slide-menu .bb-menu-section h2 { color: var(--bb-st-accent); font-size: clamp(20px, 3.6cqmin, 52px); }
+.bb-slide-menu .bb-menu-section h2 { color: var(--bb-st-accent); font-size: calc(clamp(20px, 3.6cqmin, 52px) * var(--bb-menu-text-scale, 1)); }
 .bb-slide-menu ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 14px; }
-.bb-slide-menu .bb-menu-row { display: flex; align-items: baseline; gap: 8px; font-size: clamp(16px, 2.8cqmin, 40px); }
+.bb-slide-menu .bb-menu-row { display: flex; align-items: baseline; gap: 8px; font-size: calc(clamp(16px, 2.8cqmin, 40px) * var(--bb-menu-text-scale, 1)); }
 .bb-slide-menu .bb-menu-name { font-weight: 600; }
 .bb-slide-menu .bb-menu-dots { flex: 1; border-bottom: 1px dotted rgba(255,255,255,.3); height: .8em; }
 .bb-slide-menu .bb-menu-price { font-variant-numeric: tabular-nums; }
-.bb-slide-menu .bb-menu-desc { font-size: clamp(12px, 1.9cqmin, 24px); opacity: .7; margin-top: 2px; }
+.bb-slide-menu .bb-menu-desc { font-size: calc(clamp(12px, 1.9cqmin, 24px) * var(--bb-menu-text-scale, 1)); opacity: .7; margin-top: 2px; }
 /* Per-item layout: optional thumbnail on the left, name+price row + desc on the right */
 .bb-slide-menu li { display: flex; gap: 12px; align-items: flex-start; }
 .bb-slide-menu .bb-menu-body { flex: 1; min-width: 0; }
@@ -1854,14 +1860,20 @@
 .bb-qr-card.bb-qr-frameless { padding: 0; border-radius: 0; box-shadow: none; background: transparent !important; }
 .bb-qr-img { display: block; max-width: 90cqw; max-height: 90cqh; }
 .bb-qr-frameless .bb-qr-img { max-width: 100cqw; max-height: 100cqh; }
-.bb-qr-caption { font-weight: 600; font-size: clamp(14px, 2.2cqmin, 20px); }
+.bb-qr-caption { font-weight: 600; font-size: calc(clamp(14px, 2.2cqmin, 20px) * var(--bb-qr-cap-scale, 1)); }
+.bb-qr-text { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.bb-qr-details { display: flex; flex-direction: column; gap: 2px; font-size: calc(clamp(11px, 1.7cqmin, 16px) * var(--bb-qr-cap-scale, 1)); opacity: .85; }
+.bb-qr-detail-label { font-weight: 600; opacity: .8; }
+.bb-qr-detail-value { font-family: var(--bb-mono); word-break: break-all; }
+.bb-qr-card-h { flex-direction: row; align-items: center; gap: 24px; }
+.bb-qr-card-h .bb-qr-text { align-items: flex-start; text-align: left; }
 
 /* Currency */
-.bb-slide-fx .bb-fx-base { font-size: clamp(16px, 2.6cqmin, 22px); opacity: .6; margin-bottom: 12px; }
+.bb-slide-fx .bb-fx-base { font-size: calc(clamp(16px, 2.6cqmin, 22px) * var(--bb-fx-text-scale, 1)); opacity: .6; margin-bottom: 12px; }
 .bb-slide-fx .bb-fx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
 .bb-fx-cell { background: rgba(255,255,255,.06); border-radius: 12px; padding: 16px; text-align: center; }
-.bb-fx-sym { display: block; font-size: clamp(12px, 1.6cqmin, 22px); opacity: .6; letter-spacing: .1em; }
-.bb-fx-rate { display: block; font: 800 clamp(28px, 5cqmin, 48px)/1 var(--bb-mono); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.bb-fx-sym { display: block; font-size: calc(clamp(12px, 1.6cqmin, 22px) * var(--bb-fx-text-scale, 1)); opacity: .6; letter-spacing: .1em; }
+.bb-fx-rate { display: block; font: 800 calc(clamp(28px, 5cqmin, 48px) * var(--bb-fx-text-scale, 1))/1 var(--bb-mono); margin-top: 4px; font-variant-numeric: tabular-nums; }
 
 /* Live JSON */
 .bb-slide-livejson .bb-json { font-family: var(--bb-mono); font-size: clamp(12px, 2.2cqmin, 26px); white-space: pre-wrap; padding: 24px; background: rgba(0,0,0,.4); border-radius: 12px; overflow: auto; max-height: 90cqh; }
@@ -1877,7 +1889,7 @@
 
 /* Data table */
 .bb-slide-datatable .bb-dt-wrap { width: 100%; overflow: auto; }
-.bb-slide-datatable .bb-dt { width: 100%; border-collapse: collapse; font-size: clamp(14px, 2.8cqmin, 44px); }
+.bb-slide-datatable .bb-dt { width: 100%; border-collapse: collapse; font-size: calc(clamp(14px, 2.8cqmin, 44px) * var(--bb-dt-text-scale, 1)); }
 .bb-slide-datatable .bb-dt th { text-align: left; padding: 10px 16px; color: var(--bb-st-accent); text-transform: uppercase; letter-spacing: .06em; font-size: .8em; border-bottom: 2px solid var(--bb-st-accent); }
 .bb-slide-datatable .bb-dt td { padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,.1); }
 .bb-slide-datatable .bb-dt tbody tr:nth-child(even) { background: rgba(255,255,255,.04); }
@@ -1890,22 +1902,22 @@
    because the plugin also puts these classes on the slide root as state markers.
    Without scoping, the rules below would override .bb-slide's sizing and turn
    the entire slide into a pill bar (the bar variant) or display:block container. */
-.bb-prog-label { font-size: clamp(16px, 3.6cqmin, 52px); opacity: .85; text-align: center; }
+.bb-prog-label { font-size: calc(clamp(16px, 3.6cqmin, 52px) * var(--bb-prog-text-scale, 1)); opacity: .85; text-align: center; }
 .bb-slide-progress .bb-prog-bar { width: 86%; height: min(48px, 12cqh); min-height: 16px; background: rgba(255,255,255,.1); border-radius: 999px; overflow: hidden; }
 .bb-prog-fill { height: 100%; border-radius: 999px; min-width: 2%; transition: width .6s cubic-bezier(.22,1,.36,1); }
-.bb-prog-value { font: 700 clamp(16px, 4cqmin, 40px) var(--bb-display); font-variant-numeric: tabular-nums; }
+.bb-prog-value { font: 700 calc(clamp(16px, 4cqmin, 40px) * var(--bb-prog-text-scale, 1)) var(--bb-display); font-variant-numeric: tabular-nums; }
 .bb-prog-ringwrap { position: relative; width: min(60cqw, 60cqh); height: min(60cqw, 60cqh); }
 .bb-slide-progress .bb-prog-ring { width: 100%; height: 100%; display: block; }
 .bb-prog-ringtext { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.bb-prog-pct { font: 800 min(20cqw, 20cqh) var(--bb-display); line-height: 1; font-variant-numeric: tabular-nums; }
-.bb-prog-sub { font-size: min(7cqw, 7cqh); opacity: .7; font-variant-numeric: tabular-nums; }
+.bb-prog-pct { font: 800 calc(min(20cqw, 20cqh) * var(--bb-prog-text-scale, 1)) var(--bb-display); line-height: 1; font-variant-numeric: tabular-nums; }
+.bb-prog-sub { font-size: calc(min(7cqw, 7cqh) * var(--bb-prog-text-scale, 1)); opacity: .7; font-variant-numeric: tabular-nums; }
 
 /* Days since */
 .bb-slide-dayssince { text-align: center; }
-.bb-ds-heading { font-size: min(8cqw, 12cqh); text-transform: uppercase; letter-spacing: .1em; opacity: .75; }
-.bb-ds-count { font: 800 min(42cqw, 58cqh) var(--bb-display); line-height: 1; color: var(--bb-st-accent); font-variant-numeric: tabular-nums; }
-.bb-ds-unit { font: 700 min(8cqw, 12cqh) var(--bb-display); text-transform: uppercase; letter-spacing: .12em; opacity: .8; }
-.bb-ds-date { font-size: min(5cqw, 7cqh); opacity: .6; margin-top: .4em; }
+.bb-ds-heading { font-size: calc(min(8cqw, 12cqh) * var(--bb-ds-text-scale, 1)); text-transform: uppercase; letter-spacing: .1em; opacity: .75; }
+.bb-ds-count { font: 800 calc(min(42cqw, 58cqh) * var(--bb-ds-text-scale, 1)) var(--bb-display); line-height: 1; color: var(--bb-st-accent); font-variant-numeric: tabular-nums; }
+.bb-ds-unit { font: 700 calc(min(8cqw, 12cqh) * var(--bb-ds-text-scale, 1)) var(--bb-display); text-transform: uppercase; letter-spacing: .12em; opacity: .8; }
+.bb-ds-date { font-size: calc(min(5cqw, 7cqh) * var(--bb-ds-text-scale, 1)); opacity: .6; margin-top: .4em; }
 .bb-ds-empty { opacity: .5; padding: 24px; font-family: var(--bb-font, Inter, sans-serif); }
 
 /* Image title overlay */

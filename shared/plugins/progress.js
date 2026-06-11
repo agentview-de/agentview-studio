@@ -1,113 +1,320 @@
 import { register } from './registry.js';
-import { themeField } from '../data/themes.js';
-import { colorOverrideDefaults, colorOverrideFields, applyColorOverrides } from '../widget-color.js';
+import { themeColorSection, colorOverrideDefaults, applyColorOverrides } from '../widget-color.js';
 import { composeDispose } from '../plugin-contract.js';
+import { liveSource } from '../live-source.js';
+import { offlineLiveOpts } from '../offline-data.js';
+import { remoteJsonFields } from '../remote-json-fields.js';
+import { STATUS_COLORS } from '../status-colors.js';
+import { textScaleField } from '../text-scale.js';
+import { localeField } from '../locale-field.js';
 import { escapeHtml } from '../utils/escape.js';
 
 const C = 2 * Math.PI * 42; // ring circumference (r=42 in a 100×100 viewBox)
+// Gauge: a 220° arc with the 140° gap centred at the bottom — the classic
+// dashboard speedometer. Same stroke-dasharray technique as the ring, just a
+// shorter arc and a different start rotation (160° puts the gap symmetric
+// around 6 o'clock: 160° + 220° sweep ends at 20°).
+const GAUGE_SWEEP = 220 / 360;
+const GAUGE_ROT = 160;
+
+// Threshold-based fill: classic KPI traffic light. The three colour fields are
+// STATUS colours (bad / warn / good); which percentage band maps to which
+// status flips with "Lower is better" (capacity, error budgets, queue length).
+// Defaults (warn=70%, good=90%) match common dashboard conventions. When
+// thresholds are off, the single `color` field wins — empty = theme accent
+// (`||`, never `??`, so '' falls through).
+function fillFor(c, pct) {
+  if (!c.useThresholds) return c.color || 'var(--bb-st-accent, #8b5cf6)';
+  const warn = Number(c.thresholdWarn ?? 70);
+  const good = Number(c.thresholdGood ?? 90);
+  const band = pct >= good ? 'high' : pct >= warn ? 'mid' : 'low';
+  const status = c.invertThresholds
+    ? (band === 'high' ? 'bad' : band === 'mid' ? 'warn' : 'good')
+    : (band === 'high' ? 'good' : band === 'mid' ? 'warn' : 'bad');
+  return status === 'good' ? (c.colorHigh || STATUS_COLORS.good)
+       : status === 'warn' ? (c.colorMid  || STATUS_COLORS.warn)
+       :                     (c.colorLow  || STATUS_COLORS.bad);
+}
+
+// Live JSON → { value, target, label?, unit? }. Accepts a bare number (or a
+// numeric string) as well as an object; target/label/unit fall back to the
+// inline fields, so a feed only has to deliver the one number that changes.
+// Throws on a non-numeric value — liveSource routes that to onError like any
+// fetch failure.
+function parseLive(data, c) {
+  const d = (typeof data === 'object' && data !== null) ? data : { value: data };
+  const value = Number(d.value);
+  if (!Number.isFinite(value)) throw new Error('JSON has no numeric "value" field');
+  const t = Number(d.target);
+  return {
+    value,
+    target: Number.isFinite(t) && t > 0 ? t : (+c.target || 0),
+    label: typeof d.label === 'string' && d.label ? d.label : undefined,
+    unit: typeof d.unit === 'string' ? d.unit : undefined,
+  };
+}
 
 export default register({
   type: 'progress',
   label: 'Progress / Goal',
   group: 'data',
   icon: '🎯',
+  // Live mode (source:'url') makes this a fetching widget — the flag opts it
+  // into the same DSGVO machinery as kpi-cards/chart/data-table (editor
+  // click-to-load placeholder, IP note, on-error fallback, offline slots).
+  network: true,
   schemaVersion: 1,
   defaults: () => ({ ...colorOverrideDefaults(),
     label: 'Fundraising goal',
     value: 6800, target: 10000, unit: '€',
-    style: 'bar', showValue: true,
-    color: '#10b981',
-    useThresholds: false,
+    source: 'inline', dataUrl: '', refreshSec: 60,
+    style: 'bar', showValue: true, animate: true,
+    color: STATUS_COLORS.good,
+    locale: '', textScale: 100,
+    useThresholds: false, invertThresholds: false,
     thresholdWarn: 70, thresholdGood: 90,
-    colorLow: '#ef4444', colorMid: '#f59e0b', colorHigh: '#10b981',
+    colorLow: STATUS_COLORS.bad, colorMid: STATUS_COLORS.warn, colorHigh: STATUS_COLORS.good,
     theme: 'minimal-dark',
   }),
-  schema: () => ({
-    fields: [
-      { type: 'section', label: 'Value' },
+  schema: () => {
+    // Shared source/dataUrl/refreshSec trio (same keys as kpi-cards/chart) —
+    // turns the widget into a self-updating donation/sales/production counter.
+    const [sourceField, dataUrlField, refreshField] = remoteJsonFields({
+      placeholder: 'https://api.example.com/progress.json',
+      urlHelp: 'Accepts {"value": 12345} with optional "target", "label" and "unit" — or a bare number. Must allow CORS for whichever side fetches it (display in Live mode, Studio in Offline mode).',
+    });
+    return { fields: [
+      { type: 'section', key: 'content', label: 'Content' },
       { key: 'label', type: 'text', label: 'Label' },
       { type: 'row', children: [
-        { key: 'value',  type: 'number', label: 'Current' },
+        // In live mode the fetched value replaces 'Current'; 'Target' stays
+        // visible as the fallback denominator when the JSON carries none.
+        { key: 'value',  type: 'number', label: 'Current',
+          showIf: c => (c.source ?? 'inline') === 'inline' },
         { key: 'target', type: 'number', label: 'Target' },
       ] },
       { key: 'unit', type: 'text', label: 'Unit / suffix', placeholder: '€, %, sign-ups…' },
 
-      { type: 'section', label: 'Appearance' },
-      { type: 'row', children: [
-        { key: 'style', type: 'select', label: 'Style', options: ['bar', 'ring'] },
-        { key: 'showValue', type: 'toggle', label: 'Show value' },
+      { type: 'section', key: 'data', label: 'Data' },
+      sourceField,
+      dataUrlField,
+      refreshField,
+
+      { type: 'section', key: 'appearance', label: 'Appearance' },
+      { key: 'style', type: 'select', label: 'Style', buttons: true, options: [
+        { value: 'bar',   label: 'Bar' },
+        { value: 'ring',  label: 'Ring' },
+        { value: 'gauge', label: 'Gauge' },
       ] },
-      { key: 'color', type: 'color', label: 'Fill colour',
-        showIf: c => !c.useThresholds },
+      { key: 'showValue', type: 'toggle', label: 'Show value' },
+      { key: 'animate', type: 'toggle', label: 'Animate',
+        help: 'Fills the bar or ring with a sweep and counts the value up when the slide appears or the value changes.' },
+      { key: 'color', type: 'color', label: 'Fill colour', clearable: true,
+        showIf: c => !c.useThresholds,
+        help: 'Leave empty to follow the theme accent; click × to reset.' },
+      localeField(),
+      textScaleField(),
 
-      { type: 'section', label: 'Threshold colours' },
+      { type: 'section', key: 'thresholds', label: 'Threshold colours', collapsed: true,
+        summary: c => c.useThresholds
+          ? `${c.thresholdWarn ?? 70}% · ${c.thresholdGood ?? 90}%${c.invertThresholds ? ' ↓' : ''}`
+          : 'Off' },
       { key: 'useThresholds', type: 'toggle', label: 'Use threshold colours',
-        help: 'Fill colour switches between low / mid / high based on percentage, useful for KPI-style bars where colour signals status.' },
+        help: 'Fill colour switches between good / warn / bad based on the percentage — a KPI-style traffic light.' },
+      { key: 'invertThresholds', type: 'toggle', label: 'Lower is better',
+        showIf: c => !!c.useThresholds,
+        help: 'Flips the bands so a LOW percentage is good — for capacity, error budgets or queue lengths.' },
       { type: 'row', children: [
-        { key: 'colorLow',  type: 'color', label: 'Low' },
-        { key: 'colorMid',  type: 'color', label: 'Mid' },
-        { key: 'colorHigh', type: 'color', label: 'High' },
+        { key: 'colorLow',  type: 'color', label: 'Bad' },
+        { key: 'colorMid',  type: 'color', label: 'Warn' },
+        { key: 'colorHigh', type: 'color', label: 'Good' },
       ], showIf: c => !!c.useThresholds },
       { type: 'row', children: [
-        { key: 'thresholdWarn', type: 'number', label: 'Warn at %', min: 0, max: 100, step: 5, slider: true },
-        { key: 'thresholdGood', type: 'number', label: 'Good at %', min: 0, max: 100, step: 5, slider: true },
+        { key: 'thresholdWarn', type: 'number', label: 'Warn at %', min: 0, max: 100, step: 5, slider: true,
+          validate: (v, c) => (c?.useThresholds && Number(v) >= Number(c?.thresholdGood ?? 90))
+            ? { level: 'warn', message: 'Warn threshold should be below the Good threshold.' } : null },
+        { key: 'thresholdGood', type: 'number', label: 'Good at %', min: 0, max: 100, step: 5, slider: true,
+          validate: (v, c) => (c?.useThresholds && Number(v) <= Number(c?.thresholdWarn ?? 70))
+            ? { level: 'warn', message: 'Good threshold should be above the Warn threshold.' } : null },
       ], showIf: c => !!c.useThresholds },
 
-      { type: 'section', label: 'Theme' },
-      themeField(),
-      ...colorOverrideFields(),
-    ],
-  }),
-  render(slide, container) {
+      ...themeColorSection(),
+    ] };
+  },
+  render(slide, container, ctx) {
     const c = slide.content ?? {};
-    const value = +c.value || 0;
-    const target = +c.target || 0;
-    const ratio = target > 0 ? value / target : 0;
-    const clamped = Math.max(0, Math.min(1, ratio));
-    const pct = Math.round(ratio * 100);
-    const unit = c.unit ?? '';
-    // Threshold-based fill: classic KPI traffic-light. Default thresholds
-    // (warn=70%, good=90%) match common dashboard conventions; user can
-    // override either edge. When disabled, the single `color` field wins.
-    let fill;
-    if (c.useThresholds) {
-      const warn = Number(c.thresholdWarn ?? 70);
-      const good = Number(c.thresholdGood ?? 90);
-      const p = pct;
-      fill = p >= good ? (c.colorHigh || '#10b981')
-           : p >= warn ? (c.colorMid  || '#f59e0b')
-           :             (c.colorLow  || '#ef4444');
-    } else {
-      fill = c.color || 'var(--bb-st-accent, #8b5cf6)';
-    }
-    const fmtNum = n => n.toLocaleString();
-    const valueLine = c.showValue !== false
-      ? `<div class="bb-prog-value">${escapeHtml(fmtNum(value) + unit)} / ${escapeHtml(fmtNum(target) + unit)} · ${pct}%</div>` : '';
+    const style = c.style ?? 'bar';
+    const source = c.source ?? 'inline';
+    const showValue = c.showValue !== false;
+    const animate = c.animate !== false
+      && !window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    const ARC = style === 'gauge' ? C * GAUGE_SWEEP : C;
+    const ROT = style === 'gauge' ? GAUGE_ROT : -90;
+    // Audience language, not player OS ('' falls through to the device default).
+    const fmtNum = n => Number(n).toLocaleString(c.locale || undefined);
 
     const root = document.createElement('div');
     applyColorOverrides(root, c);
-    root.className = `bb-slide bb-slide-progress bb-prog-${c.style ?? 'bar'} bb-theme-${c.theme ?? 'minimal-dark'}`;
+    root.className = `bb-slide bb-slide-progress bb-prog-${style} bb-theme-${c.theme ?? 'minimal-dark'}`;
+    // container-type:size gives the cq* font clamps their container context.
     root.style.cssText += 'container-type:size;width:100%;height:100%;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5em;';
-
-    if ((c.style ?? 'bar') === 'ring') {
-      root.innerHTML = `
-        ${c.label ? `<div class="bb-prog-label">${escapeHtml(c.label)}</div>` : ''}
-        <div class="bb-prog-ringwrap">
-          <svg class="bb-prog-ring" viewBox="0 0 100 100">
-            <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="9"/>
-            <circle cx="50" cy="50" r="42" fill="none" stroke="${fill}" stroke-width="9" stroke-linecap="round"
-              stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - clamped)).toFixed(1)}" transform="rotate(-90 50 50)"/>
-          </svg>
-          <div class="bb-prog-ringtext"><div class="bb-prog-pct">${pct}%</div>${c.showValue !== false ? `<div class="bb-prog-sub">${escapeHtml(fmtNum(value) + unit)}</div>` : ''}</div>
-        </div>`;
-    } else {
-      root.innerHTML = `
-        ${c.label ? `<div class="bb-prog-label">${escapeHtml(c.label)}</div>` : ''}
-        <div class="bb-prog-bar"><div class="bb-prog-fill" style="width:${(clamped * 100).toFixed(1)}%;background:${fill};"></div></div>
-        ${valueLine}`;
-    }
+    // Text-size multiplier — the .bb-prog-* font clamps in slide-themes.css
+    // consume this var (see cssNeeds for the calc(... * var()) wrappers).
+    root.style.setProperty('--bb-prog-text-scale', String((Number(c.textScale) || 100) / 100));
     container.appendChild(root);
-    return composeDispose(() => root.remove());
+
+    const titleHtml = slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : '';
+
+    // --- dynamic refs + painters -------------------------------------------
+    let labelEl, barFill, arcFill, tgtEl, curEls = [], pctEls = [], unitEls = [];
+    let shown = 0;   // last value the count-up displayed (animation start point)
+    let built = false;
+    let rafId = 0;
+    const stopRaf = () => { if (rafId) { cancelAnimationFrame(rafId); rafId = 0; } };
+
+    const setNums = (v, target) => {
+      // pct intentionally unclamped: 120% over-achievement reads as 120% while
+      // the bar/ring fill clamps at 100%.
+      const p = Math.round((target > 0 ? v / target : 0) * 100);
+      for (const el of curEls) el.textContent = fmtNum(v);
+      for (const el of pctEls) el.textContent = String(p);
+    };
+    const setMeta = (label, unit) => {
+      if (labelEl) {
+        labelEl.textContent = label;
+        labelEl.style.display = label ? '' : 'none';
+      }
+      for (const el of unitEls) el.textContent = unit;
+    };
+
+    // Build the markup once per render (or after an error note), with the fill
+    // at `v` of `t`. Dynamic bits are spans updated via textContent, so the
+    // JSON-sourced path needs no re-escaping.
+    const build = (v, t) => {
+      const clamped = Math.max(0, Math.min(1, t > 0 ? v / t : 0));
+      const fill = fillFor(c, Math.round((t > 0 ? v / t : 0) * 100));
+      // currentColor track instead of hardcoded white — visible on the light
+      // 'editorial-mono' theme too (stylesheet fallback keeps old browsers OK).
+      if (style === 'bar') {
+        root.innerHTML = `${titleHtml}
+          <div class="bb-prog-label"></div>
+          <div class="bb-prog-bar" style="background:color-mix(in srgb, currentColor 12%, transparent);"><div class="bb-prog-fill" style="width:${(clamped * 100).toFixed(1)}%;background:${escapeHtml(fill)};${animate ? '' : 'transition:none;'}"></div></div>
+          ${showValue ? '<div class="bb-prog-value"><span data-cur></span><span data-unit></span> / <span data-tgt></span><span data-unit></span> · <span data-pct></span>%</div>' : ''}`;
+      } else {
+        const dash = style === 'gauge' ? `${ARC.toFixed(1)} ${C.toFixed(1)}` : C.toFixed(1);
+        root.innerHTML = `${titleHtml}
+          <div class="bb-prog-label"></div>
+          <div class="bb-prog-ringwrap">
+            <svg class="bb-prog-ring" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" stroke-opacity=".15" stroke-width="9"${style === 'gauge' ? ` stroke-linecap="round" stroke-dasharray="${dash}" transform="rotate(${ROT} 50 50)"` : ''}/>
+              <circle data-arc cx="50" cy="50" r="42" fill="none" stroke="${escapeHtml(fill)}" stroke-width="9" stroke-linecap="round"
+                stroke-dasharray="${dash}" stroke-dashoffset="${(ARC * (1 - clamped)).toFixed(1)}" transform="rotate(${ROT} 50 50)"${animate ? ' style="transition:stroke-dashoffset .8s cubic-bezier(.22,1,.36,1),stroke .4s;"' : ''}/>
+            </svg>
+            <div class="bb-prog-ringtext"><div class="bb-prog-pct"><span data-pct></span>%</div>${showValue ? '<div class="bb-prog-sub"><span data-cur></span><span data-unit></span></div>' : ''}</div>
+          </div>`;
+      }
+      labelEl = root.querySelector('.bb-prog-label');
+      barFill = root.querySelector('.bb-prog-fill');
+      arcFill = root.querySelector('[data-arc]');
+      tgtEl = root.querySelector('[data-tgt]');
+      curEls = [...root.querySelectorAll('[data-cur]')];
+      pctEls = [...root.querySelectorAll('[data-pct]')];
+      unitEls = [...root.querySelectorAll('[data-unit]')];
+      setMeta(c.label ?? '', c.unit ?? '');
+      if (tgtEl) tgtEl.textContent = fmtNum(t);
+      setNums(v, t);
+      shown = v;
+      built = true;
+    };
+
+    // Move fill + numbers to (value, target). CSS transitions animate the bar
+    // width / arc dashoffset; an eased rAF loop counts the value line up from
+    // whatever was on screen. Idempotent per call — re-applies cleanly on
+    // every live update.
+    const apply = (value, target) => {
+      const ratio = target > 0 ? value / target : 0;
+      const clamped = Math.max(0, Math.min(1, ratio));
+      const fill = fillFor(c, Math.round(ratio * 100));
+      if (barFill) { barFill.style.width = (clamped * 100).toFixed(1) + '%'; barFill.style.background = fill; }
+      if (arcFill) { arcFill.setAttribute('stroke-dashoffset', (ARC * (1 - clamped)).toFixed(1)); arcFill.setAttribute('stroke', fill); }
+      if (tgtEl) tgtEl.textContent = fmtNum(target);
+      const from = shown;
+      shown = value;
+      stopRaf();
+      if (!animate || from === value) { setNums(value, target); return; }
+      const t0 = performance.now();
+      const tick = (now) => {
+        const k = Math.min(1, (now - t0) / 900);
+        if (k >= 1) { setNums(value, target); rafId = 0; return; } // exact final value (no rounding drift)
+        const eased = 1 - Math.pow(1 - k, 3);
+        setNums(Math.round(from + (value - from) * eased), target);
+        rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
+    };
+
+    // Editor hint / load-error note (player shows English; ctx.t is identity).
+    const showNote = (msg) => {
+      stopRaf();
+      built = false;
+      root.innerHTML = `${titleHtml}<div style="color:currentColor;opacity:.6;font-size:14px;padding:16px;text-align:center;">${escapeHtml(msg)}</div>`;
+    };
+
+    // --- data flow ----------------------------------------------------------
+    const inlineValue = +c.value || 0;
+    const inlineTarget = +c.target || 0;
+
+    if (source === 'url' || source === 'stored') {
+      const stored = source === 'stored';
+      // Offline with nothing provisioned yet → neutral placeholder (the slide
+      // re-renders once the bound slot is filled).
+      if (stored && c._offline?.data === undefined) {
+        showNote('Provided-offline — appears on the display after “Refresh data”.');
+        return composeDispose(() => root.remove());
+      }
+      if (!stored && !String(c.dataUrl ?? '').trim()) {
+        showNote('Add a JSON URL in the inspector.');
+        return composeDispose(() => root.remove());
+      }
+      // Start empty; the first onData sweeps the fill in. 0 = fetch once; any
+      // positive value polls, clamped UP to the 5 s player floor. maxErrors:0 +
+      // backoff:false + stopOnCorsError:false = keep retrying on the fixed
+      // interval and recover when the feed returns (same policy as kpi-cards).
+      build(0, inlineTarget);
+      const refreshSec = Math.max(0, Number(c.refreshSec) || 0);
+      const stop = liveSource({
+        url: c.dataUrl,
+        signal: ctx?.signal,
+        intervalMs: refreshSec > 0 ? Math.max(5000, refreshSec * 1000) : 0,
+        fetchInit: { cache: 'no-store' },
+        maxErrors: 0,
+        backoff: false,
+        stopOnCorsError: false,
+        ...offlineLiveOpts(c),
+        onData: (data) => {
+          const d = parseLive(data, c); // throws → routed to onError
+          if (!built) build(0, d.target); // recover the structure after an error note
+          setMeta(d.label ?? c.label ?? '', d.unit ?? c.unit ?? '');
+          apply(d.value, d.target);
+        },
+        onError: (e) => {
+          if (ctx?.onError?.()) return;
+          showNote('⚠️ ' + (e.message || 'Could not load progress data'));
+        },
+      });
+      return composeDispose(() => { stop(); stopRaf(); root.remove(); });
+    }
+
+    // Inline: build at zero and sweep in (a committed initial style is needed
+    // for the CSS transition to run — hence the forced reflow), or paint the
+    // final state directly when animation is off.
+    if (animate) {
+      build(0, inlineTarget);
+      root.getBoundingClientRect();
+      apply(inlineValue, inlineTarget);
+    } else {
+      build(inlineValue, inlineTarget);
+    }
+    return composeDispose(() => { stopRaf(); root.remove(); });
   },
 });
-

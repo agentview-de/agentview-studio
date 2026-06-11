@@ -83,10 +83,15 @@ describe('schema() — well-formed field declarations', () => {
     test(`${p.type} bound fields (non section/row) have a key`, () => {
       const s = p.schema();
       for (const f of s.fields) {
-        if (f.type === 'section' || f.type === 'row') {
-          // section/row are valueless — they MUST NOT carry a key, otherwise
-          // they'd shadow a content slot.
-          if ('key' in f) throw new Error(`${p.type}: ${f.type} marker should not have a 'key'`);
+        if (f.type === 'section') {
+          // Sections are valueless but MAY carry a key — buildForm uses it as
+          // the stable collapse-state storage id (sectionKeyFor), so relabeling
+          // a section doesn't orphan the user's folding. It never binds a value.
+          continue;
+        }
+        if (f.type === 'row') {
+          // Rows are pure layout — a key here is always a schema mistake.
+          if ('key' in f) throw new Error(`${p.type}: row marker should not have a 'key'`);
           continue;
         }
         if (!f.key || typeof f.key !== 'string') {
@@ -95,11 +100,13 @@ describe('schema() — well-formed field declarations', () => {
       }
     });
 
-    test(`${p.type} field keys are unique within the schema`, () => {
+    test(`${p.type} field keys are unique within the schema (incl. section storage keys)`, () => {
       const s = p.schema();
       const seen = new Set();
       for (const f of s.fields) {
         if (!f.key) continue;
+        // Section keys share the namespace check: a section key colliding with
+        // a bound field key would make the localStorage fold ids ambiguous.
         if (seen.has(f.key)) throw new Error(`${p.type}: duplicate field key "${f.key}"`);
         seen.add(f.key);
       }

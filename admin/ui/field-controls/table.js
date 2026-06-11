@@ -9,6 +9,8 @@
 //      a wide modal with the spreadsheet layout for paste workflows.
 //
 // f.columns: [{ key, label, type?: 'text'|'number'|'date'|'toggle'|'select', placeholder?, options? }]
+// opts.forceGrid (internal): always render the spreadsheet grid regardless of
+//   column count — passed by the expand modal where width is plentiful.
 
 import { t, tx } from '../../i18n.js';
 import { openModal } from '../modal.js';
@@ -146,7 +148,7 @@ export function renderTable(f, v, set, opts = {}) {
   const wrap = h('div', 'bb-table-field');
   const grid = h('div');
   const commit = () => set(rows.map(r => ({ ...r })));
-  const stacked = cols.length > STACK_THRESHOLD;
+  const stacked = !opts.forceGrid && cols.length > STACK_THRESHOLD;
 
   // Drag-to-reorder — shared by both layouts. Per-row drag targets carry the
   // `data-row` attribute; the container resolves which row was dropped on.
@@ -259,10 +261,10 @@ export function renderTable(f, v, set, opts = {}) {
     const modalBody = h('div', 'bb-table-modal-body');
     let latest = rows.map(r => ({ ...r }));
     // Inside the modal the panel is plenty wide → force grid layout regardless
-    // of column count by passing a clone of f with stack disabled. The fastest
-    // way: build a new field-spec with the same columns but the modal-inst's
-    // own threshold check (the modal panel is wide enough for any sane count).
-    const inst = renderTable(f, latest, v => { latest = v; set(v); }, opts);
+    // of column count via the internal forceGrid option, so wide tables (the
+    // ones that need expanding in the first place) get the paste-friendly
+    // spreadsheet view instead of re-stacking into cards.
+    const inst = renderTable(f, latest, v => { latest = v; set(v); }, { ...opts, forceGrid: true });
     modalBody.appendChild(inst.el);
     openModal({
       title: f.label || t('field.tableTitle'),
