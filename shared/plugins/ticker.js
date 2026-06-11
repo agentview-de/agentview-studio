@@ -151,13 +151,15 @@ export default register({
     applyColorOverrides(root, c);
     root.className = `bb-slide bb-slide-ticker bb-theme-${c.theme ?? 'minimal-dark'}`;
     // The strip is placed inside the box via the root's justify-content (the
-    // root is an explicit flex COLUMN). In the legacy 'full' mode the bar fills
-    // the box and solidBackground lets the bb-theme-* background paint the whole
-    // root (exactly as before); in the strip modes the root stays clear and the
-    // bar itself carries the fill.
+    // root is an explicit flex COLUMN). solidBackground paints the theme
+    // background colour so the strip reads as a self-contained bar; without it
+    // the ticker is transparent and overlays whatever sits behind it. The theme
+    // classes only define --bb-st-bg as a variable (they don't paint it), so we
+    // apply it here — in 'full' mode on the whole root, in strip modes on the
+    // bar (below) so only the strip is filled.
     root.style.cssText += 'width:100%;height:100%;display:flex;flex-direction:column;overflow:hidden;'
       + 'justify-content:' + (VPOS[c.barPosition] ?? 'center') + ';'
-      + ((fullHeight && solid) ? '' : 'background:transparent;')
+      + ((fullHeight && solid) ? 'background:var(--bb-st-bg,#0a0a10);' : 'background:transparent;')
       + 'color:var(--bb-st-fg,#f1f1f4);';
     root.style.containerType = 'size';
     root.style.setProperty('--bb-ticker-text-scale', String(scale));
