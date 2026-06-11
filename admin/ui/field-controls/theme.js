@@ -14,7 +14,7 @@ export function renderTheme(f, v, set) {
       const sw = THEME_SWATCHES[id] ?? { bg: '#222', accent: '#888' };
       const btn = h('button', 'bb-theme-sw' + (id === current ? ' bb-sel' : ''));
       btn.type = 'button';
-      btn.title = id;
+      btn.title = themeLabel(id);
       btn.innerHTML = `<span class="bb-theme-chip" style="background:${sw.bg};">
           <span class="bb-theme-dot" style="background:${sw.accent};"></span>
         </span><span class="bb-theme-name">${esc(themeLabel(id))}</span>`;

@@ -336,7 +336,12 @@ button { font-family: inherit; }
 .avs-inspector-back-label { font-weight: 500; }
 .avs-inspector-body { padding: 0 14px 16px; overflow-y: auto; }
 .avs-inspector-empty { padding: 28px 16px; color: var(--bb-ink-faint); font-size: 13px; text-align: center; }
-.avs-geo-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 6px 0 8px; }
+/* 6 equal columns so all six inputs (X Y W H Z R) share one row — with 5
+   columns the R input used to wrap alone onto a second row. */
+.avs-geo-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 6px 0 8px; }
+.avs-geo-grid input { width: 100%; min-width: 0; padding: 6px 5px; }
+/* Tiny muted unit suffix next to the single-letter geo labels (%, °). */
+.avs-geo-unit { opacity: .65; margin-left: 2px; font-size: 10px; }
 /* Layout preset row — small icon buttons under the X/Y/W/H grid that snap
    the widget to common slide regions without typing numbers. */
 .avs-geo-presets {
@@ -487,6 +492,10 @@ button { font-family: inherit; }
 
 .avs-inspector-section { border-top: 1px solid var(--bb-border); margin-top: 12px; padding-top: 12px; }
 .avs-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--bb-ink-faint); margin-bottom: 8px; }
+/* Below-form inspector blocks (onError / Background / Animation / Bindings)
+   now reuse the bb-form-section fold from components.css. Keep the border-top
+   separation but shrink the top padding — the fold head brings its own 6px. */
+.avs-inspector-section.bb-form-section { margin: 12px 0 0; padding-top: 6px; }
 
 /* Animation section (widget inspector): build select + replay button, timing
    grid, loop select. Selects reuse the inspector field look. */

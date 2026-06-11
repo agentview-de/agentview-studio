@@ -1,4 +1,6 @@
-// Generic form renderer driven by a plugin's schema(). Returns a {root, get, set, dispose}.
+// Generic form renderer driven by a plugin's schema(). Returns a
+// { root, value, setValue, dispose } — dispose() tears down every control
+// that holds document-level listeners or timers (rich-text et al).
 //
 // Each field type maps to one input control. The whole form is reactive:
 // whenever any input changes, the supplied onChange(newValue) fires with the
@@ -8,6 +10,8 @@ import {
   renderLocation, renderDatetime, renderTimezone, renderDuration, renderCurrency, renderTable, renderFeed, renderFeedList,
   renderTheme, renderPlace, renderIcon, renderCalendarEvents, renderRichText,
 } from './field-controls.js';
+import { renderAlign } from './field-controls/align.js';
+import { searchableSelect } from './field-controls/_combo.js';
 import { probeUrl } from './probe.js';
 import { openModal } from './modal.js';
 import { sanitizeHtml } from '../../shared/sanitize-html.js';
@@ -33,6 +37,7 @@ registerControl('rich-text', renderRichText);
 registerControl('theme', renderTheme);
 registerControl('place', renderPlace);
 registerControl('icon', renderIcon);
+registerControl('align', renderAlign);
 
 // Persist collapse state per (formKey, sectionKey). formKey is typically the
 // widget type — passed in by the caller via `buildForm({ formKey: '…' })`.
@@ -58,33 +63,77 @@ function sectionKeyFor(f) {
   return String(f.label ?? 'unnamed').toLowerCase().replace(/[^a-z0-9]+/g, '_');
 }
 
-export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, codePicker, formKey }) {
+// Controls taller than ~2 rows. Only these get auto-wrapped into their own
+// collapsible fold when they sit outside an explicit section — light scalar
+// inputs (text, number, select, toggle, …) render as plain labelled groups so
+// flat schemas stop reading as N single-field folds. Field-level `fold: true`
+// forces the fold; the buildForm option `autoFold: 'all'` restores the old
+// wrap-everything behavior verbatim.
+const HEAVY_FIELD_TYPES = new Set([
+  'rich-text', 'table', 'list', 'feed-list', 'calendar-events',
+  'markdown', 'code', 'textarea', 'location', 'icon', 'theme',
+]);
+
+export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, codePicker, formKey, defaults, autoFold }) {
   const root = document.createElement('div');
   root.className = 'bb-form';
   const refs = new Map(); // key → control element
 
   const cur = structuredCloneSafe(value);
   const groups = [];
+  const sections = [];        // every fold (explicit + auto) → expand/collapse all
+  const summaryUpdaters = []; // closed-state header summaries, re-run on change
+  const validators = [];      // ALL field validators — cross-field rules need every change
+  const resetUpdaters = [];   // per-field ↺ visibility, re-run on change
+  let disposed = false;
 
   // Wrap any element in a `.bb-form-section` with a clickable header. Used
   // both for explicit `type: 'section'` schema entries and for auto-wrapping
-  // big content fields below.
-  function buildSection(label, sectionKey, defaultCollapsed) {
+  // heavy content fields below. `def` carries the optional header extras:
+  //   icon    — emoji or raw SVG markup rendered before the label
+  //   help    — muted line at the top of the body (visible while open)
+  //   summary — (content) => string, right-aligned muted header text while
+  //             collapsed; re-evaluated on every value change + on toggle
+  // Auto-folds get a modifier class so explicit sections keep visual seniority.
+  function buildSection(def, { auto = false } = {}) {
     const section = document.createElement('section');
-    section.className = 'bb-form-section';
-    const initial = loadCollapsed(formKey, sectionKey, !!defaultCollapsed);
+    section.className = auto ? 'bb-form-section bb-form-section-auto' : 'bb-form-section';
+    const initial = loadCollapsed(formKey, def.key, !!def.collapsed);
     if (initial) section.classList.add('bb-form-section-closed');
     const head = document.createElement('button');
     head.type = 'button';
     head.className = 'bb-form-section-head';
-    head.innerHTML = `<span class="bb-form-section-chev">▾</span> <span class="bb-form-section-label">${esc(label ?? '')}</span>`;
+    const icon = def.icon
+      ? `<span class="bb-form-section-icon">${String(def.icon).trimStart().startsWith('<') ? def.icon : esc(def.icon)}</span> `
+      : '';
+    head.innerHTML = `<span class="bb-form-section-chev">▾</span> ${icon}<span class="bb-form-section-label">${esc(def.label ?? '')}</span>`;
+    if (typeof def.summary === 'function') {
+      const sum = document.createElement('span');
+      sum.className = 'bb-form-section-summary';
+      head.appendChild(sum);
+      const update = () => {
+        if (!section.classList.contains('bb-form-section-closed')) { sum.textContent = ''; return; }
+        try { sum.textContent = def.summary(cur) ?? ''; } catch { sum.textContent = ''; }
+      };
+      summaryUpdaters.push(update);
+      update();
+    }
     const body = document.createElement('div');
     body.className = 'bb-form-section-body';
-    head.addEventListener('click', () => {
-      const nowClosed = section.classList.toggle('bb-form-section-closed');
-      saveCollapsed(formKey, sectionKey, nowClosed);
-    });
+    if (def.help) {
+      const help = document.createElement('p');
+      help.className = 'bb-form-help bb-form-section-help';
+      help.textContent = tx(def.help);
+      body.appendChild(help);
+    }
+    const setCollapsed = collapsed => {
+      section.classList.toggle('bb-form-section-closed', collapsed);
+      saveCollapsed(formKey, def.key, collapsed);
+      for (const u of summaryUpdaters) u();
+    };
+    head.addEventListener('click', () => setCollapsed(!section.classList.contains('bb-form-section-closed')));
     section.append(head, body);
+    sections.push({ setCollapsed });
     return { section, body };
   }
 
@@ -92,13 +141,37 @@ export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, 
   // so the section and row layouts can re-use it without duplicating logic.
   // `suppressLabel` skips the field's own <label> — used when the field lives
   // inside an auto-section whose header already shows the label.
-  function mountField(f, { suppressLabel = false } = {}) {
+  // `suppressHelp` skips the field's own help line — used by row clusters,
+  // which render one combined help line below the cluster instead.
+  function mountField(f, { suppressLabel = false, suppressHelp = false } = {}) {
     const group = document.createElement('div');
     group.className = `bb-form-group bb-form-${f.type}`;
-    if (!suppressLabel) {
-      const lbl = document.createElement('label');
-      lbl.textContent = tx(f.label) ?? f.key;
-      group.appendChild(lbl);
+
+    // Per-field reset: a small ghost ↺ next to the label (hover-revealed)
+    // whenever the value differs from the caller-supplied defaults. Resets
+    // through the normal commit path, so canvas refresh + undo behave like
+    // any other edit — no confirm needed.
+    const wantReset = !!defaults && f.key != null;
+    let resetBtn = null, labelRow = null;
+    if (!suppressLabel || wantReset) {
+      labelRow = document.createElement('div');
+      labelRow.className = 'bb-form-labelrow';
+      if (!suppressLabel) {
+        const lbl = document.createElement('label');
+        lbl.textContent = tx(f.label) ?? f.key;
+        labelRow.appendChild(lbl);
+      }
+      if (wantReset) {
+        resetBtn = document.createElement('button');
+        resetBtn.type = 'button';
+        resetBtn.className = 'bb-field-reset';
+        resetBtn.title = tx('Reset to default');
+        resetBtn.setAttribute('aria-label', tx('Reset to default'));
+        resetBtn.textContent = '↺';
+        resetBtn.hidden = true;
+        labelRow.appendChild(resetBtn);
+      }
+      group.appendChild(labelRow);
     }
 
     // Inline validation / probe message slot (shared by validate() + Test).
@@ -108,19 +181,52 @@ export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, 
     const showMsg = res => {
       if (!res) { msg.hidden = true; msg.textContent = ''; return; }
       msg.hidden = false;
-      msg.textContent = res.message;
+      // validate() messages are English source strings (plugins are i18n-free
+      // by design) — route them through the overlay like labels/help. Probe
+      // messages arrive pre-localized and pass through unchanged.
+      msg.textContent = tx(res.message);
       msg.dataset.level = res.level;
     };
     const runValidate = () => { if (typeof f.validate === 'function') showMsg(f.validate(cur[f.key], cur)); };
+    if (typeof f.validate === 'function') validators.push(runValidate);
 
-    const ctrl = renderField(f, cur[f.key], v => {
+    // Shared commit path — every edit (typed, clicked or reset) flows through
+    // here so visibility, summaries, reset buttons, validation and onChange
+    // stay in sync. validate(value, content) invites cross-field rules, so
+    // ALL validators re-run on every change, not just the edited field's.
+    const commit = v => {
       cur[f.key] = v;
       applyVisibility();
-      runValidate();
+      for (const run of validators) run();
       onChange?.(cur);
-    }, { assetPicker, assetsPicker, codePicker });
+    };
+
+    let ctrl = renderField(f, cur[f.key], commit, { assetPicker, assetsPicker, codePicker });
     refs.set(f.key, ctrl.el);
     group.appendChild(ctrl.el);
+
+    if (resetBtn) {
+      const updateReset = () => {
+        const differs = JSON.stringify(cur[f.key]) !== JSON.stringify(defaults[f.key]);
+        resetBtn.hidden = !differs;
+        // Bare row (label suppressed): collapse it entirely while in sync so
+        // the hover affordance doesn't reserve empty space.
+        if (suppressLabel) labelRow.hidden = !differs;
+      };
+      resetUpdaters.push(updateReset);
+      updateReset();
+      resetBtn.addEventListener('click', () => {
+        const dv = structuredCloneSafe(defaults[f.key]);
+        // Controls don't track external value changes — swap in a freshly
+        // rendered control showing the default, then commit as a normal edit.
+        const next = renderField(f, dv, commit, { assetPicker, assetsPicker, codePicker });
+        ctrl.el.replaceWith(next.el);
+        ctrl.dispose?.();
+        ctrl = next;
+        refs.set(f.key, next.el);
+        commit(dv);
+      });
+    }
 
     if (f.test) {
       const testRow = document.createElement('div');
@@ -140,14 +246,14 @@ export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, 
       group.appendChild(testRow);
     }
 
-    if (f.help) {
+    if (f.help && !suppressHelp) {
       const help = document.createElement('p');
       help.className = 'bb-form-help';
       help.textContent = tx(f.help);
       group.appendChild(help);
     }
     group.appendChild(msg);
-    groups.push({ f, group });
+    groups.push({ f, group, getCtrl: () => ctrl });
     runValidate();
     return group;
   }
@@ -161,7 +267,10 @@ export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, 
     if (f.type === 'section') {
       // Explicit section marker — opens a new container that subsequent
       // top-level fields mount into (until the next section / EOF).
-      const { section, body } = buildSection(tx(f.label), sectionKeyFor(f), f.collapsed);
+      const { section, body } = buildSection({
+        label: tx(f.label), key: sectionKeyFor(f), collapsed: f.collapsed,
+        icon: f.icon, help: f.help, summary: f.summary,
+      });
       root.appendChild(section);
       currentTarget = body;
       groups.push({ f, group: section });
@@ -171,17 +280,32 @@ export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, 
       const rowWrap = document.createElement('div');
       rowWrap.className = 'bb-form-row-cluster';
       const children = Array.isArray(f.children) ? f.children : [];
-      for (const child of children) rowWrap.appendChild(mountField(child));
+      for (const child of children) rowWrap.appendChild(mountField(child, { suppressHelp: true }));
+      // Help on row children would break the flex layout inline — render one
+      // combined muted line below the cluster instead of dropping the text.
+      const helps = children.filter(c => c.help)
+        .map(c => (c.label ? `${tx(c.label)}: ${tx(c.help)}` : tx(c.help)));
+      if (helps.length) {
+        const rowHelp = document.createElement('p');
+        rowHelp.className = 'bb-form-help bb-form-row-help';
+        rowHelp.textContent = helps.join(' · ');
+        rowWrap.appendChild(rowHelp);
+      }
       currentTarget.appendChild(rowWrap);
       groups.push({ f, group: rowWrap });
       continue;
     }
-    // Universal collapsibility: every top-level labelled field becomes its
-    // own collapsible section so the inspector has one consistent fold
-    // interaction. Fields inside an explicit `type: 'section'` group keep
+    // Auto-folding: heavy controls (taller than ~2 rows) outside an explicit
+    // section get their own collapsible fold — the header shows the label.
+    // Light scalar fields render as a plain labelled group instead, so a real
+    // section header ('Appearance') and a single field ('Title') no longer
+    // carry the same visual weight. Fields inside an explicit section keep
     // rendering as before — the surrounding section already provides the fold.
-    if (currentTarget === root && f.label) {
-      const { section, body } = buildSection(tx(f.label), sectionKeyFor(f), f.collapsed);
+    if (currentTarget === root && f.label
+        && (autoFold === 'all' || f.fold === true || HEAVY_FIELD_TYPES.has(f.type))) {
+      const { section, body } = buildSection(
+        { label: tx(f.label), key: sectionKeyFor(f), collapsed: f.collapsed },
+        { auto: true });
       body.appendChild(mountField(f, { suppressLabel: true }));
       root.appendChild(section);
       groups.push({ f, group: section });
@@ -190,13 +314,34 @@ export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, 
     currentTarget.appendChild(mountField(f));
   }
 
+  // Expand-all / collapse-all toggle row — only worth the chrome on long
+  // forms, and the antidote to the per-(type, section) persisted collapse
+  // state hiding fields with no obvious way back.
+  if (sections.length >= 4) {
+    const tools = document.createElement('div');
+    tools.className = 'bb-form-tools';
+    const mkBtn = (label, collapsed) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'bb-form-tools-btn';
+      btn.textContent = tx(label);
+      btn.addEventListener('click', () => { for (const s of sections) s.setCollapsed(collapsed); });
+      return btn;
+    };
+    tools.append(mkBtn('Expand all', false), mkBtn('Collapse all', true));
+    root.prepend(tools);
+  }
+
   // Conditional fields: re-evaluate showIf(content) whenever any value changes.
   // Sections + rows can themselves have showIf — useful for "advanced" groups
-  // that only matter when a switch above is enabled.
+  // that only matter when a switch above is enabled. Doubles as the per-change
+  // refresh for section summaries and per-field reset visibility.
   function applyVisibility() {
     for (const { f, group } of groups) {
       if (typeof f.showIf === 'function') group.style.display = f.showIf(cur) ? '' : 'none';
     }
+    for (const u of summaryUpdaters) u();
+    for (const u of resetUpdaters) u();
   }
   applyVisibility();
 
@@ -204,6 +349,14 @@ export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, 
     root,
     get value() { return cur; },
     setValue(next) { Object.assign(cur, next); /* re-render isn't tracked deeply */ },
+    // Tear down every control holding document-level listeners or timers
+    // (rich-text registers selectionchange/mousedown on document). Idempotent:
+    // the inspector panel calls it once per rebuild, extra calls are no-ops.
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      for (const g of groups) { try { g.getCtrl?.().dispose?.(); } catch {} }
+    },
   };
 }
 
@@ -229,19 +382,61 @@ function renderField(f, v, set, opts) {
     }
     case 'color': {
       // Native <input type="color"> has no empty state — once a value is set
-      // it can't be cleared back to "use default". For fields where an empty
-      // value is meaningful (e.g. weather textColor = follow theme), pass
-      // `clearable: true` and a small × button is rendered next to the swatch.
+      // it can't be cleared back to "use default". The swatch is therefore
+      // paired with a synced hex text input, and an explicit 'inherit' badge
+      // marks the empty state (the theme colour applies). For fields where an
+      // empty value is meaningful (e.g. weather textColor = follow theme),
+      // pass `clearable: true` and a small × button resets back to ''.
       const wrap = document.createElement('div');
       wrap.className = 'bb-color-field';
-      wrap.style.cssText = 'display:flex; align-items:center; gap:6px;';
       const el = document.createElement('input');
       el.type = 'color';
-      el.value = v || '#000000';
-      // When v is empty, fade the swatch so the user sees "no override active".
-      if (!v) el.style.opacity = '0.45';
-      el.addEventListener('input', () => { el.style.opacity = '1'; set(el.value); });
-      wrap.appendChild(el);
+      const hex = document.createElement('input');
+      hex.type = 'text';
+      hex.className = 'bb-color-hex';
+      hex.placeholder = '#rrggbb';
+      hex.spellcheck = false;
+      const badge = document.createElement('span');
+      badge.className = 'bb-color-inherit';
+      badge.textContent = tx('inherit');
+      let current = v || '';
+      // Sync all three faces (swatch, hex text, badge) to one value.
+      const paint = () => {
+        wrap.classList.toggle('bb-color-empty', !current);
+        badge.hidden = !!current;
+        el.value = current || '#000000';
+        hex.value = current;
+      };
+      const commit = val => { current = val; paint(); set(val); };
+      el.addEventListener('input', () => commit(el.value));
+      // '#abc' / 'abc' / '#aabbcc' / 'aabbcc' → normalized '#aabbcc', or null.
+      const parseHex = raw => {
+        const m = String(raw).trim().match(/^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+        if (!m) return null;
+        let hx = m[1].toLowerCase();
+        if (hx.length === 3) hx = hx.replace(/./g, ch => ch + ch);
+        return `#${hx}`;
+      };
+      // Hex typing commits as soon as the text parses (live canvas update,
+      // without rewriting hex.value mid-edit so the caret stays put);
+      // 'change' (blur/Enter) snaps the display back to the last valid value.
+      hex.addEventListener('input', () => {
+        const val = parseHex(hex.value);
+        if (val) {
+          current = val;
+          el.value = val;
+          wrap.classList.remove('bb-color-empty');
+          badge.hidden = true;
+          set(val);
+        } else if (hex.value.trim() === '' && f.clearable) {
+          current = '';
+          wrap.classList.add('bb-color-empty');
+          badge.hidden = false;
+          set('');
+        }
+      });
+      hex.addEventListener('change', paint);
+      wrap.append(el, hex, badge);
       if (f.clearable) {
         const clear = document.createElement('button');
         clear.type = 'button';
@@ -249,10 +444,10 @@ function renderField(f, v, set, opts) {
         clear.title = tx('Reset to default');
         clear.setAttribute('aria-label', tx('Reset to default'));
         clear.textContent = '×';
-        clear.style.cssText = 'background:transparent; border:1px solid var(--bb-border, rgba(255,255,255,.15)); color:inherit; width:24px; height:24px; border-radius:6px; cursor:pointer; line-height:1; font-size:16px; padding:0;';
-        clear.addEventListener('click', () => { el.style.opacity = '0.45'; set(''); });
+        clear.addEventListener('click', () => commit(''));
         wrap.appendChild(clear);
       }
+      paint();
       return { el: wrap };
     }
     case 'number': {
@@ -280,6 +475,28 @@ function renderField(f, v, set, opts) {
       if (f.max != null) el.max = f.max;
       if (f.step != null) el.step = f.step;
       el.addEventListener('input', () => set(el.value === '' ? null : +el.value));
+      // Clamp typed values to min/max once editing settles ('change', not
+      // 'input', so half-typed numbers aren't fought while typing). The HTML
+      // attrs only constrain the spinners — typed input bypasses them.
+      el.addEventListener('change', () => {
+        if (el.value === '') return;
+        let n = +el.value;
+        if (Number.isNaN(n)) return;
+        if (f.min != null && n < f.min) n = f.min;
+        if (f.max != null && n > f.max) n = f.max;
+        if (n !== +el.value) { el.value = n; set(n); }
+      });
+      if (f.suffix) {
+        // Trailing unit span ('s', '%', 'px', 'min') — the same input+unit
+        // pattern the duration control uses, generalized for plain numbers.
+        const wrap = document.createElement('div');
+        wrap.className = 'bb-number-field';
+        const unit = document.createElement('span');
+        unit.className = 'bb-number-unit';
+        unit.textContent = f.suffix;
+        wrap.append(el, unit);
+        return { el: wrap };
+      }
       return { el };
     }
     case 'textarea': {
@@ -309,11 +526,48 @@ function renderField(f, v, set, opts) {
       return { el };
     }
     case 'select': {
+      const opts = (f.options ?? []).map(o =>
+        typeof o === 'string' ? { value: o, label: o } : o);
+      // `search: true` — long lists (10+ options) route through the shared
+      // combobox the timezone/currency pickers use: type-to-filter, same keys.
+      if (f.search) {
+        return searchableSelect({
+          options: opts.map(o => ({ value: o.value, label: tx(o.label) ?? String(o.value) })),
+          value: v,
+          placeholder: f.placeholder ? tx(f.placeholder) : undefined,
+          onChange: set,
+        });
+      }
+      // `buttons: true` — small enums (2–5 options) render as a segmented
+      // button group: every choice visible, one click to switch. Falls back
+      // to the native select beyond 5 options so the row can't overflow.
+      if (f.buttons && opts.length >= 2 && opts.length <= 5) {
+        const wrap = document.createElement('div');
+        wrap.className = 'bb-seg';
+        const paint = () => {
+          for (const b of wrap.children) {
+            const on = b.dataset.v === String(v);
+            b.classList.toggle('bb-on', on);
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+          }
+        };
+        for (const o of opts) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'bb-seg-btn';
+          btn.dataset.v = String(o.value);
+          btn.textContent = tx(o.label) ?? String(o.value);
+          btn.addEventListener('click', () => { v = o.value; paint(); set(o.value); });
+          wrap.appendChild(btn);
+        }
+        paint();
+        return { el: wrap };
+      }
       const el = document.createElement('select');
-      for (const opt of (f.options ?? [])) {
+      for (const opt of opts) {
         const o = document.createElement('option');
-        if (typeof opt === 'string') { o.value = opt; o.textContent = opt; }
-        else { o.value = opt.value; o.textContent = tx(opt.label) ?? opt.value; }
+        o.value = opt.value;
+        o.textContent = tx(opt.label) ?? opt.value;
         if (o.value === v) o.selected = true;
         el.appendChild(o);
       }

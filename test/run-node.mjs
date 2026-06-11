@@ -52,6 +52,10 @@ const suites = [
   './api-url.test.js',
   // Importer file-type routing + the CSV/JSON pure parse cores.
   './importers.test.js',
+  // Plugin contract + schema shape validation across all registered widgets.
+  // Imports every plugin module but never calls render(), so it stays
+  // DOM-free as long as plugins keep DOM work out of module top level.
+  './schema.test.js',
 ];
 
 for (const s of suites) {

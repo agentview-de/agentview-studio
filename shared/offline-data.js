@@ -46,6 +46,22 @@ export const DATAMODE_OPTIONS = [
   { value: 'stored', label: 'Offline · Studio pre-fetches, display reads' },
 ];
 
+// Schema-field factory for the `dataMode` select — spread-free, return it
+// straight into a plugin's schema().fields. EVERY always-fetching widget (rss,
+// news-photos, live-json, currency, weather) uses this ONE definition so the
+// label, options and help wording stay identical everywhere instead of each
+// plugin hand-rolling a slightly different explanation of offline mode.
+// opts.help overrides the canonical help where a widget genuinely needs more
+// specific wording; opts.showIf passes through to the field.
+export function dataModeField(opts = {}) {
+  const f = {
+    key: 'dataMode', type: 'select', label: 'Data source', options: DATAMODE_OPTIONS,
+    help: opts.help ?? 'Offline: the Studio fetches the source on “Refresh data” and stores the result; the display reads that — no live fetch, no API key on the screen, works without internet.',
+  };
+  if (opts.showIf) f.showIf = opts.showIf;
+  return f;
+}
+
 // Data slot that holds a provided-offline widget's pre-fetched data. Stable per
 // widget id so the Studio's refresh (write) and the published binding (read) agree.
 export const offlineSlugFor = (w) => 'avs-d-' + (w?.id ?? 'x');

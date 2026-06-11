@@ -1,5 +1,6 @@
 import { register } from './registry.js';
 import { composeDispose } from '../plugin-contract.js';
+import { mediaPlaceholder } from '../media-placeholder.js';
 
 function extractId(url) {
   if (!url) return '';
@@ -32,15 +33,22 @@ function startSeconds(c) {
   return Math.max(0, Math.floor(explicit > 0 ? explicit : extractStart(c.url ?? '')));
 }
 
+// Accepts "W:H", "W/H" or "WxH" with decimals; shared by ratioPair() and the
+// customRatio validate so the schema warning and the render fallback agree.
+const RATIO_RE = /^\s*(\d+(?:\.\d+)?)\s*[:/x]\s*(\d+(?:\.\d+)?)\s*$/i;
+
 // Resolves the aspect setting to a [w, h] pair. Custom accepts "W:H", "W/H" or "WxH".
 function ratioPair(aspect, custom) {
   if (aspect === '9:16') return [9, 16];
   if (aspect === 'custom') {
-    const m = String(custom ?? '').match(/^\s*(\d+(?:\.\d+)?)\s*[:/x]\s*(\d+(?:\.\d+)?)\s*$/i);
+    const m = String(custom ?? '').match(RATIO_RE);
     if (m && +m[1] > 0 && +m[2] > 0) return [+m[1], +m[2]];
   }
   return [16, 9];
 }
+
+// All YouTube-only fields share this gate (the Vimeo branch ignores them).
+const isVimeo = c => /vimeo\.com/i.test(c.url ?? '');
 
 export default register({
   type: 'youtube',
@@ -54,49 +62,109 @@ export default register({
     start: 0, end: 0,
     aspect: '16:9', customRatio: '4:3',
     showCaptions: false,
+    captionLang: '',
     progressColor: 'red',
     interfaceLang: '',
     allowCookies: false,
+    reloadSec: 0,
   }),
   schema: () => ({
     fields: [
-      { key: 'url', type: 'url', label: 'YouTube or Vimeo URL' },
-      { key: 'provider', type: 'select', label: 'Provider', options: ['youtube','vimeo'],
+      { type: 'section', key: 'content', label: 'Content' },
+      { key: 'url', type: 'url', label: 'YouTube or Vimeo URL', test: true,
+        placeholder: 'https://www.youtube.com/watch?v=…' },
+      { key: 'provider', type: 'select', label: 'Provider', buttons: true,
+        options: [
+          { value: 'youtube', label: 'YouTube' },
+          { value: 'vimeo',   label: 'Vimeo' },
+        ],
         help: 'Auto-detected from the URL, only set this if your link is ambiguous.',
-        showIf: c => !/vimeo\.com/i.test(c.url ?? '') && !/youtu\.?be|youtube/i.test(c.url ?? '') },
+        showIf: c => !isVimeo(c) && !/youtu\.?be|youtube/i.test(c.url ?? '') },
+
+      { type: 'section', key: 'layout', label: 'Layout' },
       { key: 'aspect', type: 'select', label: 'Aspect ratio', options: [
         { value: '16:9', label: '16:9, landscape' },
         { value: '9:16', label: '9:16, portrait / Shorts' },
         { value: 'custom', label: 'Custom (use ratio below)' },
         { value: 'fill', label: 'Fill widget box' },
       ] },
-      { key: 'customRatio', type: 'select', label: 'Custom ratio (W:H)',
-        options: ['4:3', '3:2', '5:4', '16:10', '21:9', '1:1'],
-        showIf: c => (c.aspect ?? '16:9') === 'custom' },
-      { key: 'muted', type: 'toggle', label: 'Muted (required for autoplay)' },
-      { key: 'loop', type: 'toggle', label: 'Loop' },
-      { key: 'controls', type: 'toggle', label: 'Show controls' },
-      { key: 'start', type: 'number', label: 'Start at (seconds, blank = use URL)', min: 0 },
-      { key: 'end', type: 'number', label: 'Stop at (seconds, 0 = play to end)', min: 0,
-        showIf: c => !/vimeo\.com/i.test(c.url ?? ''),
-        help: 'Cuts off playback at this second so you can show a specific scene without editing the source video. Combined with Start, you get an arbitrary in/out range.' },
+      // Free-form text (was a 6-preset select): render's ratioPair() always
+      // parsed arbitrary "W:H" / "W/H" / "WxH" strings, the select was the
+      // only thing restricting it. All old preset values remain valid input.
+      { key: 'customRatio', type: 'text', label: 'Custom ratio (W:H)',
+        placeholder: '4:3',
+        help: 'Any width-to-height pair as W:H, W/H or WxH — e.g. 4:3, 3:2, 5:4, 16:10, 21:9, 1:1.',
+        showIf: c => (c.aspect ?? '16:9') === 'custom',
+        validate: v => {
+          const s = String(v ?? '').trim();
+          if (!s) return null;
+          const m = s.match(RATIO_RE);
+          return m && +m[1] > 0 && +m[2] > 0 ? null
+            : { level: 'warn', message: 'Not a valid ratio — use W:H like 4:3 or 21:9. Falling back to 16:9.' };
+        } },
+
+      { type: 'section', key: 'playback', label: 'Playback' },
+      { type: 'row', children: [
+        { key: 'muted', type: 'toggle', label: 'Muted',
+          help: 'Required for autoplay — browsers block unmuted autoplay.' },
+        { key: 'loop', type: 'toggle', label: 'Loop',
+          help: 'YouTube shows a brief interface flash between loop iterations — no embed parameter can suppress it.' },
+      ] },
+      { type: 'row', children: [
+        { key: 'start', type: 'duration', label: 'Start at', min: 0,
+          help: '0 = use the timestamp from the URL (e.g. ?t=90), if any.' },
+        { key: 'end', type: 'duration', label: 'Stop at', min: 0,
+          showIf: c => !isVimeo(c),
+          help: '0 = play to the end. Cuts off playback at this second so you can show a specific scene without editing the source video. Combined with Start, you get an arbitrary in/out range.',
+          validate: (v, c) => {
+            const end = Math.floor(Number(v) || 0);
+            return end > 0 && end <= startSeconds(c)
+              ? { level: 'warn', message: 'Stop time must be after Start — it is being ignored.' }
+              : null;
+          } },
+      ] },
+
+      { type: 'section', key: 'captions', label: 'Captions & language',
+        showIf: c => !isVimeo(c) },
       { key: 'showCaptions', type: 'toggle', label: 'Show captions/subtitles',
-        showIf: c => !/vimeo\.com/i.test(c.url ?? ''),
+        showIf: c => !isVimeo(c),
         help: 'Forces YouTube captions on by default, useful for muted playback in cafés, lobbies, or noisy receptions. Only fires if the video actually has subtitles.' },
+      { key: 'captionLang', type: 'text', label: 'Caption language',
+        placeholder: 'e.g. de, en',
+        showIf: c => c.showCaptions && !isVimeo(c),
+        help: 'Two-letter ISO code preferred for the forced captions, so a German lobby gets German subtitles regardless of the video\'s default. Leave blank for the video default.' },
+
       // Tier 2, UI cosmetics that only matter when the player controls are visible.
-      { key: 'progressColor', type: 'select', label: 'Progress bar colour',
+      { type: 'section', key: 'playerui', label: 'Player controls', collapsed: true,
+        summary: c => c.controls ? 'visible' : 'hidden' },
+      { key: 'controls', type: 'toggle', label: 'Show controls' },
+      { key: 'progressColor', type: 'select', label: 'Progress bar colour', buttons: true,
         options: [
           { value: 'red',   label: 'Red (YouTube default)' },
           { value: 'white', label: 'White' },
         ],
-        showIf: c => c.controls && !/vimeo\.com/i.test(c.url ?? '') },
+        showIf: c => c.controls && !isVimeo(c) },
       { key: 'interfaceLang', type: 'text', label: 'Player UI language',
         placeholder: 'e.g. de, en, fr',
-        showIf: c => c.controls && !/vimeo\.com/i.test(c.url ?? ''),
+        showIf: c => c.controls && !isVimeo(c),
         help: 'Two-letter ISO code controlling the YouTube controls + tooltip language. Leave blank to follow the player\'s default.' },
+
+      { type: 'section', key: 'advanced', label: 'Advanced', collapsed: true,
+        summary: c => [
+          c.allowCookies ? 'cookies on' : 'no cookies',
+          Math.floor(Number(c.reloadSec) || 0) >= 5 ? 'auto-reload' : '',
+        ].filter(Boolean).join(' · ') },
       { key: 'allowCookies', type: 'toggle', label: 'Allow YouTube cookies',
-        showIf: c => !/vimeo\.com/i.test(c.url ?? ''),
+        showIf: c => !isVimeo(c),
         help: '⚠️ Off (default) uses youtube-nocookie.com for privacy. Turn ON if your video shows a "sign in to confirm you\'re not a bot" wall, some music videos, Shorts, and age-restricted content only embed cleanly via standard youtube.com.' },
+      { key: 'reloadSec', type: 'duration', label: 'Reload every (0 = never)', min: 0,
+        help: 'Reloads the embed on a timer — recovers frozen frames and "video unavailable" walls on 24/7 displays. Intervals under 5 seconds are ignored to protect the player.',
+        validate: v => {
+          const s = Number(v) || 0;
+          return s > 0 && s < 5
+            ? { level: 'warn', message: 'Intervals under 5 seconds are ignored to protect the player.' }
+            : null;
+        } },
     ],
   }),
   // Lets the editor snap the widget box to the chosen ratio (null = leave the box alone).
@@ -112,9 +180,7 @@ export default register({
     // The iframe path below would render a YouTube "video unavailable" page
     // by default; that's noisier than a clean "configure me" hint.
     if (!c.url || !id) {
-      const ph = document.createElement('div');
-      ph.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a2e,#0a0a10);color:rgba(255,255,255,.55);font:14px/1.5 var(--bb-font, Inter, sans-serif);text-align:center;padding:24px;';
-      ph.innerHTML = '<div><div style="font-size:48px;opacity:.5;margin-bottom:8px;">▶️</div><div>Paste a YouTube or Vimeo URL in the inspector.</div></div>';
+      const ph = mediaPlaceholder({ icon: '▶️', message: 'Paste a YouTube or Vimeo URL in the inspector.' });
       container.appendChild(ph);
       return composeDispose(() => ph.remove());
     }
@@ -140,7 +206,12 @@ export default register({
       // `start`; otherwise YouTube silently ignores it.
       const endSec = Math.max(0, Math.floor(Number(c.end) || 0));
       const endParam = endSec > 0 && endSec > start ? `&end=${endSec}` : '';
-      const ccParam = c.showCaptions ? '&cc_load_policy=1' : '';
+      // cc_lang_pref picks WHICH caption track fires when captions are forced
+      // on — the muted+captions signage pattern in a specific audience language.
+      const ccLang = c.showCaptions ? (c.captionLang ?? '').trim() : '';
+      const ccParam = c.showCaptions
+        ? `&cc_load_policy=1${ccLang ? `&cc_lang_pref=${encodeURIComponent(ccLang)}` : ''}`
+        : '';
       // Tier-2 vars (color, hl) are pointless when controls are hidden, gate
       // them so we don't ship URL bytes that would never have a visible effect.
       const colorParam = c.controls && c.progressColor === 'white' ? '&color=white' : '';

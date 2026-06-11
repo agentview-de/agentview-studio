@@ -1,6 +1,6 @@
 import { register } from './registry.js';
-import { themeField } from '../data/themes.js';
-import { colorOverrideDefaults, colorOverrideFields, applyColorOverrides } from '../widget-color.js';
+import { textScaleField } from '../text-scale.js';
+import { themeColorSection, colorOverrideDefaults, applyColorOverrides } from '../widget-color.js';
 import { composeDispose } from '../plugin-contract.js';
 import { currencySymbol } from '../data/currencies.js';
 import { isSafeImgUrl } from '../safe-url.js';
@@ -30,8 +30,11 @@ function badgeFor(token) {
   const k = String(token ?? '').toLowerCase().trim();
   if (!k) return null;
   if (TAG_BADGES[k]) return TAG_BADGES[k];
-  // Unknown tag → render the literal text on a neutral badge.
-  return { label: k.length <= 4 ? k.toUpperCase() : k, title: token, bg: '#475569' };
+  // Unknown tag → render the literal text on a neutral badge. color-mix tints
+  // the neutral grey toward the theme accent so custom tags feel intentional
+  // rather than off-palette.
+  return { label: k.length <= 4 ? k.toUpperCase() : k, title: token,
+    bg: 'color-mix(in srgb, var(--bb-st-accent, #475569) 28%, #475569)' };
 }
 
 export default register({
@@ -39,24 +42,56 @@ export default register({
   label: 'Menu / Pricelist',
   group: 'basic',
   icon: '📋',
-  schemaVersion: 3,
+  schemaVersion: 4,
+  // v3 → v4: toggle columns (sold / featured) used to be seeded as legacy
+  // truthy STRINGS ('yes' / 'today') in defaults(), while the table editor
+  // writes the canonical truthy-empty shape (1 = on, '' = off). The render
+  // truthiness test treated both the same, so this is a pure shape clean-up:
+  // any stored legacy string is normalised to 1 so the editor and the data
+  // agree. Anything already empty / falsy stays off.
+  migrate(content, fromVersion) {
+    const c = { ...(content ?? {}) };
+    if (fromVersion < 4 && Array.isArray(c.rows)) {
+      c.rows = c.rows.map(r => {
+        const row = { ...r };
+        if (row.sold != null && row.sold !== '' && row.sold !== 1) row.sold = String(row.sold).trim() ? 1 : '';
+        if (row.featured != null && row.featured !== '' && row.featured !== 1) row.featured = String(row.featured).trim() ? 1 : '';
+        return row;
+      });
+    }
+    return c;
+  },
   defaults: () => ({ ...colorOverrideDefaults(),
     rows: [
       { section: 'Starters', name: 'Bruschetta',         price: 6.50,  desc: 'Tomato · basil · garlic',          tags: 'vegan' },
       { section: 'Starters', name: 'Olives',             price: 4.00,  desc: 'Mediterranean mix',                tags: 'vegan, gluten-free' },
-      { section: 'Mains',    name: 'Pasta al Pomodoro',  price: 12.00, desc: 'San Marzano tomato sauce',         tags: 'vegetarian', featured: 'today' },
+      { section: 'Mains',    name: 'Pasta al Pomodoro',  price: 12.00, desc: 'San Marzano tomato sauce',         tags: 'vegetarian', featured: 1 },
       { section: 'Mains',    name: 'Risotto Funghi',     price: 14.50, desc: 'Wild mushrooms, parmesan',         tags: 'vegetarian, gluten-free' },
-      { section: 'Mains',    name: 'Bistecca alla Fiorentina', price: 28.00, desc: 'Dry-aged T-bone, rosemary',  sold: 'yes' },
+      { section: 'Mains',    name: 'Bistecca alla Fiorentina', price: 28.00, desc: 'Dry-aged T-bone, rosemary',  sold: 1 },
     ],
     currency: 'EUR',
+    currencyPosition: 'after',
+    hideZeroDecimals: false,
+    showPrices: true,
     showImages: false,
+    columns: 'auto',
+    sectionFilter: '',
+    footnote: '',
+    textScale: 100,
     theme: 'bistro-warm',
   }),
   schema: () => ({
     fields: [
-      { key: 'currency', type: 'currency', label: 'Currency' },
-      { key: 'showImages', type: 'toggle', label: 'Show dish thumbnails (if image URL set)' },
+      { type: 'section', key: 'content', label: 'Content' },
       { key: 'rows', type: 'table', label: 'Menu items',
+        help: 'One row per dish. Rows are grouped by the Section column (e.g. Starters, Mains). Tags column understands: vegan, vegetarian, gluten-free, lactose-free, spicy, nuts, halal, kosher, organic/bio, new — any other word still shows as a neutral badge.',
+        validate: (v) => {
+          const arr = Array.isArray(v) ? v : [];
+          if (!arr.length) return { level: 'warn', message: 'The menu is empty — add at least one item.' };
+          const ok = arr.some(r => String(r?.name ?? '').trim() || String(r?.price ?? '').trim());
+          if (!ok) return { level: 'warn', message: 'No item has a name or a price yet — the menu will render blank.' };
+          return null;
+        },
         columns: [
           { key: 'section',  label: 'Section', placeholder: 'Starters' },
           { key: 'name',     label: 'Item' },
@@ -67,24 +102,102 @@ export default register({
           { key: 'sold',     label: 'Sold',     type: 'toggle' },
           { key: 'featured', label: '★',        type: 'toggle' },
         ] },
-      themeField(),
-      ...colorOverrideFields(),
+      { key: 'sectionFilter', type: 'text', label: 'Only show sections',
+        placeholder: 'Starters, Mains',
+        help: 'Comma-separated section names. Leave empty to show everything. Lets several screens share one menu — a Starters screen shows only Starters.' },
+
+      { type: 'section', key: 'pricing', label: 'Pricing',
+        summary: (c) => {
+          if (c?.showPrices === false) return 'hidden';
+          return `${currencySymbol(c?.currency ?? 'EUR')} · ${c?.currencyPosition === 'before' ? 'before' : 'after'}`;
+        } },
+      { key: 'showPrices', type: 'toggle', label: 'Show prices',
+        help: 'Turn off for a showcase menu with no prices — hides the price column and the dotted leader line entirely.' },
+      { key: 'currency', type: 'currency', label: 'Currency',
+        showIf: c => c.showPrices !== false },
+      { key: 'currencyPosition', type: 'select', buttons: true, label: 'Symbol position',
+        showIf: c => c.showPrices !== false,
+        options: [
+          { value: 'after', label: '12 €' },
+          { value: 'before', label: '€ 12' },
+        ],
+        help: 'Where the currency symbol sits relative to the amount — “12 €” (EUR style) or “$ 12” (USD/GBP style).' },
+      { key: 'hideZeroDecimals', type: 'toggle', label: 'Hide “.00” on whole prices',
+        showIf: c => c.showPrices !== false,
+        help: 'Shows whole amounts as “12” instead of “12.00”; amounts with cents (12.50) keep both decimals.' },
+
+      { type: 'section', key: 'appearance', label: 'Appearance' },
+      { key: 'columns', type: 'select', buttons: true, label: 'Columns',
+        options: [
+          { value: 'auto', label: 'Auto' },
+          { value: '1', label: '1' },
+          { value: '2', label: '2' },
+          { value: '3', label: '3' },
+        ],
+        help: 'Auto fits as many columns as the width allows. Pin a fixed count to serve a narrow sidebar (1) or a full wall (3).' },
+      { key: 'showImages', type: 'toggle', label: 'Show dish thumbnails',
+        help: 'Thumbnails appear only for items that have an Image URL set; rows without an image stay text-only.' },
+      { key: 'footnote', type: 'text', label: 'Footer note',
+        placeholder: 'All prices incl. VAT · allergen info at the counter',
+        help: 'Small dimmed line under the menu — handy for VAT / allergen disclaimers.' },
+      textScaleField(),
+
+      ...themeColorSection(),
     ],
   }),
-  render(slide, container) {
+  render(slide, container, _ctx) {
     const c = slide.content ?? {};
     const root = document.createElement('div');
     applyColorOverrides(root, c);
     root.className = `bb-slide bb-slide-menu bb-theme-${c.theme ?? 'bistro-warm'}`;
+
+    // textScale is a percent (80–400); feed the multiplier into a CSS var that
+    // the cqmin font clamps in slide-themes.css multiply against. Never an
+    // inline em font-size (it would pin the text and stop tracking the box).
+    const ts = Math.max(0.8, Math.min(4, (Number(c.textScale) || 100) / 100));
+    root.style.setProperty('--bb-menu-text-scale', String(ts));
+
     const rows = Array.isArray(c.rows) ? c.rows : [];
     const cur = currencySymbol(c.currency ?? 'EUR');
     const showImages = !!c.showImages;
+    const showPrices = c.showPrices !== false;
+    const before = c.currencyPosition === 'before';
+    const hideZeroDec = !!c.hideZeroDecimals;
 
-    // Group flat rows back into sections, preserving first-seen order.
+    // Optional section allow-list: a screen can show just "Starters" from a
+    // shared dataset. Empty = everything. Case-insensitive, trimmed.
+    const filter = String(c.sectionFilter ?? '')
+      .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    const allow = (sec) => !filter.length || filter.includes(String(sec ?? '').trim().toLowerCase());
+
+    // Price → display string. Numbers honour the hide-zero-decimals toggle;
+    // non-numeric strings (e.g. "market price") pass through untouched. NaN
+    // passthrough and tabular-nums alignment stay intact.
+    const fmtPrice = (price) => {
+      let amount;
+      if (typeof price === 'number') {
+        amount = (hideZeroDec && Number.isInteger(price)) ? String(price) : price.toFixed(2);
+      } else {
+        const s = String(price ?? '').trim();
+        if (!s) return '';
+        amount = s;
+      }
+      const sym = escapeHtml(cur);
+      return before ? `${sym} ${escapeHtml(amount)}` : `${escapeHtml(amount)} ${sym}`;
+    };
+
+    // Column layout: 'auto' keeps the responsive CSS grid; a pinned count
+    // overrides grid-template-columns inline from here.
+    const colSel = String(c.columns ?? 'auto');
+    const colStyle = /^[123]$/.test(colSel) ? `grid-template-columns:repeat(${colSel}, 1fr);` : '';
+
+    // Group flat rows back into sections, preserving first-seen order, after
+    // applying the optional section filter.
     const order = [];
     const bySection = new Map();
     for (const r of rows) {
       const s = r.section ?? '';
+      if (!allow(s)) continue;
       if (!bySection.has(s)) { bySection.set(s, []); order.push(s); }
       bySection.get(s).push(r);
     }
@@ -99,9 +212,11 @@ export default register({
       }).join('')}</span>`;
     };
 
+    const footnote = String(c.footnote ?? '').trim();
+
     root.innerHTML = `
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
-      <div class="bb-menu-cols">
+      <div class="bb-menu-cols" style="${colStyle}">
         ${order.map(sec => `
           <section class="bb-menu-section">
             ${sec ? `<h2>${escapeHtml(sec)}</h2>` : ''}
@@ -111,6 +226,7 @@ export default register({
                 const isFeatured = !!String(it.featured ?? '').trim();
                 const hasImage = showImages && isSafeImgUrl(it.image);
                 const itemCls = `bb-menu-item${isSold ? ' bb-menu-sold' : ''}${isFeatured ? ' bb-menu-featured' : ''}`;
+                const priceStr = showPrices ? fmtPrice(it.price) : '';
                 // <img> instead of CSS background-image: load failures fire an
                 // `error` event we can catch (.bb-menu-thumb-broken hides the
                 // thumb cleanly so the row stays aligned) and the editor sees
@@ -123,8 +239,8 @@ export default register({
                   <div class="bb-menu-body">
                     <div class="bb-menu-row">
                       <span class="bb-menu-name">${isFeatured ? '<span class="bb-menu-star" aria-hidden="true">★</span> ' : ''}${escapeHtml(it.name ?? '')}${renderTags(it.tags)}${isSold ? '<span class="bb-menu-soldlbl">Sold out</span>' : ''}</span>
-                      <span class="bb-menu-dots"></span>
-                      <span class="bb-menu-price">${typeof it.price === 'number' ? it.price.toFixed(2) : (it.price ?? '')} ${escapeHtml(cur)}</span>
+                      ${showPrices ? '<span class="bb-menu-dots"></span>' : ''}
+                      ${showPrices ? `<span class="bb-menu-price">${priceStr}</span>` : ''}
                     </div>
                     ${it.desc ? `<div class="bb-menu-desc">${escapeHtml(it.desc)}</div>` : ''}
                   </div>
@@ -135,6 +251,7 @@ export default register({
           </section>
         `).join('')}
       </div>
+      ${footnote ? `<div class="bb-menu-footnote" style="margin-top:1.4em;font-size:calc(clamp(11px, 1.6cqmin, 22px) * var(--bb-menu-text-scale, 1));opacity:.6;text-align:center;">${escapeHtml(footnote)}</div>` : ''}
     `;
     container.appendChild(root);
     // Wire up onerror for menu thumbs so a broken dish-image URL collapses
@@ -149,4 +266,3 @@ export default register({
     return composeDispose(() => root.remove());
   },
 });
-

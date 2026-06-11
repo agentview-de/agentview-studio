@@ -74,8 +74,6 @@ textarea { resize: vertical; min-height: 100px; }
 }
 .bb-panel-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 600; font-size: 14px; margin: 0 0 10px; color: var(--bb-ink); }
 .bb-badge { font-size: 11px; padding: 2px 8px; background: var(--bb-bg-2); border-radius: 999px; color: var(--bb-ink-muted); }
-.bb-form-help { color: var(--bb-ink-muted); font-size: 12px; margin: 4px 0 12px; }
-
 .bb-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   padding: 10px 14px; border-radius: var(--bb-r-sm); border: 1px solid var(--bb-border);
@@ -109,7 +107,10 @@ textarea { resize: vertical; min-height: 100px; }
 .bb-form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .bb-form-group { display: flex; flex-direction: column; gap: 4px; }
 .bb-form-group label { font-size: 11px; color: var(--bb-ink-muted); text-transform: uppercase; letter-spacing: .04em; }
-.bb-form-help { font-size: 11px; color: var(--bb-ink-faint); margin-top: 4px; }
+/* One intentional help rule (was duplicated with conflicting size/margin —
+   the cascade picked the winner by accident). Slightly more bottom air so a
+   help line separates from the next group without a full blank row. */
+.bb-form-help { font-size: 11px; color: var(--bb-ink-faint); margin: 4px 0 8px; line-height: 1.45; }
 .bb-form-common { padding: 10px 12px; background: var(--bb-bg-2); border-radius: var(--bb-r-md); margin-bottom: 12px; border: 1px solid var(--bb-border); }
 
 /* Expandable textarea / code / markdown fields — a small ⛶ button overlaid
@@ -184,10 +185,52 @@ textarea { resize: vertical; min-height: 100px; }
 .bb-form-section-head:hover .bb-form-section-chev { color: var(--bb-ink); }
 .bb-form-section-body {
   display: flex; flex-direction: column; gap: 10px;
-  padding: 2px 6px 8px;
+  padding: 2px 6px 8px 12px;
+  /* Subtle indent guide so fold contents read as nested under their header. */
+  border-left: 1px solid color-mix(in srgb, var(--bb-ink) 8%, transparent);
+  margin-left: 11px; /* aligns the guide under the chevron column */
 }
 .bb-form-section.bb-form-section-closed .bb-form-section-body { display: none; }
 .bb-form-section.bb-form-section-closed .bb-form-section-chev { transform: rotate(-90deg); }
+
+/* Optional section-header extras (icon / help / collapsed summary). */
+.bb-form-section-icon { flex: 0 0 auto; font-size: 12px; line-height: 1; }
+.bb-form-section-icon svg { width: 12px; height: 12px; vertical-align: -1px; }
+.bb-form-section-summary {
+  flex: 0 1 auto; margin-left: auto; padding-left: 8px;
+  font-size: 10px; color: var(--bb-ink-faint); text-transform: none; letter-spacing: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%;
+}
+.bb-form-section-help { margin: 0 0 2px; }
+
+/* Auto-folds (a single heavy field wrapped for collapsibility) stay visually
+   junior to explicit schema sections: lighter chevron, regular-weight header. */
+.bb-form-section-auto > .bb-form-section-head .bb-form-section-label {
+  font-weight: 400; letter-spacing: .04em;
+}
+.bb-form-section-auto > .bb-form-section-head .bb-form-section-chev { opacity: .6; }
+.bb-form-section-auto > .bb-form-section-body { border-left-color: transparent; }
+
+/* Expand/collapse-all toggle row — only rendered on forms with 4+ sections. */
+.bb-form-tools { display: flex; justify-content: flex-end; gap: 4px; padding: 0 6px 2px; }
+.bb-form-tools-btn {
+  background: transparent; border: 0; padding: 2px 6px; border-radius: var(--bb-r-sm);
+  font-size: 10px; color: var(--bb-ink-faint); cursor: pointer;
+  transition: color var(--bb-trans-fast), background var(--bb-trans-fast);
+}
+.bb-form-tools-btn:hover { color: var(--bb-ink); background: color-mix(in srgb, var(--bb-ink) 6%, transparent); }
+
+/* Label row — label + hover-revealed per-field reset (↺ back to the plugin
+   default). The reset is hidden entirely while the value matches the default. */
+.bb-form-labelrow { display: flex; align-items: center; gap: 6px; min-height: 14px; }
+.bb-form-labelrow label { flex: 1 1 auto; min-width: 0; }
+.bb-field-reset {
+  flex: 0 0 auto; background: transparent; border: 0; padding: 0 2px;
+  font-size: 12px; line-height: 1; color: var(--bb-ink-faint); cursor: pointer;
+  opacity: 0; transition: opacity var(--bb-trans-fast), color var(--bb-trans-fast);
+}
+.bb-form-group:hover .bb-field-reset { opacity: 1; }
+.bb-field-reset:hover { color: var(--bb-accent); }
 
 /* Inline row clusters — N fields side-by-side, useful for color triplets,
    slider pairs, etc. Each child stays a normal bb-form-group; the parent
@@ -201,7 +244,9 @@ textarea { resize: vertical; min-height: 100px; }
    width inside a cluster — let them shrink so they don't dominate the row. */
 .bb-form-row-cluster > .bb-form-color,
 .bb-form-row-cluster > .bb-form-toggle { flex: 0 0 auto; min-width: 60px; }
-.bb-form-row-cluster .bb-form-help { display: none; } /* help text inside a row would break the layout — move it to the section */
+/* Help on row children is rendered by buildForm as ONE combined line below
+   the cluster (label: help · label: help) instead of being silently dropped. */
+.bb-form-row-help { flex: 1 0 100%; margin: 0; }
 
 /* Form switch */
 .bb-switch { position: relative; display: inline-block; width: 38px; height: 22px; }
@@ -316,6 +361,45 @@ textarea { resize: vertical; min-height: 100px; }
 .bb-duration input { width: 96px; }
 .bb-duration-unit { color: var(--bb-ink-muted); font-size: 13px; }
 .bb-duration-hint { color: var(--bb-ink-faint); font-size: 12px; }
+
+/* Plain number + unit suffix ('s', '%', 'px', 'min') — the duration control's
+   input+unit pattern generalized for any number field with f.suffix. */
+.bb-number-field { display: flex; align-items: center; gap: 8px; }
+.bb-number-field input { width: 96px; }
+.bb-number-unit { color: var(--bb-ink-muted); font-size: 13px; }
+
+/* Colour control — swatch + synced hex input. Empty value = inherit from the
+   theme / brand kit, shown as an explicit badge instead of a faded swatch. */
+.bb-color-field { display: flex; align-items: center; gap: 6px; }
+.bb-color-field input[type="color"] { flex: 0 0 auto; }
+.bb-color-field.bb-color-empty input[type="color"] { opacity: .45; }
+.bb-color-hex { width: 84px; font-size: 12px; font-family: var(--bb-mono, ui-monospace, monospace); }
+.bb-color-inherit {
+  font-size: 10px; color: var(--bb-ink-faint); text-transform: uppercase;
+  letter-spacing: .05em; padding: 2px 6px; border: 1px dashed var(--bb-border);
+  border-radius: 999px; white-space: nowrap;
+}
+.bb-color-clear {
+  flex: 0 0 auto; background: transparent; border: 1px solid var(--bb-border);
+  color: inherit; width: 24px; height: 24px; border-radius: var(--bb-r-sm);
+  cursor: pointer; line-height: 1; font-size: 16px; padding: 0;
+  transition: border-color var(--bb-trans-fast), color var(--bb-trans-fast);
+}
+.bb-color-clear:hover { border-color: var(--bb-border-strong); color: var(--bb-ink); }
+
+/* Segmented button group — small enums (select + buttons:true) and the
+   alignment picker. Every option visible, one click to switch. */
+.bb-seg { display: inline-flex; border: 1px solid var(--bb-border); border-radius: var(--bb-r-sm); overflow: hidden; width: fit-content; }
+.bb-seg-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  background: var(--bb-bg-2); border: 0; padding: 6px 10px;
+  color: var(--bb-ink-muted); font-size: 12px; font-weight: 500; cursor: pointer;
+  transition: background var(--bb-trans-fast), color var(--bb-trans-fast);
+}
+.bb-seg-btn + .bb-seg-btn { border-left: 1px solid var(--bb-border); }
+.bb-seg-btn:hover { background: var(--bb-bg-3); color: var(--bb-ink); }
+.bb-seg-btn.bb-on { background: var(--bb-bg-3); color: var(--bb-ink); box-shadow: inset 0 -2px 0 var(--bb-accent); }
+.bb-align-field .bb-seg-btn { padding: 6px 12px; }
 
 /* Datetime + timezone */
 .bb-datetime { display: flex; flex-direction: column; gap: 8px; }
