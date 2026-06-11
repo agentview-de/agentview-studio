@@ -222,8 +222,8 @@ textarea { resize: vertical; min-height: 100px; }
 
 /* Label row — label + hover-revealed per-field reset (↺ back to the plugin
    default). The reset is hidden entirely while the value matches the default. */
-.bb-form-labelrow { display: flex; align-items: center; gap: 6px; min-height: 14px; }
-.bb-form-labelrow label { flex: 1 1 auto; min-width: 0; }
+.bb-form-labelrow { display: flex; align-items: center; gap: 6px; min-height: 14px; max-width: 100%; }
+.bb-form-labelrow label { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .bb-field-reset {
   flex: 0 0 auto; background: transparent; border: 0; padding: 0 2px;
   font-size: 12px; line-height: 1; color: var(--bb-ink-faint); cursor: pointer;
@@ -240,10 +240,13 @@ textarea { resize: vertical; min-height: 100px; }
   align-items: flex-start;
 }
 .bb-form-row-cluster > .bb-form-group { flex: 1 1 0; min-width: 90px; }
-/* Color pickers, toggles, and tiny number fields look better at intrinsic
-   width inside a cluster — let them shrink so they don't dominate the row. */
+/* Color pickers, toggles, and tiny number fields sit at intrinsic width inside
+   a cluster (flex-grow 0, so they don't dominate the row) but MUST be able to
+   shrink (flex-shrink 1 + min-width 0) — otherwise a long toggle/colour label
+   keeps the group at its full one-line width and pushes a horizontal scrollbar
+   onto the narrow inspector. With min-width:0 the label wraps instead. */
 .bb-form-row-cluster > .bb-form-color,
-.bb-form-row-cluster > .bb-form-toggle { flex: 0 0 auto; min-width: 60px; }
+.bb-form-row-cluster > .bb-form-toggle { flex: 0 1 auto; min-width: 0; }
 /* Help on row children is rendered by buildForm as ONE combined line below
    the cluster (label: help · label: help) instead of being silently dropped. */
 .bb-form-row-help { flex: 1 0 100%; margin: 0; }
@@ -356,24 +359,28 @@ textarea { resize: vertical; min-height: 100px; }
 .bb-combo-hint { color: var(--bb-ink-faint); }
 .bb-combo-empty { padding: 8px 9px; color: var(--bb-ink-faint); font-size: 13px; }
 
-/* Duration */
-.bb-duration { display: flex; align-items: center; gap: 8px; }
-.bb-duration input { width: 96px; }
+/* Duration — the input shrinks (min-width:0) so the row never out-grows the
+   narrow inspector column and forces a horizontal scrollbar; the row wraps
+   before that as a last resort. */
+.bb-duration { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; max-width: 100%; }
+.bb-duration input { flex: 1 1 70px; width: auto; min-width: 0; max-width: 110px; }
 .bb-duration-unit { color: var(--bb-ink-muted); font-size: 13px; }
 .bb-duration-hint { color: var(--bb-ink-faint); font-size: 12px; }
 
 /* Plain number + unit suffix ('s', '%', 'px', 'min') — the duration control's
    input+unit pattern generalized for any number field with f.suffix. */
-.bb-number-field { display: flex; align-items: center; gap: 8px; }
-.bb-number-field input { width: 96px; }
+.bb-number-field { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; max-width: 100%; }
+.bb-number-field input { flex: 1 1 70px; width: auto; min-width: 0; max-width: 110px; }
 .bb-number-unit { color: var(--bb-ink-muted); font-size: 13px; }
 
 /* Colour control — swatch + synced hex input. Empty value = inherit from the
-   theme / brand kit, shown as an explicit badge instead of a faded swatch. */
-.bb-color-field { display: flex; align-items: center; gap: 6px; }
+   theme / brand kit, shown as an explicit badge instead of a faded swatch.
+   Wraps and lets the hex input shrink so the swatch + hex + badge + clear row
+   fits the 280px-breakpoint inspector without a horizontal scrollbar. */
+.bb-color-field { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; max-width: 100%; }
 .bb-color-field input[type="color"] { flex: 0 0 auto; }
 .bb-color-field.bb-color-empty input[type="color"] { opacity: .45; }
-.bb-color-hex { width: 84px; font-size: 12px; font-family: var(--bb-mono, ui-monospace, monospace); }
+.bb-color-hex { flex: 1 1 64px; width: auto; min-width: 0; font-size: 12px; font-family: var(--bb-mono, ui-monospace, monospace); }
 .bb-color-inherit {
   font-size: 10px; color: var(--bb-ink-faint); text-transform: uppercase;
   letter-spacing: .05em; padding: 2px 6px; border: 1px dashed var(--bb-border);
@@ -1007,9 +1014,9 @@ textarea { resize: vertical; min-height: 100px; }
 .bb-theme-sw.bb-sel .bb-theme-name { color: var(--bb-ink); }
 
 /* Slider (range) field */
-.bb-slider-field { display: flex; align-items: center; gap: 12px; }
-.bb-slider-field input[type="range"] { flex: 1; width: auto; padding: 0; accent-color: var(--bb-accent); }
-.bb-slider-val { min-width: 48px; text-align: right; font-variant-numeric: tabular-nums; color: var(--bb-ink-muted); font-size: 13px; }
+.bb-slider-field { display: flex; align-items: center; gap: 12px; max-width: 100%; }
+.bb-slider-field input[type="range"] { flex: 1 1 0; width: auto; min-width: 0; padding: 0; accent-color: var(--bb-accent); }
+.bb-slider-val { flex: 0 0 auto; min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; color: var(--bb-ink-muted); font-size: 13px; }
 
 /* Place field */
 .bb-place-field { display: flex; flex-direction: column; gap: 6px; }
