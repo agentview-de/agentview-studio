@@ -61,6 +61,10 @@ const suites = [
   './custom-template.test.js',
   // "My widgets" store: pure entry helpers + in-memory storage round-trip.
   './custom-widgets.test.js',
+  // Inspector/Designer field-tier filter (pure) — basic vs all.
+  './tier-filter.test.js',
+  // Widget Designer "Looks" galleries — shape + every patch key is a real field.
+  './looks.test.js',
 ];
 
 for (const s of suites) {

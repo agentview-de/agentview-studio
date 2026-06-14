@@ -17,6 +17,7 @@ import { openModal } from './modal.js';
 import { sanitizeHtml } from '../../shared/sanitize-html.js';
 import { t, tx } from '../i18n.js';
 import { registerControl, getControl } from './field-controls/registry.js';
+import { filterFieldsByTier } from './tier-filter.js';
 
 // Register the rich field controls (each its own module) into the control
 // registry — the seam renderField() dispatches through first, mirroring the
@@ -267,35 +268,9 @@ export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, 
   //   `section` opens a collapsible group; subsequent fields mount into it.
   //   `row` wraps its `children` array in a horizontal flex container.
   // Anything else is a regular field.
-  // Tier filter: the inline inspector passes 'basic' to show only the essential
-  // controls (PowerPoint-simple); the Widget Designer passes 'all' (or omits
-  // this) to show everything. A field opts into advanced via `tier: 'advanced'`
-  // — everything else (no tier / 'basic') stays. Rows filter their children and
-  // drop when empty; section headers left with no content are dropped so the
-  // basic view shows no empty groups. Default 'all' → fully backward-compatible.
-  const tieredFields = (() => {
-    const src = schema.fields ?? [];
-    if (tierFilter !== 'basic') return src;
-    const isAdv = x => x && x.tier === 'advanced';
-    const kept = [];
-    for (const f of src) {
-      if (f.type === 'row') {
-        const children = (Array.isArray(f.children) ? f.children : []).filter(c => !isAdv(c));
-        if (children.length) kept.push({ ...f, children });
-        continue;
-      }
-      if (f.type === 'section') { kept.push(f); continue; }
-      if (isAdv(f)) continue;
-      kept.push(f);
-    }
-    // Drop section markers with no content before the next section / EOF.
-    const out = [];
-    for (let i = 0; i < kept.length; i++) {
-      if (kept[i].type === 'section' && (!kept[i + 1] || kept[i + 1].type === 'section')) continue;
-      out.push(kept[i]);
-    }
-    return out;
-  })();
+  // Tier filter (see filterFieldsByTier): the inline inspector passes 'basic'
+  // to show only essentials; the Widget Designer passes 'all' (or omits it).
+  const tieredFields = filterFieldsByTier(schema.fields ?? [], tierFilter);
 
   let currentTarget = root;
   for (const f of tieredFields) {
