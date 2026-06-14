@@ -45,6 +45,8 @@ let _seq = 0;
 
 export function openDesigner(widget, { onApply, slideRatio } = {}) {
   const plugin = getPlugin(widget.type);
+  const looks = (typeof plugin?.looks === 'function' ? plugin.looks() : null) || [];
+  const hasLooks = looks.length > 0;
   const slideR = (slideRatio && slideRatio > 0) ? slideRatio : 16 / 9;
   // Working copy — nothing touches the real widget until Done.
   let working = clone(widget.content ?? plugin?.defaults?.() ?? {});
@@ -82,7 +84,12 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
         <div class="avs-dz-stage"></div>
       </div>
       <div class="avs-dz-side">
-        <div class="avs-dz-form" id="dz-form"></div>
+        <div class="avs-dz-sidetabs">
+          <button type="button" class="avs-dz-sidetab avs-on" data-side="design">${escapeHtml(tx('Settings'))}</button>
+          ${hasLooks ? `<button type="button" class="avs-dz-sidetab" data-side="looks">${escapeHtml(tx('Looks'))}</button>` : ''}
+        </div>
+        <div class="avs-dz-sidepane" data-pane="design"><div class="avs-dz-form" id="dz-form"></div></div>
+        ${hasLooks ? '<div class="avs-dz-sidepane" data-pane="looks" hidden><div id="dz-looks"></div></div>' : ''}
       </div>
     </div>`;
 
@@ -204,19 +211,27 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
 
   // ---- the full form (all fields, same buildForm as the inspector) ----
   // schema(working) so a content-driven schema (custom widget) reacts; built-in
-  // plugins ignore the argument.
-  const form = buildForm({
-    schema: plugin.schema(working),
-    value: working,
-    defaults: plugin.defaults?.(),
-    formKey: widget.type,
-    // The Designer is the place for everything — show basic AND advanced fields.
-    tierFilter: 'all',
-    onChange: v => { working = v; schedulePreview(); },
-    assetPicker: async accept => await pickAsset(accept),
-    assetsPicker: async accept => await pickAssets(accept),
-  });
-  formHost.appendChild(form.root);
+  // plugins ignore the argument. Wrapped in mountForm() so applying a Look (which
+  // mutates `working`) can rebuild the controls to show the new values — the
+  // form has no deep external-update path.
+  let form = null;
+  const mountForm = () => {
+    form?.dispose?.();
+    formHost.replaceChildren();
+    form = buildForm({
+      schema: plugin.schema(working),
+      value: working,
+      defaults: plugin.defaults?.(),
+      formKey: widget.type,
+      // The Designer is the place for everything — show basic AND advanced fields.
+      tierFilter: 'all',
+      onChange: v => { working = v; schedulePreview(); },
+      assetPicker: async accept => await pickAsset(accept),
+      assetsPicker: async accept => await pickAssets(accept),
+    });
+    formHost.appendChild(form.root);
+  };
+  mountForm();
 
   // ---- direct manipulation bridge (hover + click) ----
   // Plugins annotate rendered elements with data-field="key1 key2 …" (the keys
@@ -253,6 +268,57 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
     grp.classList.remove('avs-dz-flash'); void grp.offsetWidth; grp.classList.add('avs-dz-flash');
   });
 
+  // ---- Looks gallery (Phase 4) — curated starting points as live thumbnails ----
+  const looksHost = body.querySelector('#dz-looks');
+  const looksDisposers = [];
+  const clearLooks = () => { while (looksDisposers.length) { try { looksDisposers.pop()(); } catch { /* ignore */ } } };
+  const renderLooks = () => {
+    if (!looksHost) return;
+    clearLooks();
+    looksHost.replaceChildren();
+    const intro = document.createElement('p');
+    intro.className = 'bb-form-help';
+    intro.textContent = tx('Pick a starting look, then fine-tune — your text and colours are kept.');
+    looksHost.appendChild(intro);
+    const grid = document.createElement('div');
+    grid.className = 'avs-dz-looks-grid';
+    looksHost.appendChild(grid);
+    const gated = plugin?.network && !isStored(working) && !isLivePreview(widget.id);
+    for (const look of looks) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'avs-dz-look';
+      const thumb = document.createElement('div');
+      thumb.className = `avs-dz-look-thumb bb-theme-${themeOverride ?? working.theme ?? 'minimal-dark'}`;
+      const name = document.createElement('div');
+      name.className = 'avs-dz-look-name';
+      name.textContent = tx(look.name);
+      card.append(thumb, name);
+      grid.appendChild(card);
+      if (gated) {
+        thumb.classList.add('avs-dz-look-thumb-empty');
+        thumb.textContent = '◻';
+      } else {
+        const temp = { ...widget, id: `dzl_${++_seq}`, content: { ...working, ...look.patch } };
+        looksDisposers.push(mountWidget(temp, { duration: 10 }, thumb, { mode: 'preview', t: k => k }));
+      }
+      card.addEventListener('click', () => {
+        working = { ...working, ...clone(look.patch) };
+        mountForm();        // reflect the patch in the controls
+        paintAll();         // update the big stage
+        switchSide('design'); // surface the controls the user can now tweak
+      });
+    }
+  };
+
+  // ---- side tabs (Settings / Looks / …) ----
+  const switchSide = (which) => {
+    body.querySelectorAll('.avs-dz-sidetab').forEach(b => b.classList.toggle('avs-on', b.dataset.side === which));
+    body.querySelectorAll('.avs-dz-sidepane').forEach(p => { p.hidden = p.dataset.pane !== which; });
+    if (which === 'looks') renderLooks();
+  };
+  body.querySelectorAll('.avs-dz-sidetab').forEach(btn => btn.addEventListener('click', () => switchSide(btn.dataset.side)));
+
   const onResize = () => { refit(); };
 
   return openModal({
@@ -276,6 +342,7 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
     window.removeEventListener('resize', onResize);
     clearTimeout(previewTimer);
     clearPanes();
+    clearLooks();
     form?.dispose?.();
     if (result === 'apply') {
       widget.content = working;
@@ -311,7 +378,17 @@ function injectStylesOnce() {
     .avs-dz-stage { flex: 1 1 auto; min-height: 200px; display: flex; align-items: center; justify-content: center; gap: ${STAGE_GAP}px; padding: ${STAGE_PAD}px; overflow: hidden; border: 1px solid var(--bb-border,#333); border-radius: 10px; background: color-mix(in srgb, var(--bb-ink,#888) 7%, transparent); background-image: linear-gradient(45deg, color-mix(in srgb, var(--bb-ink,#888) 5%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--bb-ink,#888) 5%, transparent) 75%), linear-gradient(45deg, color-mix(in srgb, var(--bb-ink,#888) 5%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--bb-ink,#888) 5%, transparent) 75%); background-size: 24px 24px; background-position: 0 0, 12px 12px; }
     .avs-dz-preview { flex: 0 0 auto; border-radius: 8px; overflow: hidden; position: relative; background: var(--bb-st-bg,#0f1218); box-shadow: 0 8px 34px rgba(0,0,0,.4); }
     .avs-dz-note { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; font-size: 13px; color: var(--bb-ink-muted,#aaa); }
-    .avs-dz-side { min-width: 0; overflow-y: auto; padding-right: 4px; }
+    .avs-dz-side { min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+    .avs-dz-sidetabs { display: flex; gap: 4px; margin-bottom: 8px; flex: 0 0 auto; }
+    .avs-dz-sidetab { padding: 5px 12px; border-radius: 7px; border: 1px solid var(--bb-border,#333); background: transparent; color: var(--bb-ink-muted,#aaa); cursor: pointer; font-size: 13px; }
+    .avs-dz-sidetab.avs-on { background: var(--bb-bg-2,#1a1d24); color: var(--bb-ink,#eee); border-color: var(--bb-accent,#8b5cf6); }
+    .avs-dz-sidepane { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; }
+    .avs-dz-looks-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+    .avs-dz-look { display: flex; flex-direction: column; gap: 6px; padding: 6px; border: 1px solid var(--bb-border,#333); border-radius: 9px; background: transparent; cursor: pointer; text-align: center; }
+    .avs-dz-look:hover { border-color: var(--bb-accent,#8b5cf6); }
+    .avs-dz-look-thumb { width: 100%; aspect-ratio: 16/9; border-radius: 6px; overflow: hidden; position: relative; background: var(--bb-st-bg,#0f1218); }
+    .avs-dz-look-thumb-empty { display: flex; align-items: center; justify-content: center; color: var(--bb-ink-muted,#888); font-size: 22px; }
+    .avs-dz-look-name { font-size: 12px; color: var(--bb-ink,#ddd); }
     /* direct-manipulation bridge */
     .avs-dz-preview [data-field] { cursor: pointer; }
     .avs-dz-preview [data-field]:hover { outline: 1px dashed color-mix(in srgb, var(--bb-accent,#8b5cf6) 70%, transparent); outline-offset: 2px; }

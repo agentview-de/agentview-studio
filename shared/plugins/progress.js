@@ -163,6 +163,15 @@ export default register({
       ...themeColorSection(),
     ] };
   },
+  // Curated "design ideas" for the Widget Designer's Looks gallery. Each patch
+  // is merged onto the current content, so colours/label/value are preserved.
+  looks: () => [
+    { id: 'headline', name: 'Big headline',  patch: { style: 'bar', labelScale: 180, valueScale: 70, labelEmphasis: true, align: 'top', labelPos: 'above' } },
+    { id: 'minimal',  name: 'Minimal ring',  patch: { style: 'ring', showValue: false, labelScale: 110, align: 'center' } },
+    { id: 'ring-sub', name: 'Ring + value',  patch: { style: 'ring', showValue: true, valueScale: 80, labelScale: 120, labelEmphasis: true, labelPos: 'below' } },
+    { id: 'gauge',    name: 'KPI gauge',     patch: { style: 'gauge', showValue: true, valueScale: 80, useThresholds: true, align: 'bottom' } },
+    { id: 'compact',  name: 'Compact bar',   patch: { style: 'bar', labelScale: 90, valueScale: 90, labelEmphasis: false, align: 'center', animate: true } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const style = c.style ?? 'bar';
