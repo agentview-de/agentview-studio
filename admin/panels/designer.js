@@ -433,7 +433,7 @@ function injectStylesOnce() {
   style.id = 'avs-dz-styles';
   style.textContent = `
     .avs-dz-modal { width: 96vw; max-width: 1400px; }
-    .avs-dz-grid { display: grid; grid-template-columns: minmax(0,1fr) 380px; gap: 16px; align-items: stretch; height: min(78vh, 780px); }
+    .avs-dz-grid { display: grid; grid-template-columns: minmax(0,1fr) clamp(380px, 32vw, 600px); gap: 16px; align-items: stretch; height: min(80vh, 820px); }
     .avs-dz-stagewrap { display: flex; flex-direction: column; min-width: 0; }
     /* nowrap + horizontal scroll so the toolbar always stays one row tall and
        never steals the stage's height at narrow widths. */
@@ -456,6 +456,13 @@ function injectStylesOnce() {
     .avs-dz-sidetab { padding: 5px 12px; border-radius: 7px; border: 1px solid var(--bb-border,#333); background: transparent; color: var(--bb-ink-muted,#aaa); cursor: pointer; font-size: 13px; }
     .avs-dz-sidetab.avs-on { background: var(--bb-bg-2,#1a1d24); color: var(--bb-ink,#eee); border-color: var(--bb-accent,#8b5cf6); }
     .avs-dz-sidepane { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; }
+    /* Use the gained width: the config form flows into 2 columns once the panel
+       is wide enough (~560px+). Sections/groups stay intact (no mid-control
+       breaks). Single column on narrow panels. Designer-only — the inspector
+       keeps its narrow single column. */
+    .avs-dz-form .bb-form { columns: 260px; column-gap: 18px; }
+    .avs-dz-form .bb-form > * { break-inside: avoid; margin-bottom: 10px; }
+    .avs-dz-form .bb-form-tools { column-span: all; }
     .avs-dz-looks-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
     .avs-dz-look { display: flex; flex-direction: column; gap: 6px; padding: 6px; border: 1px solid var(--bb-border,#333); border-radius: 9px; background: transparent; cursor: pointer; text-align: center; }
     .avs-dz-look:hover { border-color: var(--bb-accent,#8b5cf6); }
