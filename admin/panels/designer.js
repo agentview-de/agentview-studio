@@ -19,6 +19,7 @@ import { mountWidget } from '../../shared/widget-host.js';
 import { isStored } from '../../shared/offline-data.js';
 import { isLivePreview, enableLivePreview } from '../canvas/canvas.js';
 import { get as getPlugin } from '../../shared/plugins/registry.js';
+import { THEME_SWATCHES } from '../../shared/data/themes.js';
 import { pickAsset, pickAssets } from '../ui/asset-library.js';
 import { escapeHtml } from '../../shared/utils/escape.js';
 import { t, tx } from '../i18n.js';
@@ -38,6 +39,7 @@ const FORMATS = [
   { id: '21/9',  label: '21:9' },
 ];
 const STAGE_PAD = 18; // keep in sync with .avs-dz-stage padding
+const STAGE_GAP = 16; // gap between the two panes in split mode
 
 let _seq = 0;
 
@@ -60,14 +62,24 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
     <div class="avs-dz-grid">
       <div class="avs-dz-stagewrap">
         <div class="avs-dz-toolbar">
-          <span class="avs-dz-tb-label">${escapeHtml(tx('Format'))}</span>
           <div class="avs-dz-formats">
             ${FORMATS.map((f, i) => `<button type="button" class="avs-dz-fmt${i === 0 ? ' avs-on' : ''}" data-fmt="${escapeHtml(f.id)}">${escapeHtml(tx(f.label))}</button>`).join('')}
           </div>
+          <button type="button" class="avs-dz-split" id="dz-split" aria-pressed="false" title="${escapeHtml(tx('Show both orientations side by side'))}">⊟ ${escapeHtml(tx('Split'))}</button>
+          <span class="avs-dz-tb-spacer"></span>
+          <label class="avs-dz-tb-theme">${escapeHtml(tx('Theme'))}
+            <select id="dz-theme">
+              <option value="">${escapeHtml(tx('Widget theme'))}</option>
+              ${Object.keys(THEME_SWATCHES).map(id => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`).join('')}
+            </select>
+          </label>
+          <div class="avs-dz-zoom" role="group" aria-label="${escapeHtml(tx('Zoom'))}">
+            <button type="button" data-zoom="out" aria-label="${escapeHtml(tx('Zoom out'))}">−</button>
+            <span id="dz-zoom-label">100%</span>
+            <button type="button" data-zoom="in" aria-label="${escapeHtml(tx('Zoom in'))}">+</button>
+          </div>
         </div>
-        <div class="avs-dz-stage">
-          <div class="avs-dz-preview" id="dz-preview"></div>
-        </div>
+        <div class="avs-dz-stage"></div>
       </div>
       <div class="avs-dz-side">
         <div class="avs-dz-form" id="dz-form"></div>
@@ -77,36 +89,38 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
   injectStylesOnce();
 
   const stage = body.querySelector('.avs-dz-stage');
-  const previewHost = body.querySelector('#dz-preview');
   const formHost = body.querySelector('#dz-form');
 
-  // ---- preview sizing: letterbox the stage to the chosen ratio (px so the
-  // widget's cqmin sizing computes against a real box) ----
-  const fitPreview = () => {
-    const availW = Math.max(0, stage.clientWidth - STAGE_PAD * 2);
-    const availH = Math.max(0, stage.clientHeight - STAGE_PAD * 2);
-    if (!availW || !availH) return;
-    const r = parseRatio(currentFmt);
-    let w = availW, h = availW / r;
-    if (h > availH) { h = availH; w = availH * r; }
-    previewHost.style.width = `${Math.round(w)}px`;
-    previewHost.style.height = `${Math.round(h)}px`;
+  // ---- preview state ----
+  let themeOverride = null;   // null = use the widget's own content.theme
+  let zoom = 1;
+  let split = false;
+  let panes = [];             // current pane host elements
+  const previewDisposers = [];
+  let previewTimer = null;
+
+  const transpose = r => (r > 0 ? 1 / r : r);
+
+  const clearPanes = () => {
+    while (previewDisposers.length) { try { previewDisposers.pop()(); } catch { /* ignore */ } }
+    panes = [];
+    stage.replaceChildren();
   };
 
-  // ---- live preview (debounced, same render path as canvas/player) ----
-  let previewDispose = null;
-  let previewTimer = null;
-  const renderPreview = () => {
-    try { previewDispose?.(); } catch { /* ignore */ }
-    previewDispose = null;
-    previewHost.replaceChildren();
-    previewHost.className = `avs-dz-preview bb-theme-${working.theme ?? 'minimal-dark'}`;
-    fitPreview();
+  // px sizes (not CSS aspect-ratio) so the widget's cqmin typography computes
+  // against a real box; letterbox the ratio into the available area.
+  const fitInto = (host, ratio, availW, availH) => {
+    let w = availW, h = availW / ratio;
+    if (h > availH) { h = availH; w = availH * ratio; }
+    host.style.width = `${Math.round(w)}px`;
+    host.style.height = `${Math.round(h)}px`;
+  };
+
+  const mountInto = (host) => {
+    host.className = `avs-dz-preview bb-theme-${themeOverride ?? working.theme ?? 'minimal-dark'}`;
     // Mirror the canvas privacy gate: a network widget that would fetch live
-    // data does NOT auto-fetch in the designer. Offer one-click consent — the
-    // same model as the inspector's IP note — so the design can still be
-    // previewed (in inline mode no fetch happens anyway, but the gate is coarse
-    // by widget type, matching the canvas, so we let the user opt in here too).
+    // data does NOT auto-fetch in the designer. Offer one-click consent (the
+    // inspector's IP-note model) so the design can still be previewed.
     if (plugin?.network && !isStored(working) && !isLivePreview(widget.id)) {
       const note = document.createElement('div');
       note.className = 'avs-dz-note';
@@ -117,21 +131,75 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
       btn.className = 'bb-btn bb-btn-secondary';
       btn.style.marginTop = '10px';
       btn.textContent = '▶ ' + t('privacy.enableLive');
-      btn.addEventListener('click', () => { enableLivePreview(widget.id); renderPreview(); });
+      btn.addEventListener('click', () => { enableLivePreview(widget.id); paintAll(); });
       note.append(msg, btn);
-      previewHost.appendChild(note);
+      host.appendChild(note);
       return;
     }
     const temp = { ...widget, id: `dz_${++_seq}`, content: working };
-    previewDispose = mountWidget(temp, { duration: 10 }, previewHost, { mode: 'preview', t: k => k });
+    previewDisposers.push(mountWidget(temp, { duration: 10 }, host, { mode: 'preview', t: k => k }));
   };
-  const schedulePreview = () => { clearTimeout(previewTimer); previewTimer = setTimeout(renderPreview, 120); };
 
-  // ---- format switcher ----
+  const applyZoom = () => { for (const p of panes) p.style.transform = `scale(${zoom})`; };
+
+  const ratiosFor = () => {
+    const baseR = parseRatio(currentFmt);
+    return split ? [baseR, transpose(baseR)] : [baseR];
+  };
+
+  // Build the stage: one pane, or two (format + its transpose) in split mode.
+  const paintAll = () => {
+    clearPanes();
+    const availW = Math.max(0, stage.clientWidth - STAGE_PAD * 2);
+    const availH = Math.max(0, stage.clientHeight - STAGE_PAD * 2);
+    if (!availW || !availH) return;
+    const ratios = ratiosFor();
+    const perW = split ? Math.max(0, (availW - STAGE_GAP) / 2) : availW;
+    for (const r of ratios) {
+      const host = document.createElement('div');
+      panes.push(host);
+      stage.appendChild(host);
+      fitInto(host, r, perW, availH);
+      mountInto(host);
+    }
+    applyZoom();
+  };
+
+  // Re-letterbox existing panes without re-mounting (resize / open-anim settle).
+  const refit = () => {
+    if (!panes.length) { paintAll(); return; }
+    const availW = Math.max(0, stage.clientWidth - STAGE_PAD * 2);
+    const availH = Math.max(0, stage.clientHeight - STAGE_PAD * 2);
+    if (!availW || !availH) return;
+    const ratios = ratiosFor();
+    const perW = split ? Math.max(0, (availW - STAGE_GAP) / 2) : availW;
+    panes.forEach((host, i) => fitInto(host, ratios[i] ?? ratios[0], perW, availH));
+  };
+  const schedulePreview = () => { clearTimeout(previewTimer); previewTimer = setTimeout(paintAll, 120); };
+
+  // ---- toolbar handlers ----
   body.querySelectorAll('.avs-dz-fmt').forEach(btn => btn.addEventListener('click', () => {
     body.querySelectorAll('.avs-dz-fmt').forEach(b => b.classList.toggle('avs-on', b === btn));
     currentFmt = btn.dataset.fmt;
-    renderPreview();
+    paintAll();
+  }));
+  const splitBtn = body.querySelector('#dz-split');
+  splitBtn.addEventListener('click', () => {
+    split = !split;
+    splitBtn.classList.toggle('avs-on', split);
+    splitBtn.setAttribute('aria-pressed', String(split));
+    paintAll();
+  });
+  body.querySelector('#dz-theme').addEventListener('change', e => {
+    themeOverride = e.target.value || null;
+    paintAll();
+  });
+  const zoomLabel = body.querySelector('#dz-zoom-label');
+  body.querySelectorAll('[data-zoom]').forEach(btn => btn.addEventListener('click', () => {
+    const next = zoom + (btn.dataset.zoom === 'in' ? 0.25 : -0.25);
+    zoom = Math.max(0.5, Math.min(2, Math.round(next * 100) / 100));
+    zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+    applyZoom();
   }));
 
   // ---- the full form (all fields, same buildForm as the inspector) ----
@@ -154,13 +222,13 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
   // Plugins annotate rendered elements with data-field="key1 key2 …" (the keys
   // that drive the element; first = primary). buildForm tags each control group
   // with data-field-key. Hover a control → glow the element(s) it drives; click
-  // an element → focus its primary control. Both are delegated on stable hosts
-  // so they survive preview re-renders. Widgets without annotations simply opt
+  // an element → focus its primary control. Delegated on the stable stage + form
+  // hosts so it survives re-paints (incl. split panes). Unannotated widgets opt
   // out — nothing breaks.
   const fieldTokens = el => (el.getAttribute('data-field') || '').split(/\s+/).filter(Boolean);
   const cssEscape = k => (window.CSS && CSS.escape) ? CSS.escape(k) : String(k).replace(/"/g, '\\"');
   const glowFor = (key, on) => {
-    previewHost.querySelectorAll('[data-field]').forEach(el => {
+    stage.querySelectorAll('[data-field]').forEach(el => {
       if (fieldTokens(el).includes(key)) el.classList.toggle('avs-dz-hl', on);
     });
   };
@@ -172,9 +240,9 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
     const grp = e.target.closest('[data-field-key]');
     if (grp && formHost.contains(grp)) glowFor(grp.dataset.fieldKey, false);
   });
-  previewHost.addEventListener('click', e => {
+  stage.addEventListener('click', e => {
     const el = e.target.closest('[data-field]');
-    if (!el || !previewHost.contains(el)) return;
+    if (!el || !stage.contains(el)) return;
     const key = fieldTokens(el)[0];
     if (!key) return;
     const grp = formHost.querySelector(`[data-field-key="${cssEscape(key)}"]`);
@@ -185,7 +253,7 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
     grp.classList.remove('avs-dz-flash'); void grp.offsetWidth; grp.classList.add('avs-dz-flash');
   });
 
-  const onResize = () => { fitPreview(); };
+  const onResize = () => { refit(); };
 
   return openModal({
     title: `🎨 ${tx('Widget Designer')} · ${tx(plugin?.label ?? widget.type)}`,
@@ -197,17 +265,17 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
     onMount: card => {
       card.classList.add('avs-dz-modal');
       // Card is in the document now → the stage already has its layout size, so
-      // render immediately. A short follow-up re-fit catches the case where the
+      // paint immediately. A short follow-up re-fit catches the case where the
       // open animation changes the final box. (Avoid requestAnimationFrame for
       // the first paint: in a backgrounded/headless tab rAF can be paused.)
-      renderPreview();
-      setTimeout(() => { fitPreview(); }, 220);
+      paintAll();
+      setTimeout(refit, 220);
       window.addEventListener('resize', onResize);
     },
   }).then(result => {
     window.removeEventListener('resize', onResize);
     clearTimeout(previewTimer);
-    try { previewDispose?.(); } catch { /* ignore */ }
+    clearPanes();
     form?.dispose?.();
     if (result === 'apply') {
       widget.content = working;
@@ -227,13 +295,21 @@ function injectStylesOnce() {
     .avs-dz-modal { width: 96vw; max-width: 1400px; }
     .avs-dz-grid { display: grid; grid-template-columns: minmax(0,1fr) 380px; gap: 16px; align-items: stretch; height: min(78vh, 780px); }
     .avs-dz-stagewrap { display: flex; flex-direction: column; min-width: 0; }
-    .avs-dz-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-    .avs-dz-tb-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; opacity: .6; }
-    .avs-dz-formats { display: flex; gap: 4px; flex-wrap: wrap; }
-    .avs-dz-fmt { padding: 4px 10px; border-radius: 6px; border: 1px solid var(--bb-border,#333); background: transparent; color: var(--bb-ink-muted,#aaa); cursor: pointer; font-size: 12px; }
-    .avs-dz-fmt.avs-on { background: var(--bb-bg-2,#1a1d24); color: var(--bb-ink,#eee); border-color: var(--bb-accent,#8b5cf6); }
-    .avs-dz-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: ${STAGE_PAD}px; overflow: hidden; border: 1px solid var(--bb-border,#333); border-radius: 10px; background: color-mix(in srgb, var(--bb-ink,#888) 7%, transparent); background-image: linear-gradient(45deg, color-mix(in srgb, var(--bb-ink,#888) 5%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--bb-ink,#888) 5%, transparent) 75%), linear-gradient(45deg, color-mix(in srgb, var(--bb-ink,#888) 5%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--bb-ink,#888) 5%, transparent) 75%); background-size: 24px 24px; background-position: 0 0, 12px 12px; }
-    .avs-dz-preview { border-radius: 8px; overflow: hidden; position: relative; background: var(--bb-st-bg,#0f1218); box-shadow: 0 8px 34px rgba(0,0,0,.4); }
+    /* nowrap + horizontal scroll so the toolbar always stays one row tall and
+       never steals the stage's height at narrow widths. */
+    .avs-dz-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: nowrap; overflow-x: auto; flex: 0 0 auto; padding-bottom: 2px; }
+    .avs-dz-toolbar > * { flex: 0 0 auto; }
+    .avs-dz-tb-spacer { flex: 1 1 auto !important; min-width: 4px; }
+    .avs-dz-formats { display: flex; gap: 4px; }
+    .avs-dz-fmt, .avs-dz-split { padding: 4px 10px; border-radius: 6px; border: 1px solid var(--bb-border,#333); background: transparent; color: var(--bb-ink-muted,#aaa); cursor: pointer; font-size: 12px; }
+    .avs-dz-fmt.avs-on, .avs-dz-split.avs-on { background: var(--bb-bg-2,#1a1d24); color: var(--bb-ink,#eee); border-color: var(--bb-accent,#8b5cf6); }
+    .avs-dz-tb-theme { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; opacity: .75; }
+    .avs-dz-tb-theme select { text-transform: none; letter-spacing: 0; font-size: 12px; padding: 3px 6px; }
+    .avs-dz-zoom { display: inline-flex; align-items: center; gap: 4px; }
+    .avs-dz-zoom button { width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--bb-border,#333); background: transparent; color: var(--bb-ink,#eee); cursor: pointer; font-size: 14px; line-height: 1; }
+    .avs-dz-zoom span { font-size: 12px; min-width: 38px; text-align: center; font-variant-numeric: tabular-nums; opacity: .8; }
+    .avs-dz-stage { flex: 1 1 auto; min-height: 200px; display: flex; align-items: center; justify-content: center; gap: ${STAGE_GAP}px; padding: ${STAGE_PAD}px; overflow: hidden; border: 1px solid var(--bb-border,#333); border-radius: 10px; background: color-mix(in srgb, var(--bb-ink,#888) 7%, transparent); background-image: linear-gradient(45deg, color-mix(in srgb, var(--bb-ink,#888) 5%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--bb-ink,#888) 5%, transparent) 75%), linear-gradient(45deg, color-mix(in srgb, var(--bb-ink,#888) 5%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--bb-ink,#888) 5%, transparent) 75%); background-size: 24px 24px; background-position: 0 0, 12px 12px; }
+    .avs-dz-preview { flex: 0 0 auto; border-radius: 8px; overflow: hidden; position: relative; background: var(--bb-st-bg,#0f1218); box-shadow: 0 8px 34px rgba(0,0,0,.4); }
     .avs-dz-note { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; font-size: 13px; color: var(--bb-ink-muted,#aaa); }
     .avs-dz-side { min-width: 0; overflow-y: auto; padding-right: 4px; }
     /* direct-manipulation bridge */
