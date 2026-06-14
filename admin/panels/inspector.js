@@ -22,6 +22,7 @@ import { renderScheduleEditor } from '../ui/schedule-editor.js';
 import { mountBackgroundEditor } from './background-editor.js';
 import { openModal } from '../ui/modal.js';
 import { openWidgetDesigner } from './widget-designer.js';
+import { openDesigner } from './designer.js';
 import { saveWidgetAsPreset } from '../ui/custom-widget-actions.js';
 import { pickAsset, pickAssets } from '../ui/asset-library.js';
 import { toast } from '../ui/toast.js';
@@ -613,6 +614,31 @@ export function renderWidgetInspector(host) {
         state.ui.selectedWidgetId = widget.id;
       },
     }));
+    host.querySelector('#ins-content').prepend(dz);
+  } else {
+    // Every other widget: a launcher for the full-screen Widget Designer
+    // (Ebene ②) — a large live stage with device-format previews plus the full
+    // control set. The inline form above stays the quick path; this graduates to
+    // comfortable, focused design. Edits there are a transaction (Cancel discards).
+    const dz = document.createElement('div');
+    dz.className = 'avs-inspector-section';
+    dz.style.cssText = 'margin-bottom:12px;';
+    dz.innerHTML = `<button class="bb-btn bb-btn-primary" id="ins-open-designer2" style="width:100%;">🎨 ${esc(tx('Open designer'))}</button>
+      <p class="bb-form-help">${esc(tx('Open the full-screen designer with a large live preview.'))}</p>`;
+    dz.querySelector('#ins-open-designer2').addEventListener('click', () => {
+      const cv = resolveCanvas(state.playlist?.canvas);
+      openDesigner(widget, {
+        slideRatio: cv.h ? cv.w / cv.h : 16 / 9,
+        onApply: () => {
+          commit('widget-design');
+          refreshWidget(widget.id);
+          // Toggle through null so the selectedWidgetId subscriber rebuilds the
+          // inline form with the designer's changes.
+          state.ui.selectedWidgetId = null;
+          state.ui.selectedWidgetId = widget.id;
+        },
+      });
+    });
     host.querySelector('#ins-content').prepend(dz);
   }
 
