@@ -22,6 +22,7 @@ import { isLivePreview, enableLivePreview } from '../canvas/canvas.js';
 import { get as getPlugin } from '../../shared/plugins/registry.js';
 import { THEME_SWATCHES } from '../../shared/data/themes.js';
 import { pickAsset, pickAssets } from '../ui/asset-library.js';
+import { saveWidgetAsPreset } from '../ui/custom-widget-actions.js';
 import { escapeHtml } from '../../shared/utils/escape.js';
 import { t, tx } from '../i18n.js';
 
@@ -82,6 +83,7 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
             <span id="dz-zoom-label">100%</span>
             <button type="button" data-zoom="in" aria-label="${escapeHtml(tx('Zoom in'))}">+</button>
           </div>
+          <button type="button" class="avs-dz-split" id="dz-save" title="${escapeHtml(tx('Save this design to My widgets'))}">⭐ ${escapeHtml(tx('Save'))}</button>
         </div>
         <div class="avs-dz-stage"></div>
       </div>
@@ -213,6 +215,8 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
     zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
     applyZoom();
   }));
+  // Save the current (in-progress) design to "My widgets" without closing.
+  body.querySelector('#dz-save').addEventListener('click', () => saveWidgetAsPreset({ ...widget, content: working }));
 
   // ---- the full form (all fields, same buildForm as the inspector) ----
   // schema(working) so a content-driven schema (custom widget) reacts; built-in
@@ -274,9 +278,11 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
     grp.classList.remove('avs-dz-flash'); void grp.offsetWidth; grp.classList.add('avs-dz-flash');
   });
 
-  // Inline text editing (Stage C): double-click a plain-text element in the
-  // preview to edit it in place. Only the primary field's plain-text types
-  // (text / textarea) are editable inline; richer fields are edited in the form.
+  // Inline text editing (Stage C): double-click a text element in the preview to
+  // edit it in place. text / textarea commit their plain text; rich-text commits
+  // its HTML (the widget re-sanitises on render). markdown / code keep to the
+  // form — their source differs from the rendered output, so inline would be lossy.
+  const INLINE_TYPES = new Set(['text', 'textarea', 'rich-text']);
   const fieldTypeMap = () => {
     const m = {};
     const walk = arr => { for (const f of (arr || [])) { if (f.type === 'row') walk(f.children); else if (f.key) m[f.key] = f.type; } };
@@ -289,7 +295,7 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
     const key = fieldTokens(el)[0];
     if (!key) return;
     const type = fieldTypeMap()[key];
-    if (type !== 'text' && type !== 'textarea') return; // inline-edit plain text only
+    if (!INLINE_TYPES.has(type)) return;
     e.preventDefault();
     editing = true;
     el.setAttribute('contenteditable', 'true');
@@ -304,13 +310,15 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
       el.classList.remove('avs-dz-editing');
       editing = false;
       if (commitIt) {
-        working = { ...working, [key]: el.innerText.replace(/\n+$/, '') };
+        const val = type === 'rich-text' ? el.innerHTML : el.innerText.replace(/\n+$/, '');
+        working = { ...working, [key]: val };
         mountForm();
       }
       paintAll();
     };
     const onBlur = () => finish(true);
     const onKey = (ev) => {
+      // Enter commits only single-line text; textarea / rich-text keep newlines.
       if (ev.key === 'Enter' && type === 'text') { ev.preventDefault(); el.removeEventListener('blur', onBlur); finish(true); }
       else if (ev.key === 'Escape') { ev.preventDefault(); el.removeEventListener('blur', onBlur); finish(false); }
     };

@@ -26,6 +26,7 @@ export const overlayDe = {
   "Zoom out": "Verkleinern",
   "Settings": "Einstellungen",
   "Looks": "Looks",
+  "Save this design to My widgets": "Dieses Design in „Meine Widgets“ speichern",
   "Pick a starting look, then fine-tune — your text and colours are kept.": "Wähle einen Start-Look und feile dann nach — Text und Farben bleiben erhalten.",
   "Big headline": "Große Überschrift",
   "Minimal ring": "Minimaler Ring",
