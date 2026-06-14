@@ -112,7 +112,8 @@ export function mountCanvas(host, { onSelect } = {}) {
   // dragstart; we accept the drop and place the widget at the drop point
   // (centred on the cursor). dragover must preventDefault to allow drop.
   stage.addEventListener('dragover', e => {
-    if (!e.dataTransfer?.types?.includes('avs/widget-type')) return;
+    const types = e.dataTransfer?.types;
+    if (!types?.includes('avs/widget-type') && !types?.includes('avs/custom-id')) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
     stage.classList.add('avs-stage-dragover');
@@ -122,15 +123,29 @@ export function mountCanvas(host, { onSelect } = {}) {
   });
   stage.addEventListener('drop', e => {
     stage.classList.remove('avs-stage-dragover');
+    // dataTransfer is only valid synchronously — read everything now.
+    const customId = e.dataTransfer?.getData('avs/custom-id');
     const type = e.dataTransfer?.getData('avs/widget-type');
-    if (!type) return;
+    if (!customId && !type) return;
     e.preventDefault();
     const sr = stage.getBoundingClientRect();
     const x = ((e.clientX - sr.left) / sr.width) * 100;
     const y = ((e.clientY - sr.top) / sr.height) * 100;
+    const rect = clampRect({ x: x - 20, y: y - 15, w: 40, h: 30 });
+    if (customId) {
+      // A saved "My widget" — resolve it lazily so the canvas doesn't pull the
+      // custom-widget store into its static module graph.
+      import('../../shared/custom-widgets.js').then(({ get }) => {
+        const entry = get(customId);
+        if (!entry) return;
+        if (entry.kind === 'composite') addComposite(entry.widgets);
+        else addWidgetAt(entry.baseType ?? 'custom', rect, entry.content);
+      });
+      return;
+    }
     // Centre the default-sized widget on the drop point so the cursor
     // matches the visual placement.
-    addWidgetAt(type, clampRect({ x: x - 20, y: y - 15, w: 40, h: 30 }));
+    addWidgetAt(type, rect);
   });
 
   // Right-click → context menu. Over a widget: widget actions (select it first).
@@ -559,6 +574,37 @@ function addWidgetAt(type, rect, content) {
 }
 export function addWidget(type, content) {
   return addWidgetAt(type, clampRect({ x: 30, y: 30, w: 40, h: 30 }), content);
+}
+
+// Insert a saved "composite" (several widgets as one unit) onto the active
+// slide. Each portable widget keeps its relative rect; ids are regenerated and
+// the whole group is stacked above whatever is already on the slide. Returns
+// the created widgets (or null if there's no slide / nothing to add).
+export function addComposite(widgets) {
+  const slide = activeSlide();
+  if (!slide || !Array.isArray(widgets) || !widgets.length) return null;
+  let z = slide.widgets.reduce((m, w) => Math.max(m, w.z ?? 0), 0);
+  const created = [];
+  for (const w of widgets) {
+    z += 1;
+    const cw = createWidget(w.type ?? 'text', {
+      rect: clampRect(w.rect ?? { x: 30, y: 30, w: 40, h: 30 }),
+      z,
+      content: w.content ?? {},
+      title: w.title,
+      background: w.background,
+      rotation: w.rotation,
+      anim: w.anim,
+      loop: w.loop,
+      contentVersion: w.contentVersion ?? getPlugin(w.type)?.schemaVersion ?? 1,
+    });
+    slide.widgets.push(cw);
+    created.push(cw);
+  }
+  commit('add-composite');
+  renderSlide();
+  selectWidget(created.length === 1 ? created[0].id : null);
+  return created;
 }
 
 // Apply a design (stamps editable widgets) to the active slide.

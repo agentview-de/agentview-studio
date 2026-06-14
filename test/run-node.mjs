@@ -56,6 +56,11 @@ const suites = [
   // Imports every plugin module but never calls render(), so it stays
   // DOM-free as long as plugins keep DOM work out of module top level.
   './schema.test.js',
+  // Custom-widget engine pure transforms (tokens/filters/CSS scope+sanitize).
+  // The DOM sanitize cases self-skip under node; the browser suite runs them.
+  './custom-template.test.js',
+  // "My widgets" store: pure entry helpers + in-memory storage round-trip.
+  './custom-widgets.test.js',
 ];
 
 for (const s of suites) {

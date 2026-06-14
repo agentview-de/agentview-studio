@@ -5,9 +5,12 @@
 // property (like Theme), not an item you add to a slide — they now live in
 // the slide-settings modal alongside Theme/Background/Schedule.
 
-import { state } from '../store.js';
+import { state, on } from '../store.js';
 import { listByGroup } from '../../shared/plugins/registry.js';
 import { addWidget, renderSlide as canvasRender } from '../canvas/canvas.js';
+import { list as listCustomWidgets } from '../../shared/custom-widgets.js';
+import { placeEntry, exportEntry, removeEntry, importCustomWidget, saveSlideAsComposite } from '../ui/custom-widget-actions.js';
+import { openWidgetDesigner } from './widget-designer.js';
 import * as assetLibrary from '../ui/asset-library.js';
 import * as publicApiBrowser from '../ui/public-api-browser.js';
 import { toast } from '../ui/toast.js';
@@ -27,6 +30,13 @@ const TABS = [
   { id: 'apis',    label: () => t('lib.apis') },
   { id: 'store',   label: () => t('library.store') },
 ];
+
+// The latest mounted library's redraw fn + a once-only subscription, so saving
+// / importing / deleting a custom widget refreshes the palette. The library is
+// re-mounted on every right-panel swap, so the handler is registered once at
+// module scope and dispatches to whichever render is current (no per-mount leak).
+let _libRender = null;
+let _customSubscribed = false;
 
 export function mountLibrary(host) {
   host.classList.add('avs-library');
@@ -56,6 +66,11 @@ export function mountLibrary(host) {
     else if (tab === 'store') renderStore(body);
   }
   render();
+  _libRender = render;
+  if (!_customSubscribed) {
+    _customSubscribed = true;
+    on('custom-widgets.changed', () => { if (state.ui.libraryTab === 'widgets') _libRender?.(); });
+  }
   return { render };
 }
 
@@ -270,9 +285,106 @@ function renderWidgets(body) {
       groupsWrap.appendChild(sec);
     }
     if (!groupsWrap.children.length) groupsWrap.innerHTML = `<div class="bb-empty-state">${t('lib.noWidgets')}</div>`;
+    // "My widgets" — the user's saved presets / designs / composites. Always
+    // shown (even when empty) so New / Import are reachable.
+    renderMyWidgets(groupsWrap, q);
   };
   search.addEventListener('input', draw);
   draw();
+}
+
+// The "My widgets" palette group: saved entries plus New + Import actions.
+// `q` is the active search filter (matched against entry names).
+function renderMyWidgets(groupsWrap, q) {
+  const entries = listCustomWidgets()
+    .filter(e => !q || e.name.toLowerCase().includes(q));
+  const sec = document.createElement('div');
+  sec.className = 'avs-lib-group avs-lib-group-mine';
+  sec.innerHTML = `<div class="avs-lib-group-label">${escapeHtml(tx('My widgets'))}</div>`;
+
+  const actions = document.createElement('div');
+  actions.className = 'avs-lib-mine-actions';
+  actions.style.cssText = 'display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;';
+  const newBtn = document.createElement('button');
+  newBtn.className = 'bb-btn bb-btn-secondary bb-btn-sm';
+  newBtn.textContent = '🎨 ' + tx('New custom widget');
+  newBtn.addEventListener('click', () => {
+    const w = addWidget('custom');
+    if (w) openWidgetDesigner(w, { onApply: () => { commit('widget-design'); canvasRender(); } });
+  });
+  const slideBtn = document.createElement('button');
+  slideBtn.className = 'bb-btn bb-btn-secondary bb-btn-sm';
+  slideBtn.textContent = '🧩 ' + tx('Save slide');
+  slideBtn.title = tx('Save every widget on the current slide as one composite');
+  slideBtn.addEventListener('click', () => {
+    const pl = state.playlist;
+    const slide = pl?.slides.find(s => s.id === state.ui.activeSlideId) ?? pl?.slides[0];
+    saveSlideAsComposite(slide);
+  });
+  const impBtn = document.createElement('button');
+  impBtn.className = 'bb-btn bb-btn-secondary bb-btn-sm';
+  impBtn.textContent = '📥 ' + tx('Import');
+  impBtn.addEventListener('click', () => importCustomWidget());
+  actions.append(newBtn, slideBtn, impBtn);
+  sec.appendChild(actions);
+
+  if (!entries.length) {
+    const empty = document.createElement('p');
+    empty.className = 'avs-muted';
+    empty.style.cssText = 'font-size:12px;margin:0 0 4px;';
+    empty.textContent = q ? tx('No saved widgets match.') : tx('Save any widget with ⭐ in the inspector, or design a new one.');
+    sec.appendChild(empty);
+    groupsWrap.appendChild(sec);
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'avs-widget-grid';
+  for (const entry of entries) {
+    const btn = document.createElement('button');
+    btn.className = 'avs-widget-tile';
+    btn.title = entry.name;
+    btn.style.position = 'relative';
+    btn.innerHTML = `<span class="avs-widget-ic">${escapeHtml(entry.icon ?? '🎨')}</span><span class="avs-widget-lab">${escapeHtml(entry.name)}</span>`;
+    btn.addEventListener('click', () => placeEntry(entry));
+    // Drag-to-canvas: the canvas resolves `avs/custom-id` on drop.
+    btn.draggable = true;
+    btn.addEventListener('dragstart', e => {
+      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.setData('avs/custom-id', entry.id);
+      e.dataTransfer.setData('text/plain', entry.name);
+      btn.classList.add('avs-widget-tile-dragging');
+    });
+    btn.addEventListener('dragend', () => btn.classList.remove('avs-widget-tile-dragging'));
+
+    // Corner actions: export + delete. Stop propagation so they don't add/drag.
+    const corner = document.createElement('span');
+    corner.className = 'avs-mine-corner';
+    corner.style.cssText = 'position:absolute;top:2px;right:2px;display:flex;gap:1px;';
+    const mkCorner = (glyph, title, fn) => {
+      const b = document.createElement('span');
+      b.textContent = glyph;
+      b.title = title;
+      b.style.cssText = 'cursor:pointer;font-size:11px;line-height:1;padding:2px 3px;border-radius:4px;background:color-mix(in srgb,var(--bb-bg-2,#1a1d24) 70%,transparent);';
+      const stop = e => { e.preventDefault(); e.stopPropagation(); };
+      b.addEventListener('mousedown', stop);
+      b.addEventListener('click', e => { stop(e); fn(); });
+      return b;
+    };
+    corner.appendChild(mkCorner('⤓', tx('Export'), () => exportEntry(entry)));
+    corner.appendChild(mkCorner('✕', tx('Delete'), async () => {
+      const ok = await openModal({
+        title: tx('Delete widget'),
+        body: (() => { const d = document.createElement('div'); d.innerHTML = `<p>${escapeHtml(tx('Delete'))} “${escapeHtml(entry.name)}”?</p>`; return d; })(),
+        actions: [{ label: t('common.cancel') }, { label: tx('Delete'), kind: 'danger', value: 1 }],
+      });
+      if (ok) removeEntry(entry.id);
+    }));
+    btn.appendChild(corner);
+    grid.appendChild(btn);
+  }
+  sec.appendChild(grid);
+  groupsWrap.appendChild(sec);
 }
 
 

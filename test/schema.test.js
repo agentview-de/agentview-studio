@@ -132,17 +132,24 @@ describe('schema ↔ defaults cohesion', () => {
   for (const p of plugins) {
     test(`${p.type}: every key in defaults() has a corresponding schema field (or is shared sub-state)`, () => {
       const def = p.defaults();
-      const s = p.schema();
+      // Pass defaults as content so CONTENT-DRIVEN schemas (the custom widget
+      // builds its fields from content.fields) resolve to their real form.
+      // Built-in plugins ignore the argument.
+      const s = p.schema(def);
       const fieldKeys = new Set();
       for (const f of s.fields) {
         if (f.key) fieldKeys.add(f.key);
         if (Array.isArray(f.children)) for (const c of f.children) if (c.key) fieldKeys.add(c.key);
       }
+      // The custom widget keeps its MACHINERY (the template/css/field-defs the
+      // designer edits, not the inspector) in content; these are intentionally
+      // not form fields.
+      const EXEMPT = new Set(['template', 'css', 'fields']);
       for (const k of Object.keys(def)) {
         // A few plugins keep computed/nested-only keys in defaults that the
         // form intentionally omits (e.g. menu image cache state). They begin
         // with `_` by convention.
-        if (k.startsWith('_')) continue;
+        if (k.startsWith('_') || EXEMPT.has(k)) continue;
         if (!fieldKeys.has(k)) {
           throw new Error(`${p.type}: defaults() key "${k}" has no matching schema field`);
         }

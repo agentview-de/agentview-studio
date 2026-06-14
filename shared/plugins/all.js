@@ -9,6 +9,7 @@ import './code.js';
 import './ticker.js';
 import './icon.js';
 import './greeting.js';
+import './custom.js';
 // Media
 import './image.js';
 import './image-gallery.js';

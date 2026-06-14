@@ -21,6 +21,8 @@ import {
 import { renderScheduleEditor } from '../ui/schedule-editor.js';
 import { mountBackgroundEditor } from './background-editor.js';
 import { openModal } from '../ui/modal.js';
+import { openWidgetDesigner } from './widget-designer.js';
+import { saveWidgetAsPreset } from '../ui/custom-widget-actions.js';
 import { pickAsset, pickAssets } from '../ui/asset-library.js';
 import { toast } from '../ui/toast.js';
 import { t, tx } from '../i18n.js';
@@ -454,6 +456,7 @@ export function renderWidgetInspector(host) {
       </button>
       <span class="avs-inspector-title">${widgetIcon(widget.type, plugin?.icon ?? '◻', 18)} ${tx(plugin?.label ?? widget.type)}</span>
       <div class="avs-inspector-actions">
+        <button class="avs-iconbtn" id="ins-save-widget" title="${esc(tx('Save as widget'))}">⭐</button>
         <button class="avs-iconbtn" id="ins-reset" title="${t('insp.reset')}">↺</button>
         <button class="avs-iconbtn" id="ins-dup" title="${t('rail.duplicate')}">⧉</button>
         <button class="avs-iconbtn" id="ins-del" title="${t('rail.delete')}">🗑</button>
@@ -483,6 +486,7 @@ export function renderWidgetInspector(host) {
     </div>`;
 
   host.querySelector('#ins-back').addEventListener('click', () => { state.ui.selectedWidgetId = null; });
+  host.querySelector('#ins-save-widget').addEventListener('click', () => saveWidgetAsPreset(widget));
   host.querySelector('#ins-dup').addEventListener('click', duplicateSelected);
   host.querySelector('#ins-del').addEventListener('click', deleteSelected);
   // Reset = reapply plugin.defaults() to widget.content. Confirms first
@@ -545,7 +549,10 @@ export function renderWidgetInspector(host) {
   }));
 
   const form = buildForm({
-    schema: plugin.schema(),
+    // Pass the content so a widget with a CONTENT-DRIVEN schema (the custom
+    // widget builds its form from content.fields) can react. Built-in plugins
+    // ignore the argument, so this is backward-compatible.
+    schema: plugin.schema(widget.content),
     value: widget.content ?? plugin.defaults(),
     // Per-field reset baseline. Consumed once buildForm supports it; an older
     // buildForm simply ignores the extra param, so this is safe either way.
@@ -586,6 +593,28 @@ export function renderWidgetInspector(host) {
   host.querySelector('#ins-content').appendChild(form.root);
   // Remember the live form so the NEXT rebuild can dispose its controls.
   prevForm = form;
+
+  // Custom widget: a prominent launcher for the Widget Designer (template / CSS
+  // / fields). Sits above the author-defined fields so "edit the structure" is
+  // the first thing offered. The form above already edits the field VALUES.
+  if (widget.type === 'custom') {
+    const dz = document.createElement('div');
+    dz.className = 'avs-inspector-section';
+    dz.style.cssText = 'margin-bottom:12px;';
+    dz.innerHTML = `<button class="bb-btn bb-btn-primary" id="ins-open-designer" style="width:100%;">🎨 ${esc(tx('Open Widget Designer'))}</button>
+      <p class="bb-form-help">${esc(tx('Edit this widget’s template, styling and fields.'))}</p>`;
+    dz.querySelector('#ins-open-designer').addEventListener('click', () => openWidgetDesigner(widget, {
+      onApply: () => {
+        commit('widget-design');
+        refreshWidget(widget.id);
+        // Field set may have changed → rebuild the inspector form (toggle
+        // through null so the selectedWidgetId subscriber re-runs).
+        state.ui.selectedWidgetId = null;
+        state.ui.selectedWidgetId = widget.id;
+      },
+    }));
+    host.querySelector('#ins-content').prepend(dz);
+  }
 
   // Usage / licensing note. The library shows a quiet corner glyph BEFORE the
   // widget is picked; here — once it's placed — we repeat the full constraint
