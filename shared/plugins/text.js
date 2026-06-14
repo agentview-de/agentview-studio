@@ -104,6 +104,13 @@ export default register({
       ...themeColorSection('Color theme (text/accent)'),
     ],
   }),
+  looks: () => [
+    { id: 'centered-statement', name: 'Centered statement', patch: { valign: 'middle', maxWidth: 'comfortable', textScale: 130, font: 'serif', priority: 'normal' } },
+    { id: 'urgent-alert', name: 'Urgent alert', patch: { priority: 'urgent', pulse: true, valign: 'middle', textScale: 120, font: 'display' } },
+    { id: 'narrow-column', name: 'Narrow column', patch: { maxWidth: 'narrow', valign: 'top', textScale: 100, font: 'serif', priority: 'info' } },
+    { id: 'big-bold', name: 'Big & bold', patch: { font: 'display', textScale: 200, valign: 'middle', maxWidth: 'full', priority: 'normal' } },
+    { id: 'fine-print', name: 'Fine print', patch: { font: 'mono', textScale: 90, valign: 'bottom', maxWidth: 'comfortable', priority: 'normal' } },
+  ],
   render(slide, container) {
     const c = slide.content ?? {};
     const fam = FONT_STACK[c.font] ?? FONT_STACK.sans;

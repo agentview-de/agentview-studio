@@ -147,6 +147,16 @@ export default register({
       ],
     };
   },
+  looks: () => [
+    { id: 'compact', name: 'Compact',
+      patch: { density: 'compact', striped: false, headerStyle: 'normal' } },
+    { id: 'striped', name: 'Striped',
+      patch: { striped: true, density: 'comfortable', headerStyle: 'normal' } },
+    { id: 'bold-header', name: 'Bold header',
+      patch: { headerStyle: 'accent', striped: true, density: 'comfortable' } },
+    { id: 'numbers-right', name: 'Numbers right',
+      patch: { autoAlignNumbers: true, striped: true, density: 'compact' } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const root = document.createElement('div');

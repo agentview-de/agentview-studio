@@ -151,6 +151,12 @@ export default register({
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'lobby-clock', name: 'Lobby clock', patch: { showDate: true, showTime: true, textScale: 120 } },
+    { id: 'big-welcome', name: 'Big welcome', patch: { showDate: false, showTime: false, textScale: 200 } },
+    { id: 'date-only', name: 'Date only', patch: { showDate: true, showTime: false, textScale: 110 } },
+    { id: 'compact', name: 'Compact', patch: { showDate: false, showTime: true, textScale: 90 } },
+  ],
   render(slide, container) {
     const c = slide.content ?? {};
     const tz = c.timezone || defaultTz();

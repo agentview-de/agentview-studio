@@ -97,6 +97,18 @@ export default register({
       }), tier: 'advanced' },
     ],
   }),
+  looks: () => [
+    { id: 'cover', name: 'Cover', patch: {
+      fit: 'cover', overlay: 0, kenBurns: false, cornerRadius: 0 } },
+    { id: 'contain', name: 'Contain', patch: {
+      fit: 'contain', overlay: 0, kenBurns: false, cornerRadius: 0 } },
+    { id: 'ken-burns', name: 'Ken Burns', patch: {
+      fit: 'cover', kenBurns: true, cornerRadius: 0 } },
+    { id: 'with-overlay', name: 'With overlay', patch: {
+      fit: 'cover', overlay: 45, overlayStyle: 'bottom' } },
+    { id: 'rounded-card', name: 'Rounded card', patch: {
+      fit: 'cover', cornerRadius: 24, overlay: 20, overlayStyle: 'solid' } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const root = document.createElement('div');

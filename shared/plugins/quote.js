@@ -84,6 +84,12 @@ export default register({
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'portrait-card', name: 'Portrait card', patch: { layout: 'card', markStyle: 'classic', textScale: 100 } },
+    { id: 'minimal', name: 'Minimal', patch: { layout: 'minimal', markStyle: 'none', textScale: 110 } },
+    { id: 'big-quote', name: 'Big quote', patch: { layout: 'fullscreen', markStyle: 'classic', textScale: 140 } },
+    { id: 'guillemet', name: 'Guillemet', patch: { layout: 'minimal', markStyle: 'guillemet', textScale: 120 } },
+  ],
   render(slide, container) {
     const c = slide.content ?? {};
     const layout = LAYOUTS.includes(c.layout) ? c.layout : 'card';

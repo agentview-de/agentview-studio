@@ -133,6 +133,13 @@ export default register({
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'compact-row', name: 'Compact row', patch: { layout: 'row', display: 'time' } },
+    { id: 'day-night', name: 'Day/night', patch: { showDayNight: true, layout: 'auto' } },
+    { id: 'highlight-home', name: 'Highlight home', patch: { highlightFirst: true, showRelative: true } },
+    { id: 'with-offset', name: 'With offsets', patch: { showOffset: true, layout: 'list' } },
+    { id: 'date-only', name: 'Date only', patch: { display: 'date', dateFormat: 'weekday-long' } },
+  ],
   render(slide, container) {
     const c = slide.content ?? {};
     const root = document.createElement('div');

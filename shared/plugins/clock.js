@@ -128,6 +128,13 @@ export default register({
       ...themeColorSection('Color theme (text/accent)'),
     ],
   }),
+  looks: () => [
+    { id: 'digital', name: 'Digital', patch: { style: 'digital', display: 'date-time' } },
+    { id: 'analog', name: 'Analog', patch: { style: 'analog', display: 'time', faceStyle: 'quarters' } },
+    { id: 'time-12h', name: '12-hour', patch: { display: 'time', hour12: true, style: 'digital' } },
+    { id: 'numerals', name: 'Numeral face', patch: { style: 'analog', faceStyle: 'numerals', display: 'time' } },
+    { id: 'open-badge', name: 'With open badge', patch: { showOpenBadge: true, align: 'left' } },
+  ],
   render(slide, container) {
     const c = slide.content ?? {};
     const tz = c.timezone || defaultTz();

@@ -305,6 +305,18 @@ export default register({
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'current-only', name: 'Current only', patch: {
+      design: 'minimal', showForecast: false, showHourly: false, showStats: false, showHiLo: false, showDescription: false } },
+    { id: 'with-forecast', name: 'With forecast', patch: {
+      design: 'classic', showForecast: true, forecastDays: 5, showHourly: false, showHiLo: true } },
+    { id: 'detailed', name: 'Detailed', patch: {
+      design: 'dashboard', showStats: true, showHiLo: true, showForecast: true, showHourly: true, showDescription: true } },
+    { id: 'hourly-strip', name: 'Hourly strip', patch: {
+      design: 'hourly', showHourly: true, hourlyHours: 12, showForecast: false } },
+    { id: 'fahrenheit-hero', name: 'Fahrenheit hero', patch: {
+      design: 'hero', unit: 'F', showForecast: false, showStats: false } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const root = document.createElement('div');

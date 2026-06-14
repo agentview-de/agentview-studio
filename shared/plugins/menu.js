@@ -145,6 +145,18 @@ export default register({
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'with-photos', name: 'With photos', patch: {
+      showImages: true, showPrices: true, columns: '1' } },
+    { id: 'text-only', name: 'Text only', patch: {
+      showImages: false, showPrices: true, columns: 'auto' } },
+    { id: 'two-columns', name: 'Two columns', patch: {
+      columns: '2', showImages: false } },
+    { id: 'showcase', name: 'Showcase (no prices)', patch: {
+      showPrices: false, showImages: true, columns: '1' } },
+    { id: 'price-first', name: 'Price first', patch: {
+      showPrices: true, currencyPosition: 'before', showImages: false } },
+  ],
   render(slide, container, _ctx) {
     const c = slide.content ?? {};
     const root = document.createElement('div');

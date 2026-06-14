@@ -149,6 +149,16 @@ export default register({
       ...themeColorSection(),
     ] };
   },
+  looks: () => [
+    { id: 'dense-grid', name: 'Dense grid',
+      patch: { density: 'compact', columns: '4', showSparkline: false } },
+    { id: 'big-numbers', name: 'Big numbers',
+      patch: { density: 'comfortable', columns: '2', numberFormat: 'full', showSparkline: false } },
+    { id: 'with-sparklines', name: 'With sparklines',
+      patch: { density: 'comfortable', showSparkline: true, showDelta: true, showTarget: true } },
+    { id: 'minimal', name: 'Minimal',
+      patch: { showDelta: false, showTarget: false, showSparkline: false, numberFormat: 'compact' } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const root = document.createElement('div');

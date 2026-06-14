@@ -131,6 +131,13 @@ export default register({
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'full-units', name: 'Full units', patch: { units: 'dhms', unitStyle: 'full' } },
+    { id: 'compact', name: 'Compact', patch: { units: 'dh', unitStyle: 'short' } },
+    { id: 'with-date', name: 'With date', patch: { showTarget: true, units: 'dhm' } },
+    { id: 'days-only', name: 'Just days', patch: { units: 'days', unitStyle: 'full' } },
+    { id: 'count-up', name: 'Count up after', patch: { finishedMode: 'countup', units: 'dhms' } },
+  ],
   render(slide, container) {
     const c = slide.content ?? {};
     const locale = c.locale || undefined;

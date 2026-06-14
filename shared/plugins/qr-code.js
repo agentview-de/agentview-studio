@@ -368,6 +368,12 @@ export default register({
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'rounded', name: 'Rounded', patch: { moduleStyle: 'rounded' } },
+    { id: 'dots', name: 'Dots', patch: { moduleStyle: 'dots' } },
+    { id: 'inverted', name: 'Inverted', patch: { fgColor: '#ffffff', bgColor: '#000000' } },
+    { id: 'with-caption', name: 'With caption', patch: { showDetails: true, frameless: false } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const horizontal = (c.layout ?? 'vertical') === 'horizontal';

@@ -110,6 +110,13 @@ export default register({
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'big-counter', name: 'Big counter', patch: { showDate: false, milestoneEvery: 0, recordDays: 0 } },
+    { id: 'with-milestones', name: 'With milestones', patch: { milestoneEvery: 100, showDate: true } },
+    { id: 'with-record', name: 'With record', patch: { recordDays: 365, showDate: true } },
+    { id: 'safety-board', name: 'Safety board', patch: { goodAbove: 30, showDate: true } },
+    { id: 'minimal', name: 'Minimal', patch: { showDate: false, milestoneEvery: 0, recordDays: 0, goodAbove: 0 } },
+  ],
   render(slide, container) {
     const c = slide.content ?? {};
     const at = (c.since && typeof c.since === 'object') ? c.since.at : null;

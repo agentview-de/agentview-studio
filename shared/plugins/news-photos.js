@@ -183,6 +183,12 @@ export default register({
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'grid',        name: 'Grid',          patch: { cardLayout: 'image-top', columns: 3, fit: 'cover' } },
+    { id: 'big-photo',   name: 'Big photo',     patch: { cardLayout: 'text-overlay', columns: 1, showDesc: false } },
+    { id: 'text-photo',  name: 'Text + photo',  patch: { cardLayout: 'image-left', columns: 2, showDesc: true } },
+    { id: 'compact',     name: 'Compact',       patch: { cardLayout: 'auto', columns: 4, showDesc: false, showSource: true } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const mode = c.mode ?? 'fit';

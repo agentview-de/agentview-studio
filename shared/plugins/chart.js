@@ -395,6 +395,16 @@ export default register({
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'bars', name: 'Bars',
+      patch: { kind: 'bar', showLegend: false, showValues: true, valueFormat: 'compact' } },
+    { id: 'line', name: 'Line',
+      patch: { kind: 'line', showLegend: true, showValues: false, valueFormat: 'compact' } },
+    { id: 'pie', name: 'Pie',
+      patch: { kind: 'pie', showLegend: true, showValues: true } },
+    { id: 'labelled', name: 'Labelled',
+      patch: { kind: 'bar', showValues: true, showLegend: true, valueFormat: 'full' } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const root = document.createElement('div');

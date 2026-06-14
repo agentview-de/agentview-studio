@@ -145,6 +145,13 @@ export default register({
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'agenda',       name: 'Agenda',        patch: { view: 'agenda', maxItems: 6, hidePast: true } },
+    { id: 'week-grid',    name: 'Week grid',     patch: { view: 'week', weekDays: 'work', perDayCap: 4 } },
+    { id: 'compact-list', name: 'Compact list',  patch: { view: 'agenda', maxItems: 3, daysAhead: 7 } },
+    { id: 'room-panel',   name: 'Room panel',    patch: { view: 'now-next', showClock: true } },
+    { id: 'month',        name: 'Month',         patch: { view: 'month', perDayCap: 3 } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const view = CALENDAR_VIEW_OPTIONS.some(o => o.value === c.view) ? c.view : 'agenda';

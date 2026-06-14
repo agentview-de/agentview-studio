@@ -88,6 +88,12 @@ export default register({
         help: 'Gently pulses the glyph to draw the eye (alerts, live-status dots). Respects reduced-motion settings.' },
     ],
   }),
+  looks: () => [
+    { id: 'big', name: 'Big', patch: { scale: 160 } },
+    { id: 'badged', name: 'With badge', patch: { badge: 'circle' } },
+    { id: 'pulsing', name: 'Pulsing', patch: { pulse: true } },
+    { id: 'label-below', name: 'Label below', patch: { labelPos: 'below', scale: 120 } },
+  ],
   render(slide, container) {
     const c = slide.content ?? {};
     const id = ICON_IDS.includes(c.symbol) ? c.symbol : 'arrow';

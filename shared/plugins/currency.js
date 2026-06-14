@@ -158,6 +158,12 @@ export default register({
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'with-names', name: 'With names', patch: { showName: true } },
+    { id: 'trend-arrows', name: 'Trend arrows', patch: { trend: true } },
+    { id: 'precise', name: 'Precise', patch: { decimals: '4' } },
+    { id: 'dense', name: 'Dense', patch: { decimals: '2', showName: false, trend: true } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const root = document.createElement('div');

@@ -125,6 +125,13 @@ export default register({
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'fast',      name: 'Fast',      patch: { speed: 200 } },
+    { id: 'bold-caps', name: 'Bold caps', patch: { uppercase: true, fontWeight: 'bold', letterSpacing: 'wide' } },
+    { id: 'top-bar',   name: 'Top bar',   patch: { barHeight: 'normal', barPosition: 'top', solidBackground: true } },
+    { id: 'solid',     name: 'Solid',     patch: { solidBackground: true, separator: '|' } },
+    { id: 'calm',      name: 'Calm',      patch: { speed: 40, fontWeight: 'regular', uppercase: false } },
+  ],
   render(slide, container, ctx) {
     ensureTickerKeyframes();
     const c = slide.content ?? {};
