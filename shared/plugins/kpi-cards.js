@@ -157,7 +157,7 @@ export default register({
     // Text-size multiplier — the .bb-kpi-* font clamps in slide-themes.css
     // consume this var (see cssNeeds for the calc(... * var()) wrappers).
     root.style.setProperty('--bb-kpi-text-scale', String((Number(c.textScale) || 100) / 100));
-    root.innerHTML = `${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}<div class="bb-kpi-grid">Loading…</div>`;
+    root.innerHTML = `${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}<div class="bb-kpi-grid" data-field="cards columns density numberFormat textScale showDelta showTarget showSparkline">Loading…</div>`;
     container.appendChild(root);
     const grid = root.querySelector('.bb-kpi-grid');
 
@@ -196,7 +196,7 @@ export default register({
         const hasTarget = showTarget && Number.isFinite(target) && target > 0 && Number.isFinite(+card.value);
         const pct = hasTarget ? Math.max(0, Math.min(100, Math.round((+card.value / target) * 100))) : 0;
         const targetBar = hasTarget
-          ? `<div class="bb-kpi-target">
+          ? `<div class="bb-kpi-target" data-field="showTarget cards numberFormat">
                <div class="bb-kpi-targetbar"><div class="bb-kpi-targetfill" style="width:${pct}%;background:${statusColor};"></div></div>
                <div class="bb-kpi-targettext">${pct}% ${ofWord(c.locale)} ${fmt(target, card.unit, fmtOpts)}</div>
              </div>`
@@ -205,15 +205,15 @@ export default register({
         // colour carries the GOODNESS, so lower-is-better cards colour
         // correctly even though the stylesheet pins up=green / down=red.
         const deltaLine = showDelta
-          ? `<div class="bb-kpi-delta bb-kpi-${up ? 'up' : 'down'}" style="color:${statusColor};">${up ? '▲' : '▼'} ${delta.toFixed(1)}%</div>`
+          ? `<div class="bb-kpi-delta bb-kpi-${up ? 'up' : 'down'}" data-field="showDelta cards" style="color:${statusColor};">${up ? '▲' : '▼'} ${delta.toFixed(1)}%</div>`
           : '';
         const spark = showSparkline
-          ? `<div class="bb-kpi-spark">${sparkline(parseHistory(card.history), statusColor)}</div>`
+          ? `<div class="bb-kpi-spark" data-field="showSparkline cards density">${sparkline(parseHistory(card.history), statusColor)}</div>`
           : '';
         return `
-          <div class="bb-kpi-card"${cardStyle}>
-            <div class="bb-kpi-label">${escapeHtml(card.label ?? '')}</div>
-            <div class="bb-kpi-value">${fmt(card.value, card.unit, fmtOpts)}</div>
+          <div class="bb-kpi-card" data-field="cards density textScale"${cardStyle}>
+            <div class="bb-kpi-label" data-field="cards">${escapeHtml(card.label ?? '')}</div>
+            <div class="bb-kpi-value" data-field="cards numberFormat">${fmt(card.value, card.unit, fmtOpts)}</div>
             ${deltaLine}
             ${targetBar}
             ${spark}

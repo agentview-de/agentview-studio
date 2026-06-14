@@ -191,10 +191,10 @@ export default register({
     // c.label || tz (NOT ??): defaults() stores '', which must still fall
     // through to the time zone name on a fresh clock.
     const labelHtml = `
-      <div class="bb-clock-label">${escapeHtml(c.label || tz)}${c.showOffset
-        ? '<span class="bb-clock-offset" style="opacity:.65;margin-left:.6em;font-size:.85em;letter-spacing:.05em;"></span>' : ''}</div>`;
+      <div class="bb-clock-label" data-field="label timezone showOffset align textScale locale">${escapeHtml(c.label || tz)}${c.showOffset
+        ? '<span class="bb-clock-offset" data-field="showOffset timezone locale" style="opacity:.65;margin-left:.6em;font-size:.85em;letter-spacing:.05em;"></span>' : ''}</div>`;
     const titleHtml = slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : '';
-    const badgeHtml = '<div class="bb-clock-badge" style="display:none"></div>';
+    const badgeHtml = '<div class="bb-clock-badge" data-field="showOpenBadge openFrom openTo openText closedText timezone locale textScale" style="display:none"></div>';
 
     if (analog) {
       const faceStyle = c.faceStyle ?? 'ticks';
@@ -213,7 +213,7 @@ export default register({
       root.innerHTML = `
         ${titleHtml}
         ${labelHtml}
-        <div class="bb-analog">
+        <div class="bb-analog" data-field="style faceStyle timezone hour12 display">
           <div class="bb-analog-face">
             ${ticksHtml}
             ${numsHtml}
@@ -223,14 +223,14 @@ export default register({
             <div class="bb-analog-center"></div>
           </div>
         </div>
-        <div class="bb-clock-date"></div>
+        <div class="bb-clock-date" data-field="display timezone locale textScale"></div>
         ${badgeHtml}`;
     } else {
       root.innerHTML = `
         ${titleHtml}
         ${labelHtml}
-        <div class="bb-digital">--</div>
-        <div class="bb-clock-date"></div>
+        <div class="bb-digital" data-field="display timezone hour12 customFormat textScale locale align">--</div>
+        <div class="bb-clock-date" data-field="display timezone locale textScale"></div>
         ${badgeHtml}`;
     }
     container.appendChild(root);

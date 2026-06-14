@@ -142,11 +142,11 @@ export default register({
     root.className = `bb-slide bb-slide-countdown bb-theme-${c.theme ?? 'gradient-purple'}`;
     root.style.setProperty('--bb-countdown-text-scale', String((c.textScale ?? 100) / 100));
     const caption = c.showTarget && target && !isNaN(target.getTime())
-      ? `<div class="bb-cd-target" style="margin-top:18px;opacity:.7;font:500 calc(min(3.6cqw,5cqh) * var(--bb-countdown-text-scale,1))/1.3 var(--bb-st-font, Inter, sans-serif);">${escapeHtml(formatTarget(target, c.target?.tz, locale))}</div>`
+      ? `<div class="bb-cd-target" data-field="target showTarget locale textScale" style="margin-top:18px;opacity:.7;font:500 calc(min(3.6cqw,5cqh) * var(--bb-countdown-text-scale,1))/1.3 var(--bb-st-font, Inter, sans-serif);">${escapeHtml(formatTarget(target, c.target?.tz, locale))}</div>`
       : '';
     root.innerHTML = `
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
-      ${c.heading ? `<div class="bb-cd-heading">${escapeHtml(c.heading)}</div>` : ''}
+      ${c.heading ? `<div class="bb-cd-heading" data-field="heading textScale">${escapeHtml(c.heading)}</div>` : ''}
       <div class="bb-cd-grid"></div>
       ${caption}
     `;
@@ -154,8 +154,8 @@ export default register({
     const grid = root.querySelector('.bb-cd-grid');
     const urgentColor = c.urgentColor || 'var(--bb-st-accent)'; // || so '' inherits
     const cell = (k, count, v, urgent) =>
-      `<div><b class="bb-cd-${k}"${urgent ? ` style="color:${escapeHtml(urgentColor)};"` : ''}>${v}</b>${
-        unitStyle === 'hidden' ? '' : `<span class="bb-cd-u-${k}">${escapeHtml(unitLabel(k, count, locale, unitStyle))}</span>`}</div>`;
+      `<div><b class="bb-cd-${k}" data-field="target units finishedMode textScale urgentBelow urgentColor"${urgent ? ` style="color:${escapeHtml(urgentColor)};"` : ''}>${v}</b>${
+        unitStyle === 'hidden' ? '' : `<span class="bb-cd-u-${k}" data-field="unitStyle units locale">${escapeHtml(unitLabel(k, count, locale, unitStyle))}</span>`}</div>`;
     const pad = n => String(n).padStart(2, '0');
 
     // The grid only rebuilds its DOM when the SHAPE changes (unit mode,
@@ -175,7 +175,7 @@ export default register({
           // Responsive like the rest of the widget set, a fixed 84px overflowed
           // small tiles and looked lost on a wall-sized TV. .bb-cd-grid is inside
           // the .bb-slide size-container, so cq units track the actual tile.
-          grid.innerHTML = `<div style="font:800 calc(min(18cqw,26cqh) * var(--bb-countdown-text-scale,1))/1.05 var(--bb-st-font, Inter, sans-serif);">${escapeHtml(c.expiredText ?? 'Now!')}</div>`;
+          grid.innerHTML = `<div data-field="expiredText finishedMode textScale" style="font:800 calc(min(18cqw,26cqh) * var(--bb-countdown-text-scale,1))/1.05 var(--bb-st-font, Inter, sans-serif);">${escapeHtml(c.expiredText ?? 'Now!')}</div>`;
           lastSig = 'finished-text';
         }
         return 30000;

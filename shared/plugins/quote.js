@@ -159,11 +159,11 @@ export default register({
     const renderEntry = (entry) => {
       const showPortrait = !!entry.withPortrait && layout !== 'fullscreen';
       card.innerHTML = `
-        ${showPortrait ? `<img class="bb-quote-portrait" src="${escapeAttr(c.portrait)}" alt="">` : ''}
+        ${showPortrait ? `<img class="bb-quote-portrait" src="${escapeAttr(c.portrait)}" alt="" data-field="portrait layout">` : ''}
         <div class="bb-quote-text">
-          ${markGlyph ? `<span class="bb-quote-mark">${markGlyph}</span>` : ''}
-          <blockquote>${quoteHtmlFor(entry.quote)}</blockquote>
-          ${entry.author ? `<cite>— ${escapeHtml(entry.author)}${entry.source ? `<span class="bb-quote-source"> · ${escapeHtml(entry.source)}</span>` : ''}</cite>` : ''}
+          ${markGlyph ? `<span class="bb-quote-mark" data-field="markStyle">${markGlyph}</span>` : ''}
+          <blockquote data-field="quote textScale layout">${quoteHtmlFor(entry.quote)}</blockquote>
+          ${entry.author ? `<cite data-field="author source textScale layout">— ${escapeHtml(entry.author)}${entry.source ? `<span class="bb-quote-source" data-field="source"> · ${escapeHtml(entry.source)}</span>` : ''}</cite>` : ''}
         </div>
       `;
       // Child-level variant tweaks — re-applied after every innerHTML swap.

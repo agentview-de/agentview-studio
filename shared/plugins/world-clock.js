@@ -163,11 +163,11 @@ export default register({
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
       <div class="bb-wc-grid">
         ${zones.map(z => `
-          <div class="bb-wc-card" data-tz="${escapeHtml(z.tz)}" data-format="${escapeHtml(z.format || '')}">
-            <div class="bb-wc-city">${c.showDayNight ? '<span class="bb-wc-dn" style="margin-right:.45em;"></span>' : ''}${escapeHtml(z.label || z.tz)}</div>
-            <div class="bb-wc-time">--:--</div>
-            ${showDate ? '<div class="bb-wc-date">—</div>' : ''}
-            ${showSub ? `<div class="bb-wc-sub" style="${subStyle}"></div>` : ''}
+          <div class="bb-wc-card" data-field="zones layout highlightFirst showDayNight" data-tz="${escapeHtml(z.tz)}" data-format="${escapeHtml(z.format || '')}">
+            <div class="bb-wc-city" data-field="zones showDayNight">${c.showDayNight ? '<span class="bb-wc-dn" data-field="showDayNight zones" style="margin-right:.45em;"></span>' : ''}${escapeHtml(z.label || z.tz)}</div>
+            <div class="bb-wc-time" data-field="zones display hour12 locale textScale">--:--</div>
+            ${showDate ? '<div class="bb-wc-date" data-field="dateFormat display zones locale textScale">—</div>' : ''}
+            ${showSub ? `<div class="bb-wc-sub" data-field="showOffset showRelative zones locale textScale" style="${subStyle}"></div>` : ''}
           </div>
         `).join('')}
       </div>

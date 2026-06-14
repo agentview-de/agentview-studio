@@ -219,7 +219,7 @@ export default register({
       <div class="bb-menu-cols" style="${colStyle}">
         ${order.map(sec => `
           <section class="bb-menu-section">
-            ${sec ? `<h2>${escapeHtml(sec)}</h2>` : ''}
+            ${sec ? `<h2 data-field="rows sectionFilter">${escapeHtml(sec)}</h2>` : ''}
             <ul>
               ${bySection.get(sec).map(it => {
                 const isSold = !!String(it.sold ?? '').trim();
@@ -234,15 +234,15 @@ export default register({
                 return `
                 <li class="${itemCls}">
                   ${hasImage
-                    ? `<div class="bb-menu-thumb"><img src="${escapeAttr(it.image)}" alt="" loading="lazy" decoding="async" data-menu-thumb></div>`
+                    ? `<div class="bb-menu-thumb" data-field="rows showImages"><img src="${escapeAttr(it.image)}" alt="" loading="lazy" decoding="async" data-menu-thumb></div>`
                     : ''}
                   <div class="bb-menu-body">
                     <div class="bb-menu-row">
-                      <span class="bb-menu-name">${isFeatured ? '<span class="bb-menu-star" aria-hidden="true">★</span> ' : ''}${escapeHtml(it.name ?? '')}${renderTags(it.tags)}${isSold ? '<span class="bb-menu-soldlbl">Sold out</span>' : ''}</span>
+                      <span class="bb-menu-name" data-field="rows tags sold featured">${isFeatured ? '<span class="bb-menu-star" aria-hidden="true">★</span> ' : ''}${escapeHtml(it.name ?? '')}${renderTags(it.tags)}${isSold ? '<span class="bb-menu-soldlbl">Sold out</span>' : ''}</span>
                       ${showPrices ? '<span class="bb-menu-dots"></span>' : ''}
-                      ${showPrices ? `<span class="bb-menu-price">${priceStr}</span>` : ''}
+                      ${showPrices ? `<span class="bb-menu-price" data-field="rows showPrices currency currencyPosition hideZeroDecimals">${priceStr}</span>` : ''}
                     </div>
-                    ${it.desc ? `<div class="bb-menu-desc">${escapeHtml(it.desc)}</div>` : ''}
+                    ${it.desc ? `<div class="bb-menu-desc" data-field="rows">${escapeHtml(it.desc)}</div>` : ''}
                   </div>
                 </li>
               `;
@@ -251,7 +251,7 @@ export default register({
           </section>
         `).join('')}
       </div>
-      ${footnote ? `<div class="bb-menu-footnote" style="margin-top:1.4em;font-size:calc(clamp(11px, 1.6cqmin, 22px) * var(--bb-menu-text-scale, 1));opacity:.6;text-align:center;">${escapeHtml(footnote)}</div>` : ''}
+      ${footnote ? `<div class="bb-menu-footnote" data-field="footnote textScale" style="margin-top:1.4em;font-size:calc(clamp(11px, 1.6cqmin, 22px) * var(--bb-menu-text-scale, 1));opacity:.6;text-align:center;">${escapeHtml(footnote)}</div>` : ''}
     `;
     container.appendChild(root);
     // Wire up onerror for menu thumbs so a broken dish-image URL collapses

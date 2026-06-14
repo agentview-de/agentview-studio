@@ -172,9 +172,9 @@ export default register({
     const fs = clamp => `font-size:calc(${clamp} * var(--bb-greeting-text-scale, 1));`;
     root.innerHTML = `
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
-      <div class="bb-greet-line" style="font-weight:700;${fs('clamp(28px, 8cqmin, 80px)')}line-height:1.1;font-family:var(--bb-st-font, Inter, sans-serif);">—</div>
-      ${c.subtitle ? `<div class="bb-greet-sub" style="font-weight:500;${fs('clamp(14px, 2.6cqmin, 22px)')}line-height:1.4;font-family:var(--bb-st-font, Inter, sans-serif);opacity:.75;margin-top:.4em;">${escapeHtml(c.subtitle)}</div>` : ''}
-      <div class="bb-greet-date" style="font-weight:600;${fs('clamp(13px, 2.2cqmin, 20px)')}line-height:1.3;font-family:var(--bb-st-font, Inter, sans-serif);opacity:.6;margin-top:1.2em;${metaVisible ? '' : 'display:none;'}">—</div>
+      <div class="bb-greet-line" data-field="venue welcomeTo greetMorning greetAfternoon greetEvening greetNight hourMorning hourAfternoon hourEvening hourNight timezone textScale" style="font-weight:700;${fs('clamp(28px, 8cqmin, 80px)')}line-height:1.1;font-family:var(--bb-st-font, Inter, sans-serif);">—</div>
+      ${c.subtitle ? `<div class="bb-greet-sub" data-field="subtitle textScale" style="font-weight:500;${fs('clamp(14px, 2.6cqmin, 22px)')}line-height:1.4;font-family:var(--bb-st-font, Inter, sans-serif);opacity:.75;margin-top:.4em;">${escapeHtml(c.subtitle)}</div>` : ''}
+      <div class="bb-greet-date" data-field="showDate showTime locale timezone textScale" style="font-weight:600;${fs('clamp(13px, 2.2cqmin, 20px)')}line-height:1.3;font-family:var(--bb-st-font, Inter, sans-serif);opacity:.6;margin-top:1.2em;${metaVisible ? '' : 'display:none;'}">—</div>
     `;
     container.appendChild(root);
     const lineEl = root.querySelector('.bb-greet-line');

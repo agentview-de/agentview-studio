@@ -391,64 +391,64 @@ export default register({
     root.innerHTML = `
       ${useSvgIcons ? WEATHER_SVG_DEFS : ''}
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
-      ${showAlerts ? `<div class="bb-weather-alert" role="status" style="display:none;grid-column:1 / -1;align-items:center;justify-content:center;gap:.5em;font-size:calc(clamp(13px, 2.4cqmin, 28px) * var(--bb-weather-text-scale, 1));font-weight:600;line-height:1.3;padding:.35em .9em;border:2px solid var(--bb-st-accent, #f5a85a);border-radius:.5em;background:color-mix(in srgb, var(--bb-st-accent, #f5a85a) 16%, transparent);"></div>` : ''}
+      ${showAlerts ? `<div class="bb-weather-alert" data-field="showAlerts accentColor textScale" role="status" style="display:none;grid-column:1 / -1;align-items:center;justify-content:center;gap:.5em;font-size:calc(clamp(13px, 2.4cqmin, 28px) * var(--bb-weather-text-scale, 1));font-weight:600;line-height:1.3;padding:.35em .9em;border:2px solid var(--bb-st-accent, #f5a85a);border-radius:.5em;background:color-mix(in srgb, var(--bb-st-accent, #f5a85a) 16%, transparent);"></div>` : ''}
       <div class="bb-weather-current">
-        <div class="bb-weather-icon">${iconHero}</div>
+        <div class="bb-weather-icon" data-field="showIcon iconSet">${iconHero}</div>
         <div class="bb-weather-meta">
-          <div class="bb-weather-city">${escapeHtml(c.location?.name ?? 'Munich')}</div>
-          <div class="bb-weather-temp">—°</div>
-          <div class="bb-weather-desc">Loading…</div>
-          ${showHiLo ? `<div class="bb-weather-hilo" hidden>
+          <div class="bb-weather-city" data-field="showCity location textScale">${escapeHtml(c.location?.name ?? 'Munich')}</div>
+          <div class="bb-weather-temp" data-field="showTemp unit colorTemperature textScale">—°</div>
+          <div class="bb-weather-desc" data-field="showDescription locale textScale">Loading…</div>
+          ${showHiLo ? `<div class="bb-weather-hilo" data-field="showHiLo unit colorTemperature" hidden>
             <span class="bb-weather-hi">H —°</span>
             <span class="bb-weather-lo">L —°</span>
           </div>` : ''}
         </div>
       </div>
       ${showStats ? `<div class="bb-weather-stats">
-        <div class="bb-stat-card bb-stat-card-wind">
+        <div class="bb-stat-card bb-stat-card-wind" data-field="showStats windUnit showWindVector">
           <span class="bb-stat-icon" aria-hidden="true">${statIcon('i-wind') ?? '💨'}</span>
           <span class="bb-stat-label">Wind</span>
           <b class="bb-stat-wind">—</b>
           <span class="bb-stat-sub bb-stat-wind-sub"></span>
         </div>
-        <div class="bb-stat-card bb-stat-card-hum">
+        <div class="bb-stat-card bb-stat-card-hum" data-field="showStats">
           <span class="bb-stat-icon" aria-hidden="true">${statIcon('i-drop', 'var(--bb-st-accent, #79b6ff)') ?? '💧'}</span>
           <span class="bb-stat-label">Humidity</span>
           <b class="bb-stat-hum">—</b>
           <span class="bb-stat-sub bb-stat-hum-sub"></span>
         </div>
-        <div class="bb-stat-card bb-stat-card-feels">
+        <div class="bb-stat-card bb-stat-card-feels" data-field="showStats unit">
           <span class="bb-stat-icon" aria-hidden="true">${statIcon('i-thermo') ?? '🌡️'}</span>
           <span class="bb-stat-label">Feels like</span>
           <b class="bb-stat-feels">—</b>
           <span class="bb-stat-sub bb-stat-feels-sub"></span>
         </div>
-        ${showUv ? `<div class="bb-stat-card bb-stat-card-uv">
+        ${showUv ? `<div class="bb-stat-card bb-stat-card-uv" data-field="showUv showStats">
           <span class="bb-stat-icon" aria-hidden="true">${statIcon('i-sun-small') ?? '🔆'}</span>
           <span class="bb-stat-label">UV</span>
           <b class="bb-stat-uv">—</b>
           <span class="bb-stat-sub bb-stat-uv-sub"></span>
         </div>` : ''}
-        ${isDashboard && showSunrise ? `<div class="bb-stat-card bb-stat-card-sun">
+        ${isDashboard && showSunrise ? `<div class="bb-stat-card bb-stat-card-sun" data-field="showSunrise design timeFormat locale">
           <span class="bb-stat-icon" aria-hidden="true">${statIcon('i-sunrise') ?? '🌅'}</span>
           <span class="bb-stat-label">Sun</span>
           <b class="bb-stat-sun-times">—:— · —:—</b>
           <span class="bb-stat-sub bb-stat-sun-sub"></span>
         </div>` : ''}
       </div>` : ''}
-      ${showSunrise && !isDashboard ? `<div class="bb-weather-sun" hidden>
+      ${showSunrise && !isDashboard ? `<div class="bb-weather-sun" data-field="showSunrise timeFormat locale" hidden>
         <span class="bb-weather-sunrise"><span aria-hidden="true">🌅</span> <b>—:—</b></span>
         <span class="bb-weather-sunset"><span aria-hidden="true">🌇</span> <b>—:—</b></span>
       </div>` : ''}
-      ${showHourly ? `${isDashboard ? `<div class="bb-weather-section-head">
+      ${showHourly ? `${isDashboard ? `<div class="bb-weather-section-head" data-field="showHourly hourlyHours design">
         <span class="bb-weather-section-title">Hourly forecast · Next ${hourlyCap} hours</span>
         <span class="bb-weather-section-meta bb-weather-updated"></span>
-      </div>` : ''}<div class="bb-weather-hourly" hidden></div>` : ''}
-      ${showForecast ? `${isDashboard ? `<div class="bb-weather-section-head">
+      </div>` : ''}<div class="bb-weather-hourly" data-field="showHourly hourlyHours unit iconSet timeFormat locale showPrecip colorTemperature" hidden></div>` : ''}
+      ${showForecast ? `${isDashboard ? `<div class="bb-weather-section-head" data-field="showForecast forecastDays design location">
         <span class="bb-weather-section-title">${forecastCap}-day forecast</span>
         <span class="bb-weather-section-meta bb-weather-coords"></span>
-      </div>` : ''}<div class="bb-weather-forecast"></div>` : ''}
-      <div class="bb-weather-attribution" style="font-size:calc(clamp(10px, 1.4cqmin, 18px) * var(--bb-weather-text-scale, 1));line-height:1.4;opacity:.55;margin-top:6px;text-align:center;">
+      </div>` : ''}<div class="bb-weather-forecast" data-field="showForecast forecastDays unit iconSet showPrecip colorTemperature locale"></div>` : ''}
+      <div class="bb-weather-attribution" data-field="textScale" style="font-size:calc(clamp(10px, 1.4cqmin, 18px) * var(--bb-weather-text-scale, 1));line-height:1.4;opacity:.55;margin-top:6px;text-align:center;">
         Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;">Open-Meteo.com</a>
       </div>
     `;

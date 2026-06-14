@@ -144,6 +144,7 @@ export default register({
       glyphCss += `box-sizing:border-box;padding:${(glyphCqmin * 0.18).toFixed(2)}cqmin;background:${badgeFill};border-radius:${badge === 'circle' ? '50%' : '18%'};`;
     }
     glyph.style.cssText = glyphCss;
+    glyph.dataset.field = 'symbol color scale flipH flipV badge badgeColor pulse';
     if (c.pulse) {
       ensureIconPulseStyle();
       glyph.classList.add('bb-icon-pulse');
@@ -163,6 +164,7 @@ export default register({
     if (hasLabel) {
       lab = document.createElement('div');
       lab.textContent = c.label;
+      lab.dataset.field = 'label labelScale labelPos';
       lab.style.cssText = `font:700 ${labelCqmin.toFixed(2)}cqmin var(--bb-st-font, Inter, sans-serif);text-align:center;line-height:1.1;`;
     }
 

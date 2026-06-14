@@ -75,7 +75,7 @@ function matrixToSvg(m, size, fgColor, bgColor, moduleStyle) {
   // crispEdges keeps square modules sharp; rounded/dots need anti-aliasing so we
   // switch to geometricPrecision when they're present.
   const rendering = style === 'square' ? 'crispEdges' : 'geometricPrecision';
-  return `<svg class="bb-qr-img" xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${total} ${total}" shape-rendering="${rendering}" role="img" aria-label="QR code">`
+  return `<svg class="bb-qr-img" data-field="template url text wifiSsid wifiPassword wifiEnc wifiHidden vcardName vcardPhone vcardEmail vcardOrg vcardUrl moduleStyle fgColor bgColor size ecLevel" xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${total} ${total}" shape-rendering="${rendering}" role="img" aria-label="QR code">`
     + `<rect width="${total}" height="${total}" fill="${bg}"/>`
     + (path ? `<path d="${path}" fill="${fg}"/>` : '')
     + (shapes ? `<g fill="${fg}">${shapes}</g>` : '')
@@ -429,14 +429,14 @@ export default register({
     // No logo → inline SVG (crisp at any size). With a logo → a canvas we draw
     // the modules onto, then composite the raster logo over the centre.
     const qrMarkup = hasLogo
-      ? `<canvas class="bb-qr-img bb-qr-canvas" width="${size}" height="${size}" aria-label="QR code"></canvas>`
+      ? `<canvas class="bb-qr-img bb-qr-canvas" data-field="template url text wifiSsid wifiPassword wifiEnc wifiHidden vcardName vcardPhone vcardEmail vcardOrg vcardUrl moduleStyle fgColor bgColor size ecLevel logoUrl logoSize" width="${size}" height="${size}" aria-label="QR code"></canvas>`
       : matrixToSvg(matrix, size, c.fgColor, c.bgColor, moduleStyle);
 
     // Optional human-readable detail lines under the caption (showDetails).
     let detailsMarkup = '';
     if (c.showDetails) {
       const lines = detailLines(c).map(({ label, value }) =>
-        `<div class="bb-qr-detail">${label ? `<span class="bb-qr-detail-label">${escapeHtml(label)}:</span> ` : ''}<span class="bb-qr-detail-value">${escapeHtml(value)}</span></div>`
+        `<div class="bb-qr-detail" data-field="showDetails template url wifiSsid wifiPassword wifiEnc vcardName vcardPhone">${label ? `<span class="bb-qr-detail-label">${escapeHtml(label)}:</span> ` : ''}<span class="bb-qr-detail-value">${escapeHtml(value)}</span></div>`
       ).join('');
       if (lines) detailsMarkup = `<div class="bb-qr-details" style="color:${escapeAttr(captionColor)};">${lines}</div>`;
     }
@@ -444,7 +444,7 @@ export default register({
     // Caption + details cluster together; in horizontal layout they sit beside
     // the code rather than under it.
     const textMarkup = (c.label || detailsMarkup)
-      ? `<div class="bb-qr-text">${c.label ? `<div class="bb-qr-caption" style="color:${escapeAttr(captionColor)};">${escapeHtml(c.label)}</div>` : ''}${detailsMarkup}</div>`
+      ? `<div class="bb-qr-text">${c.label ? `<div class="bb-qr-caption" data-field="label textScale fgColor" style="color:${escapeAttr(captionColor)};">${escapeHtml(c.label)}</div>` : ''}${detailsMarkup}</div>`
       : '';
 
     root.innerHTML = `

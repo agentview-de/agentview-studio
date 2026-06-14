@@ -171,6 +171,8 @@ export default register({
     }
     const body = document.createElement('div');
     body.className = 'bb-body';
+    // data-field: lets the Widget Designer bridge controls ↔ this element.
+    body.dataset.field = 'body font textScale maxWidth valign priority';
     body.style.fontFamily = fam;
     cap(body);
     // Legacy widgets stored body as plain text with \n; new widgets store HTML.

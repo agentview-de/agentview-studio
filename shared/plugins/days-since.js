@@ -148,12 +148,12 @@ export default register({
     const subFont = 'calc(min(5cqw, 7cqh) * var(--bb-ds-text-scale, 1))';
     root.innerHTML = `
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
-      ${c.heading ? `<div class="bb-ds-heading">${escapeHtml(c.heading)}</div>` : ''}
-      <div class="bb-ds-count">—</div>
-      <div class="bb-ds-unit"></div>
-      <div class="bb-ds-milestone" style="display:none;font:700 calc(min(4.5cqw,6.5cqh) * var(--bb-ds-text-scale,1))/1.2 var(--bb-st-font,Inter,sans-serif);color:var(--bb-st-accent);background:color-mix(in srgb, var(--bb-st-accent) 16%, transparent);border-radius:999px;padding:.25em .9em;margin-top:.3em;"></div>
-      ${recordDays > 0 ? `<div class="bb-ds-record" style="font-size:${subFont};opacity:.75;margin-top:.3em;"></div>` : ''}
-      ${c.showDate ? `<div class="bb-ds-date"></div>` : ''}`;
+      ${c.heading ? `<div class="bb-ds-heading" data-field="heading textScale">${escapeHtml(c.heading)}</div>` : ''}
+      <div class="bb-ds-count" data-field="since textScale goodAbove goodColor locale">—</div>
+      <div class="bb-ds-unit" data-field="unitSingular unitPlural locale"></div>
+      <div class="bb-ds-milestone" data-field="milestoneEvery locale textScale" style="display:none;font:700 calc(min(4.5cqw,6.5cqh) * var(--bb-ds-text-scale,1))/1.2 var(--bb-st-font,Inter,sans-serif);color:var(--bb-st-accent);background:color-mix(in srgb, var(--bb-st-accent) 16%, transparent);border-radius:999px;padding:.25em .9em;margin-top:.3em;"></div>
+      ${recordDays > 0 ? `<div class="bb-ds-record" data-field="recordDays unitSingular unitPlural locale textScale" style="font-size:${subFont};opacity:.75;margin-top:.3em;"></div>` : ''}
+      ${c.showDate ? `<div class="bb-ds-date" data-field="showDate since locale textScale"></div>` : ''}`;
 
     const countEl = root.querySelector('.bb-ds-count');
     const unitEl = root.querySelector('.bb-ds-unit');
