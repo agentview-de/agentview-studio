@@ -432,8 +432,8 @@ function injectStylesOnce() {
   const style = document.createElement('style');
   style.id = 'avs-dz-styles';
   style.textContent = `
-    .avs-dz-modal { width: 96vw; max-width: 1400px; }
-    .avs-dz-grid { display: grid; grid-template-columns: minmax(0,1fr) clamp(380px, 32vw, 600px); gap: 16px; align-items: stretch; height: min(80vh, 820px); }
+    .avs-dz-modal { width: 96vw; max-width: 1500px; }
+    .avs-dz-grid { display: grid; grid-template-columns: minmax(0,1fr) clamp(420px, 38vw, 660px); gap: 16px; align-items: stretch; height: min(80vh, 820px); }
     .avs-dz-stagewrap { display: flex; flex-direction: column; min-width: 0; }
     /* nowrap + horizontal scroll so the toolbar always stays one row tall and
        never steals the stage's height at narrow widths. */
@@ -460,7 +460,7 @@ function injectStylesOnce() {
        is wide enough (~560px+). Sections/groups stay intact (no mid-control
        breaks). Single column on narrow panels. Designer-only — the inspector
        keeps its narrow single column. */
-    .avs-dz-form .bb-form { columns: 260px; column-gap: 18px; }
+    .avs-dz-form .bb-form { columns: 230px; column-gap: 18px; }
     .avs-dz-form .bb-form > * { break-inside: avoid; margin-bottom: 10px; }
     .avs-dz-form .bb-form-tools { column-span: all; }
     .avs-dz-looks-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
