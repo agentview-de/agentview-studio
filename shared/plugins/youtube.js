@@ -245,6 +245,7 @@ export default register({
     const aspect = c.aspect ?? '16:9';
 
     const f = document.createElement('iframe');
+    f.dataset.field = 'url provider muted loop controls start end showCaptions captionLang progressColor interfaceLang allowCookies aspect customRatio reloadSec';
     f.src = src;
     f.allow = 'autoplay; encrypted-media; picture-in-picture';
     f.allowFullscreen = true;

@@ -121,6 +121,7 @@ export default register({
       // The image is painted on its own absolute layer (not on root) so the
       // Ken Burns transform can't scale the overlay/title stacked above it.
       const layer = document.createElement('div');
+      layer.dataset.field = 'url fit focusX focusY letterboxColor kenBurns cornerRadius refreshSec';
       layer.style.position = 'absolute';
       layer.style.inset = '0';
       layer.style.backgroundRepeat = 'no-repeat';
@@ -188,6 +189,7 @@ export default register({
     const alpha = Math.max(0, Math.min(100, Number(c.overlay) || 0)) / 100;
     if (alpha > 0) {
       const ov = document.createElement('div');
+      ov.dataset.field = 'overlay overlayStyle';
       ov.style.position = 'absolute';
       ov.style.inset = '0';
       ov.style.pointerEvents = 'none';

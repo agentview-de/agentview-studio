@@ -98,9 +98,9 @@ export default register({
 
     root.innerHTML = `
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
-      <canvas class="bb-audio-canvas" width="800" height="400" style="width:80%;max-width:1100px;flex:1 1 auto;min-height:0;"></canvas>
-      ${c.nowPlaying ? `<div class="bb-h2" style="margin:0;font-size:clamp(14px,3cqmin,32px);opacity:.85;">${escapeHtml(c.nowPlaying)}</div>` : ''}
-      <audio src="${escapeHtml(c.url)}" autoplay loop crossorigin="anonymous"></audio>
+      <canvas class="bb-audio-canvas" data-field="url style barCount mirror sensitivity colorA colorB" width="800" height="400" style="width:80%;max-width:1100px;flex:1 1 auto;min-height:0;"></canvas>
+      ${c.nowPlaying ? `<div class="bb-h2" data-field="nowPlaying" style="margin:0;font-size:clamp(14px,3cqmin,32px);opacity:.85;">${escapeHtml(c.nowPlaying)}</div>` : ''}
+      <audio src="${escapeHtml(c.url)}" data-field="url volume" autoplay loop crossorigin="anonymous"></audio>
     `;
     container.appendChild(root);
 

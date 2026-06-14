@@ -110,6 +110,7 @@ export default register({
     // .style so a stored value can never break out of the declaration.
     root.style.background = c.background || '#0a0a10';
     const canvas = document.createElement('canvas');
+    canvas.dataset.field = 'url startPage endPage fit';
     canvas.style.maxWidth = '100%';
     canvas.style.maxHeight = '100%';
     root.appendChild(canvas);

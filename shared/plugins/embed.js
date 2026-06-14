@@ -126,6 +126,7 @@ export default register({
     root.style.cssText = 'position:relative;width:100%;height:100%;overflow:hidden;';
 
     const f = document.createElement('iframe');
+    f.dataset.field = 'mode url html injectTheme scale background reloadSec';
     // `||` (not `??`) so the clearable colour's empty string falls back to the
     // default dark instead of producing invalid `background:;` CSS.
     const bg = c.background || '#0a0a10';

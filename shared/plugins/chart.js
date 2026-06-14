@@ -402,7 +402,7 @@ export default register({
     root.className = `bb-slide bb-slide-chart bb-theme-${c.theme ?? 'minimal-dark'}`;
     root.innerHTML = `
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
-      <canvas class="bb-chart-canvas" width="1100" height="540"></canvas>
+      <canvas class="bb-chart-canvas" width="1100" height="540" data-field="kind source data dataUrl sortOrder xLabel yLabel yMax goalValue goalLabel showLegend showValues seriesLabel valueFormat valueUnit palette"></canvas>
       <div class="bb-chart-msg" style="display:none;align-items:center;justify-content:center;width:100%;flex:1 1 auto;min-height:0;color:currentColor;opacity:.65;font:13px/1.5 var(--bb-font, Inter, sans-serif);text-align:center;padding:16px;"></div>
     `;
     container.appendChild(root);

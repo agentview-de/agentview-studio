@@ -208,9 +208,9 @@ export default register({
         const dt = fmtDate(it.date);
         return `
         <li class="bb-rss-item">
-          <div class="bb-rss-title">${escapeHtml(it.title)}</div>
-          ${it.desc ? `<div class="bb-rss-desc">${escapeHtml(it.desc)}${it.truncated ? '…' : ''}</div>` : ''}
-          ${dt ? `<div class="bb-rss-date" data-ts="${it.date}" style="${DATE_STYLE}">${escapeHtml(dt)}</div>` : ''}
+          <div class="bb-rss-title" data-field="url maxItems textScale">${escapeHtml(it.title)}</div>
+          ${it.desc ? `<div class="bb-rss-desc" data-field="showDesc textScale">${escapeHtml(it.desc)}${it.truncated ? '…' : ''}</div>` : ''}
+          ${dt ? `<div class="bb-rss-date" data-field="showDate dateFormat locale" data-ts="${it.date}" style="${DATE_STYLE}">${escapeHtml(dt)}</div>` : ''}
         </li>`;
       }).join('') || '<li class="bb-rss-loading">Empty feed</li>';
     };
@@ -225,7 +225,7 @@ export default register({
       const buildCopy = () => entries
         .map(i => {
           const dt = fmtDate(i.date);
-          return `<span class="bb-rss-ticker-item">${escapeHtml(i.title)}${dt ? `<span data-ts="${i.date}" style="${TICKER_DATE_STYLE}">${escapeHtml(dt)}</span>` : ''}</span>`;
+          return `<span class="bb-rss-ticker-item" data-field="url maxItems mode tickerSpeed textScale">${escapeHtml(i.title)}${dt ? `<span data-field="showDate dateFormat locale" data-ts="${i.date}" style="${TICKER_DATE_STYLE}">${escapeHtml(dt)}</span>` : ''}</span>`;
         })
         .join(`<span class="bb-rss-ticker-sep">${sep}</span>`);
       tickerTrack.innerHTML = buildCopy() + `<span class="bb-rss-ticker-sep">${sep}</span>` + buildCopy();

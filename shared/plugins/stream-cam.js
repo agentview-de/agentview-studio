@@ -145,6 +145,7 @@ export default register({
         ensureLivePulseKeyframes();
         const live = document.createElement('div');
         live.className = 'bb-stream-live';
+        live.dataset.field = 'liveBadge badgePosition';
         live.style.cssText = pill + 'display:flex;align-items:center;gap:.4em;font:700 clamp(11px, 2cqmin, 28px) var(--bb-font, Inter, sans-serif);letter-spacing:.08em;';
         const dot = document.createElement('span');
         dot.style.cssText = `width:.55em;height:.55em;border-radius:50%;background:${STATUS_COLORS.bad};animation:bb-stream-live-pulse 1.6s ease-in-out infinite;`;
@@ -154,6 +155,7 @@ export default register({
       if (c.title) {
         const badge = document.createElement('div');
         badge.className = 'bb-stream-title';
+        badge.dataset.field = 'title badgePosition';
         badge.textContent = c.title;
         badge.style.cssText = pill + 'font:600 clamp(11px, 2cqmin, 28px) var(--bb-font, Inter, sans-serif);';
         wrap.appendChild(badge);
@@ -195,6 +197,7 @@ export default register({
         // Branded still instead of an error card — lobby screens degrade
         // gracefully. Same object-fit as the stream so the framing matches.
         const img = document.createElement('img');
+        img.dataset.field = 'fallbackImage fit';
         img.src = fallback;
         img.alt = '';
         img.style.cssText = `position:absolute;inset:0;width:100%;height:100%;object-fit:${fitCss};z-index:1;`;
@@ -246,6 +249,7 @@ export default register({
       if (kind === 'mjpeg') {
         const img = document.createElement('img');
         img.alt = '';
+        img.dataset.field = 'url kind fit';
         // Cache-buster on reconnects so the browser opens a fresh connection
         // instead of reusing the dead response.
         img.src = retrying ? url + (url.includes('?') ? '&' : '?') + '_bb=' + Date.now() : url;
@@ -261,6 +265,7 @@ export default register({
         teardown = () => { img.src = ''; img.remove(); };
       } else {
         const v = document.createElement('video');
+        v.dataset.field = 'url kind fit muted';
         v.muted = c.muted !== false; v.autoplay = true; v.playsInline = true;
         v.style.cssText = `width:100%;height:100%;object-fit:${fitCss};background:#000;`;
         root.appendChild(v);

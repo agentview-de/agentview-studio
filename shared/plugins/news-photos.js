@@ -236,12 +236,12 @@ export default register({
         return `
         <article class="${cardClass}">
           ${bg
-            ? `<div class="bb-news-img" style="background-image:${bg};background-size:${bgSize};"></div>`
-            : '<div class="bb-news-img bb-news-img-empty"></div>'}
+            ? `<div class="bb-news-img" data-field="url cardLayout fit columns" style="background-image:${bg};background-size:${bgSize};"></div>`
+            : '<div class="bb-news-img bb-news-img-empty" data-field="url cardLayout fit columns"></div>'}
           <div class="bb-news-text">
-            <h3>${escapeHtml(it.title)}</h3>
-            <p>${escapeHtml(it.desc)}</p>
-            ${metaBits.length ? `<div class="bb-news-meta">${metaBits.join(' · ')}</div>` : ''}
+            <h3 data-field="url maxItems textScale">${escapeHtml(it.title)}</h3>
+            <p data-field="showDesc textScale">${escapeHtml(it.desc)}</p>
+            ${metaBits.length ? `<div class="bb-news-meta" data-field="showDate showSource locale">${metaBits.join(' · ')}</div>` : ''}
           </div>
         </article>
       `;

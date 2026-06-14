@@ -171,7 +171,7 @@ export default register({
     if (!src.trim()) {
       // Editor-only hint (player has no i18n). .bb-code brings its own dark
       // bg + light text, so this survives the light themes as-is.
-      body = `${chrome}<pre class="bb-code" style="opacity:.6;${preStyle}">Paste a code snippet in the inspector.</pre>`;
+      body = `${chrome}<pre class="bb-code" style="opacity:.6;${preStyle}" data-field="source language textScale showLineNumbers wrap highlightLines theme">Paste a code snippet in the inspector.</pre>`;
     } else if (showNums || hl.size) {
       // Per-line path: highlight via the synchronous Prism core API, then
       // split into rows (span-balanced) so the gutter and the accent stripes
@@ -195,12 +195,12 @@ export default register({
       }).join('');
       // min-width:max-content sizes every row to the longest line so the
       // accent stripes span the full scroll width (unless wrapping).
-      body = `${chrome}<pre class="bb-code" style="${preStyle}"><div style="${wrap ? '' : 'min-width:max-content;'}">${rows}</div></pre>`;
+      body = `${chrome}<pre class="bb-code" style="${preStyle}" data-field="source language textScale showLineNumbers wrap highlightLines theme"><div style="${wrap ? '' : 'min-width:max-content;'}">${rows}</div></pre>`;
     } else {
       // Plain path — unchanged from the original (single <code> block +
       // highlightAllUnder), so Prism autoloader setups keep working.
       const wrapStyle = wrap ? 'white-space:pre-wrap;overflow-wrap:anywhere;' : '';
-      body = `${chrome}<pre class="bb-code" style="${preStyle}${wrapStyle}"><code class="language-${escapeHtml(lang)}">${escapeHtml(src)}</code></pre>`;
+      body = `${chrome}<pre class="bb-code" style="${preStyle}${wrapStyle}" data-field="source language textScale showLineNumbers wrap highlightLines theme"><code class="language-${escapeHtml(lang)}">${escapeHtml(src)}</code></pre>`;
     }
 
     root.innerHTML = `

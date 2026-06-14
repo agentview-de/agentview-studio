@@ -159,10 +159,11 @@ export default register({
     root.style.setProperty('--bb-cal-text-scale', (c.textScale ?? 100) / 100);
     root.innerHTML = `
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
-      ${showHeading ? `<h2 class="bb-h2">${escapeHtml(c.heading)}</h2>` : ''}
+      ${showHeading ? `<h2 class="bb-h2" data-field="heading">${escapeHtml(c.heading)}</h2>` : ''}
       <div class="bb-cal-view"></div>`;
     container.appendChild(root);
     const viewHost = root.querySelector('.bb-cal-view');
+    viewHost.dataset.field = 'events view icsUrl maxItems hidePast daysAhead weekDays perDayCap emptyText roomName showClock locale textScale';
     const manualEvents = toEvents(c.events);
     // Live .ics events fetched from the URL (if any) are merged in. Starts empty
     // and is refreshed by the fetch loop below.

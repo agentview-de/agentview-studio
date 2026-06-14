@@ -171,7 +171,7 @@ export default register({
     root.innerHTML = `
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
       <div class="bb-md-viewport" style="flex:${grow};min-height:0;overflow:hidden;display:flex;flex-direction:column;">
-        <article class="bb-md" style="--bb-md-text-scale:${scale};text-align:${align};flex:0 0 auto;${artMargin}${cols > 1 ? `columns:${cols};column-gap:1.6em;` : ''}"></article>
+        <article class="bb-md" data-field="body sourceUrl textScale align valign columns autoScroll scrollSec" style="--bb-md-text-scale:${scale};text-align:${align};flex:0 0 auto;${artMargin}${cols > 1 ? `columns:${cols};column-gap:1.6em;` : ''}"></article>
       </div>
     `;
     container.appendChild(root);

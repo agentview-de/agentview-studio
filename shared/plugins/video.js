@@ -137,6 +137,7 @@ export default register({
     root.style.cssText = 'position:relative;width:100%;height:100%;';
 
     const v = document.createElement('video');
+    v.dataset.field = 'url fallbackUrl poster fit focusX focusY letterboxColor loop muted playbackRate';
     // Append start-time fragment via the media-fragments URI spec, natively
     // supported by Chromium/Firefox/Safari, no JS seek needed at load time.
     const startSec = Math.max(0, Number(c.startSec) || 0);

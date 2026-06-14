@@ -209,14 +209,14 @@ export default register({
       });
       const attr = (s) => (s ? ` style="${s}"` : '');
       const head = headerStyle === 'hidden' ? ''
-        : `<thead><tr>${headers.map((h, i) => `<th${attr((align[i] ? `text-align:${align[i]};` : '') + cellPad + thTint)}>${escapeHtml(h)}</th>`).join('')}</tr></thead>`;
+        : `<thead><tr data-field="headers headerStyle align">${headers.map((h, i) => `<th${attr((align[i] ? `text-align:${align[i]};` : '') + cellPad + thTint)}>${escapeHtml(h)}</th>`).join('')}</tr></thead>`;
       const bodyRow = (r) => `<tr${attr(rowTint(r))}>${headers.map((_, i) => `<td${attr((align[i] ? `text-align:${align[i]};` : '') + cellPad)}>${escapeHtml(r[i] ?? '')}</td>`).join('')}</tr>`;
       const per = Math.max(0, Math.floor(Number(c.pageRows) || 0));
       const pages = per > 0 ? Math.max(1, Math.ceil(rows.length / per)) : 1;
       let page = 0;
       const draw = () => {
         const slice = per > 0 ? rows.slice(page * per, page * per + per) : rows;
-        wrap.innerHTML = `<table class="bb-dt${striped ? ' bb-dt-striped' : ''}">${head}<tbody>${slice.map(bodyRow).join('')}</tbody></table>`
+        wrap.innerHTML = `<table class="bb-dt${striped ? ' bb-dt-striped' : ''}" data-field="rows headers source dataUrl align striped autoAlignNumbers density headerStyle textScale pageRows pageSec highlightRules">${head}<tbody>${slice.map(bodyRow).join('')}</tbody></table>`
           // Numbers-only page indicator: language-neutral, so the player needs
           // no i18n for it.
           + (pages > 1 ? `<div class="bb-dt-page" style="text-align:right;opacity:.55;font-variant-numeric:tabular-nums;padding:.4em 16px 0;font-size:calc(clamp(11px, 1.8cqmin, 26px) * var(--bb-dt-text-scale, 1));">${page + 1} / ${pages}</div>` : '');

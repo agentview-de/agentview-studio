@@ -127,6 +127,7 @@ export default register({
     // theme-derived so the brief flash before tiles load matches light themes.
     const mapEl = document.createElement('div');
     mapEl.className = 'bb-slide-map';
+    mapEl.dataset.field = 'location style fitMarkers tileFilter tourSec lockInteraction tileUrl tileAttribution';
     mapEl.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background:var(--bb-st-bg, #0a0a10);';
     container.appendChild(mapEl);
 
@@ -139,6 +140,7 @@ export default register({
     if (captionText) {
       chip = document.createElement('div');
       chip.className = 'bb-map-caption';
+      chip.dataset.field = 'caption';
       chip.style.cssText =
         'position:absolute;top:14px;left:14px;z-index:1100;pointer-events:none;' +
         'max-width:72%;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' +

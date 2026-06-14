@@ -87,6 +87,7 @@ export default register({
     wrap.style.background = bg || 'var(--bb-st-bg, #0a0a10)';
 
     const f = document.createElement('iframe');
+    f.dataset.field = 'url scale offsetX offsetY background reloadSec cacheBust';
     f.src = c.url;
     const scale = Math.max(25, Math.min(400, Number(c.scale) || 100)) / 100;
     const offX = Math.max(0, Number(c.offsetX) || 0);
