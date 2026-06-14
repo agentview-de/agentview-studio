@@ -38,14 +38,14 @@ export default register({
     fields: [
       { type: 'section', label: 'Source', key: 'source' },
       { key: 'url',    type: 'asset', label: 'Video URL', accept: 'video/mp4,video/webm', test: true },
-      { key: 'poster', type: 'asset', label: 'Poster image (shown before play)', accept: 'image/*',
+      { key: 'poster', type: 'asset', label: 'Poster image (shown before play)', accept: 'image/*', tier: 'advanced',
         help: 'Falls back to a black frame. Helps when autoplay is blocked.' },
 
       { type: 'section', label: 'Clip', key: 'clip',
         help: 'Play only a part of the video. 0 = full length.' },
       { type: 'row', children: [
-        { key: 'startSec', type: 'duration', label: 'Start at', min: 0 },
-        { key: 'endSec',   type: 'duration', label: 'End at',   min: 0,
+        { key: 'startSec', type: 'duration', label: 'Start at', min: 0, tier: 'advanced' },
+        { key: 'endSec',   type: 'duration', label: 'End at',   min: 0, tier: 'advanced',
           // Render silently ignores endSec <= startSec (both the media-fragment
           // and the manual-loop path) — surface that instead of doing nothing.
           validate: (val, c) => {
@@ -59,17 +59,17 @@ export default register({
 
       { type: 'section', label: 'Playback', key: 'playback' },
       { type: 'row', children: [
-        { key: 'loop',         type: 'toggle', label: 'Loop' },
+        { key: 'loop',         type: 'toggle', label: 'Loop', tier: 'advanced' },
         // autoDuration is consumed by the player host (slide-advance contract),
         // never inside render() — the help text describes that host behavior.
-        { key: 'autoDuration', type: 'toggle', label: 'Match length',
+        { key: 'autoDuration', type: 'toggle', label: 'Match length', tier: 'advanced',
           help: 'Advances to the next slide when the video ends, instead of after the slide’s fixed duration.' },
-        { key: 'muted',        type: 'toggle', label: 'Muted' },
+        { key: 'muted',        type: 'toggle', label: 'Muted', tier: 'advanced' },
       ] },
-      { key: 'volume', type: 'number', label: 'Volume', min: 0, max: 100, step: 5, slider: true, suffix: '%',
+      { key: 'volume', type: 'number', label: 'Volume', min: 0, max: 100, step: 5, slider: true, suffix: '%', tier: 'advanced',
         showIf: c => c.muted === false,
         help: 'Browsers usually block sound until the user interacts with the page.' },
-      { key: 'playbackRate', type: 'select', label: 'Playback speed', options: [
+      { key: 'playbackRate', type: 'select', label: 'Playback speed', tier: 'advanced', options: [
         { value: '0.25', label: '0.25× (slow motion)' },
         { value: '0.5',  label: '0.5×' },
         { value: '0.75', label: '0.75×' },
@@ -81,12 +81,12 @@ export default register({
 
       { type: 'section', label: 'Captions / subtitles', key: 'captions', collapsed: true,
         summary: c => c.captionsUrl ? (String(c.captionsLang || 'en').trim() || 'en') : '—' },
-      { key: 'captionsUrl', type: 'asset', label: 'Caption file (.vtt)', accept: 'text/vtt,.vtt', test: true,
+      { key: 'captionsUrl', type: 'asset', label: 'Caption file (.vtt)', accept: 'text/vtt,.vtt', test: true, tier: 'advanced',
         help: 'WebVTT subtitle file. Same-origin or a URL with CORS headers, browsers refuse cross-origin tracks without them.' },
       { type: 'row', children: [
-        { key: 'showCaptions', type: 'toggle', label: 'Show by default',
+        { key: 'showCaptions', type: 'toggle', label: 'Show by default', tier: 'advanced',
           showIf: c => !!c.captionsUrl },
-        { key: 'captionsLang', type: 'text', label: 'Language', placeholder: 'en',
+        { key: 'captionsLang', type: 'text', label: 'Language', placeholder: 'en', tier: 'advanced',
           showIf: c => !!c.captionsUrl,
           // Soft check: a non-BCP47 string silently produces a wrong track label.
           validate: val => val && !/^[a-z]{2,3}(-[A-Za-z0-9]+)*$/.test(String(val).trim())
@@ -96,12 +96,12 @@ export default register({
 
       { type: 'section', label: 'Controls', key: 'controlsUi', collapsed: true,
         summary: c => c.controls ? '✓' : '—' },
-      { key: 'controls', type: 'toggle', label: 'Show controls',
+      { key: 'controls', type: 'toggle', label: 'Show controls', tier: 'advanced',
         help: 'Native browser playback controls. Off (default) for signage, on for kiosk demos where viewers may pause/scrub.' },
       { type: 'row', children: [
-        { key: 'preventDownload', type: 'toggle', label: 'Disable download menu',
+        { key: 'preventDownload', type: 'toggle', label: 'Disable download menu', tier: 'advanced',
           showIf: c => c.controls },
-        { key: 'hidePictureInPicture', type: 'toggle', label: 'Hide PIP button',
+        { key: 'hidePictureInPicture', type: 'toggle', label: 'Hide PIP button', tier: 'advanced',
           showIf: c => c.controls },
       ] },
 
@@ -110,18 +110,18 @@ export default register({
       // Focal-point row mirrors image.js exactly (same keys, same labels) so
       // the cover-crop muscle memory transfers between the two widgets.
       { type: 'row', children: [
-        { key: 'focusX', type: 'number', label: 'Focal X (%)', min: 0, max: 100, step: 5, slider: true },
-        { key: 'focusY', type: 'number', label: 'Focal Y (%)', min: 0, max: 100, step: 5, slider: true },
+        { key: 'focusX', type: 'number', label: 'Focal X (%)', min: 0, max: 100, step: 5, slider: true, tier: 'advanced' },
+        { key: 'focusY', type: 'number', label: 'Focal Y (%)', min: 0, max: 100, step: 5, slider: true, tier: 'advanced' },
       ], showIf: c => (c.fit ?? 'cover') === 'cover' },
-      { key: 'letterboxColor', type: 'color', clearable: true, label: 'Letterbox colour',
+      { key: 'letterboxColor', type: 'color', clearable: true, label: 'Letterbox colour', tier: 'advanced',
         showIf: c => c.fit === 'contain',
         help: 'Fills the bars around the video. Empty = black.' },
 
       { type: 'section', label: 'Reliability', key: 'reliability', collapsed: true,
         summary: c => (c.autoRecover !== false || c.fallbackUrl) ? '✓' : '—' },
-      { key: 'fallbackUrl', type: 'asset', label: 'Fallback video', accept: 'video/mp4,video/webm', test: true,
+      { key: 'fallbackUrl', type: 'asset', label: 'Fallback video', accept: 'video/mp4,video/webm', test: true, tier: 'advanced',
         help: 'Second source the browser switches to when the main video fails to load or its codec is unsupported (e.g. an MP4 backup for a WebM).' },
-      { key: 'autoRecover', type: 'toggle', label: 'Auto-recover from stalls',
+      { key: 'autoRecover', type: 'toggle', label: 'Auto-recover from stalls', tier: 'advanced',
         help: 'Retries playback with increasing delays (5 s, 15 s, 60 s) after a network error or stall, instead of staying black until the next slide change.' },
     ],
   }),

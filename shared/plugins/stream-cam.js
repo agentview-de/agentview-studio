@@ -79,10 +79,13 @@ export default register({
 
       { type: 'section', label: 'Overlay', key: 'overlay' },
       { key: 'title', type: 'text', label: 'Title badge', placeholder: 'Lobby cam',
+        tier: 'advanced',
         help: 'Overlay label on the stream, useful when several cameras are tiled.' },
       { key: 'liveBadge', type: 'toggle', label: 'LIVE badge',
+        tier: 'advanced',
         help: 'Pulsing red LIVE pill — marks the feed as live footage rather than a recorded loop.' },
       { key: 'badgePosition', type: 'select', buttons: true, label: 'Badge position',
+        tier: 'advanced',
         options: [
           { value: 'top-left', label: 'Top left' },
           { value: 'top-right', label: 'Top right' },
@@ -95,6 +98,7 @@ export default register({
       { type: 'section', label: 'Playback', key: 'playback' },
       mediaFitField(),
       { key: 'muted', type: 'toggle', label: 'Muted',
+        tier: 'advanced',
         // MJPEG is a silent image stream — the toggle would be meaningless.
         showIf: c => detectKind(c) !== 'mjpeg',
         help: 'Browsers only autoplay muted video — turn off only on players configured to allow audio.' },
@@ -110,6 +114,7 @@ export default register({
       { key: 'retrySec', type: 'duration', label: 'Reconnect after (0 = off)', min: 0,
         help: 'Wait this long after a stream failure, then reconnect automatically — keeps 24/7 screens from staying on an offline card. Intervals under 5 seconds are raised to 5.' },
       { key: 'fallbackImage', type: 'asset', label: 'Fallback image', accept: 'image/*',
+        tier: 'advanced',
         help: 'Shown instead of the offline message while the stream is down — e.g. a branded “back soon” still.' },
     ],
   }),

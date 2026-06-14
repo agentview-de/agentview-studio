@@ -92,13 +92,13 @@ export default register({
 
       { type: 'section', key: 'displayopts', label: 'Display',
         summary: c => ((c.display ?? 'time-date') === 'date' ? '' : (c.hour12 ? '12h' : '24h')) },
-      { key: 'display', type: 'select', label: 'Show', buttons: true, options: [
+      { key: 'display', type: 'select', label: 'Show', buttons: true, tier: 'advanced', options: [
         { value: 'time-date', label: 'Time + date' },
         { value: 'time', label: 'Time only' },
         { value: 'time-seconds', label: 'Time + seconds' },
         { value: 'date', label: 'Date only' },
       ] },
-      { key: 'dateFormat', type: 'select', label: 'Date style',
+      { key: 'dateFormat', type: 'select', label: 'Date style', tier: 'advanced',
         showIf: c => ['time-date', 'date'].includes(c.display ?? 'time-date'),
         options: [
           { value: 'weekday-short', label: 'Weekday + date (Mon, 02 Jun)' },
@@ -107,15 +107,15 @@ export default register({
           { value: 'date-year',     label: 'Date with year (2 June 2026)' },
           { value: 'weekday-only',  label: 'Weekday only (Monday)' },
         ] },
-      { key: 'hour12', type: 'toggle', label: '12-hour clock',
+      { key: 'hour12', type: 'toggle', label: '12-hour clock', tier: 'advanced',
         showIf: c => (c.display ?? 'time-date') !== 'date',
         help: 'Default for zones whose Format is set to “Use widget default”.' },
-      localeField(),
-      { key: 'showOffset', type: 'toggle', label: 'Show UTC offset',
+      { ...localeField(), tier: 'advanced' },
+      { key: 'showOffset', type: 'toggle', label: 'Show UTC offset', tier: 'advanced',
         help: 'Adds “UTC+9” under each city — disambiguates sites across the world at a glance.' },
-      { key: 'showRelative', type: 'toggle', label: 'Show difference to home',
+      { key: 'showRelative', type: 'toggle', label: 'Show difference to home', tier: 'advanced',
         help: 'Shows the offset to the first zone, e.g. “+6h” — handy for planning calls.' },
-      { key: 'showDayNight', type: 'toggle', label: 'Day/night indicator',
+      { key: 'showDayNight', type: 'toggle', label: 'Day/night indicator', tier: 'advanced',
         help: 'Shows a sun or moon per city and gently dims cards at night (22:00–06:00).' },
 
       { type: 'section', key: 'layoutopts', label: 'Layout',
@@ -126,9 +126,9 @@ export default register({
         { value: 'list', label: 'Vertical list' },
         { value: 'two-cols', label: 'Two columns' },
       ] },
-      { key: 'highlightFirst', type: 'toggle', label: 'Highlight home zone',
+      { key: 'highlightFirst', type: 'toggle', label: 'Highlight home zone', tier: 'advanced',
         help: 'Accent border on the first zone so the local site stands out.' },
-      textScaleField(),
+      { ...textScaleField(), tier: 'advanced' },
 
       ...themeColorSection(),
     ],

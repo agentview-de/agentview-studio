@@ -92,7 +92,7 @@ export default register({
       // parsed arbitrary "W:H" / "W/H" / "WxH" strings, the select was the
       // only thing restricting it. All old preset values remain valid input.
       { key: 'customRatio', type: 'text', label: 'Custom ratio (W:H)',
-        placeholder: '4:3',
+        placeholder: '4:3', tier: 'advanced',
         help: 'Any width-to-height pair as W:H, W/H or WxH — e.g. 4:3, 3:2, 5:4, 16:10, 21:9, 1:1.',
         showIf: c => (c.aspect ?? '16:9') === 'custom',
         validate: v => {
@@ -105,15 +105,15 @@ export default register({
 
       { type: 'section', key: 'playback', label: 'Playback' },
       { type: 'row', children: [
-        { key: 'muted', type: 'toggle', label: 'Muted',
+        { key: 'muted', type: 'toggle', label: 'Muted', tier: 'advanced',
           help: 'Required for autoplay — browsers block unmuted autoplay.' },
-        { key: 'loop', type: 'toggle', label: 'Loop',
+        { key: 'loop', type: 'toggle', label: 'Loop', tier: 'advanced',
           help: 'YouTube shows a brief interface flash between loop iterations — no embed parameter can suppress it.' },
       ] },
       { type: 'row', children: [
-        { key: 'start', type: 'duration', label: 'Start at', min: 0,
+        { key: 'start', type: 'duration', label: 'Start at', min: 0, tier: 'advanced',
           help: '0 = use the timestamp from the URL (e.g. ?t=90), if any.' },
-        { key: 'end', type: 'duration', label: 'Stop at', min: 0,
+        { key: 'end', type: 'duration', label: 'Stop at', min: 0, tier: 'advanced',
           showIf: c => !isVimeo(c),
           help: '0 = play to the end. Cuts off playback at this second so you can show a specific scene without editing the source video. Combined with Start, you get an arbitrary in/out range.',
           validate: (v, c) => {
@@ -127,25 +127,26 @@ export default register({
       { type: 'section', key: 'captions', label: 'Captions & language',
         showIf: c => !isVimeo(c) },
       { key: 'showCaptions', type: 'toggle', label: 'Show captions/subtitles',
-        showIf: c => !isVimeo(c),
+        showIf: c => !isVimeo(c), tier: 'advanced',
         help: 'Forces YouTube captions on by default, useful for muted playback in cafés, lobbies, or noisy receptions. Only fires if the video actually has subtitles.' },
       { key: 'captionLang', type: 'text', label: 'Caption language',
-        placeholder: 'e.g. de, en',
+        placeholder: 'e.g. de, en', tier: 'advanced',
         showIf: c => c.showCaptions && !isVimeo(c),
         help: 'Two-letter ISO code preferred for the forced captions, so a German lobby gets German subtitles regardless of the video\'s default. Leave blank for the video default.' },
 
       // Tier 2, UI cosmetics that only matter when the player controls are visible.
       { type: 'section', key: 'playerui', label: 'Player controls', collapsed: true,
         summary: c => c.controls ? 'visible' : 'hidden' },
-      { key: 'controls', type: 'toggle', label: 'Show controls' },
+      { key: 'controls', type: 'toggle', label: 'Show controls', tier: 'advanced' },
       { key: 'progressColor', type: 'select', label: 'Progress bar colour', buttons: true,
         options: [
           { value: 'red',   label: 'Red (YouTube default)' },
           { value: 'white', label: 'White' },
         ],
+        tier: 'advanced',
         showIf: c => c.controls && !isVimeo(c) },
       { key: 'interfaceLang', type: 'text', label: 'Player UI language',
-        placeholder: 'e.g. de, en, fr',
+        placeholder: 'e.g. de, en, fr', tier: 'advanced',
         showIf: c => c.controls && !isVimeo(c),
         help: 'Two-letter ISO code controlling the YouTube controls + tooltip language. Leave blank to follow the player\'s default.' },
 
@@ -155,9 +156,9 @@ export default register({
           Math.floor(Number(c.reloadSec) || 0) >= 5 ? 'auto-reload' : '',
         ].filter(Boolean).join(' · ') },
       { key: 'allowCookies', type: 'toggle', label: 'Allow YouTube cookies',
-        showIf: c => !isVimeo(c),
+        showIf: c => !isVimeo(c), tier: 'advanced',
         help: '⚠️ Off (default) uses youtube-nocookie.com for privacy. Turn ON if your video shows a "sign in to confirm you\'re not a bot" wall, some music videos, Shorts, and age-restricted content only embed cleanly via standard youtube.com.' },
-      { key: 'reloadSec', type: 'duration', label: 'Reload every (0 = never)', min: 0,
+      { key: 'reloadSec', type: 'duration', label: 'Reload every (0 = never)', min: 0, tier: 'advanced',
         help: 'Reloads the embed on a timer — recovers frozen frames and "video unavailable" walls on 24/7 displays. Intervals under 5 seconds are ignored to protect the player.',
         validate: v => {
           const s = Number(v) || 0;

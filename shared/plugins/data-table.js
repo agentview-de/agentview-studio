@@ -80,7 +80,7 @@ export default register({
         refreshField,
 
         { type: 'section', key: 'layout', label: 'Layout' },
-        { key: 'align', type: 'text', label: 'Column alignment',
+        { key: 'align', type: 'text', label: 'Column alignment', tier: 'advanced',
           placeholder: 'lcrr',
           help: 'One letter per column, l=left, c=centre, r=right. e.g. "lrr" = label + two right-aligned number columns. Also applies to remote JSON columns (in key order). Leave blank for the default (left-aligned).',
           validate: (v, c) => {
@@ -94,8 +94,8 @@ export default register({
             return null;
           } },
         { type: 'row', children: [
-          { key: 'striped', type: 'toggle', label: 'Striped rows' },
-          { key: 'autoAlignNumbers', type: 'toggle', label: 'Auto-align numbers',
+          { key: 'striped', type: 'toggle', label: 'Striped rows', tier: 'advanced' },
+          { key: 'autoAlignNumbers', type: 'toggle', label: 'Auto-align numbers', tier: 'advanced',
             help: 'Columns where every cell is a number are right-aligned automatically. An explicit letter in the alignment string still wins.' },
         ] },
         { key: 'density', type: 'select', buttons: true, label: 'Density',
@@ -104,20 +104,20 @@ export default register({
             { value: 'compact', label: 'Compact' },
           ],
           help: 'Compact uses tighter padding so more rows fit on screen.' },
-        { key: 'headerStyle', type: 'select', buttons: true, label: 'Header style',
+        { key: 'headerStyle', type: 'select', buttons: true, label: 'Header style', tier: 'advanced',
           options: [
             { value: 'normal', label: 'Normal' },
             { value: 'accent', label: 'Accent' },
             { value: 'hidden', label: 'Hidden' },
           ],
           help: 'Accent tints the header row with the accent colour; hidden suits single-column lists.' },
-        textScaleField(),
+        { ...textScaleField(), tier: 'advanced' },
 
         { type: 'section', key: 'behavior', label: 'Behavior',
           help: 'Long tables can rotate page by page so rows stay readable on a TV.' },
         { type: 'row', children: [
-          { key: 'pageRows', type: 'number', label: 'Rows per page (0 = all)', min: 0, max: 99 },
-          { key: 'pageSec', type: 'duration', label: 'Page every', min: 1,
+          { key: 'pageRows', type: 'number', label: 'Rows per page (0 = all)', min: 0, max: 99, tier: 'advanced' },
+          { key: 'pageSec', type: 'duration', label: 'Page every', min: 1, tier: 'advanced',
             showIf: c => (Number(c.pageRows) || 0) > 0,
             help: 'How long each page stays on screen.' },
         ] },
@@ -131,7 +131,7 @@ export default register({
             const shown = kws.slice(0, 3).join(', ');
             return kws.length > 3 ? `${shown} +${kws.length - 3}` : shown;
           } },
-        { key: 'highlightRules', type: 'table', label: 'Rules',
+        { key: 'highlightRules', type: 'table', label: 'Rules', tier: 'advanced',
           help: 'When any cell in a row contains the keyword (case-insensitive), the row is tinted with the chosen colour. The first matching rule wins.',
           columns: [
             { key: 'keyword', label: 'Keyword', placeholder: 'e.g. DOWN' },

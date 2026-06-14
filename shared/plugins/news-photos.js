@@ -153,30 +153,30 @@ export default register({
       refreshSecField({ showIf: c => c.dataMode !== 'stored' }),
 
       { type: 'section', key: 'layout', label: 'Layout' },
-      { key: 'cardLayout', type: 'select', label: 'Card layout', buttons: true, options: [
+      { key: 'cardLayout', type: 'select', label: 'Card layout', buttons: true, tier: 'advanced', options: [
         { value: 'auto',         label: 'Auto' },
         { value: 'image-top',    label: 'Image top' },
         { value: 'image-left',   label: 'Image left' },
         { value: 'text-overlay', label: 'Text overlay' },
       ], help: 'Auto puts the image beside the text and stacks it on narrow widgets.' },
       mediaFitField(),
-      { key: 'columns', type: 'number', label: 'Columns',
+      { key: 'columns', type: 'number', label: 'Columns', tier: 'advanced',
         min: 0, max: 4, step: 1, slider: true,
         help: '0 = automatic — as many columns as fit the width.' },
-      { key: 'showDesc', type: 'toggle', label: 'Show descriptions' },
-      { key: 'showDate', type: 'toggle', label: 'Show date',
+      { key: 'showDesc', type: 'toggle', label: 'Show descriptions', tier: 'advanced' },
+      { key: 'showDate', type: 'toggle', label: 'Show date', tier: 'advanced',
         help: 'Shows how long ago each item was published.' },
-      { key: 'showSource', type: 'toggle', label: 'Show source',
+      { key: 'showSource', type: 'toggle', label: 'Show source', tier: 'advanced',
         help: 'Shows the publisher domain on each card.' },
-      { ...localeField(), showIf: c => !!c.showDate },
-      textScaleField(),
+      { ...localeField(), tier: 'advanced', showIf: c => !!c.showDate },
+      { ...textScaleField(), tier: 'advanced' },
 
       { type: 'section', key: 'behavior', label: 'Behavior' },
-      { key: 'mode', type: 'select', label: 'When too many items', options: [
+      { key: 'mode', type: 'select', label: 'When too many items', tier: 'advanced', options: [
         { value: 'fit',      label: 'Auto-fit (show as many as fit)' },
         { value: 'paginate', label: 'Paginate (rotate through pages)' },
       ]},
-      { key: 'pageSec', type: 'duration', label: 'Time per page',
+      { key: 'pageSec', type: 'duration', label: 'Time per page', tier: 'advanced',
         min: 2, max: 30,
         showIf: c => c.mode === 'paginate' },
 

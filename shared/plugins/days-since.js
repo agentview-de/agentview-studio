@@ -82,7 +82,7 @@ export default register({
         { key: 'unitPlural', type: 'text', label: 'Unit (plural)', placeholder: 'days',
           help: 'Leave empty for the automatic, language-aware “day” / “days” — or repurpose the counter with your own unit (“shifts”, “deliveries”).' },
       ] },
-      localeField(),
+      { ...localeField(), tier: 'advanced' },
 
       { type: 'section', key: 'milestones', label: 'Milestones & status', collapsed: true,
         summary: (c) => {
@@ -93,19 +93,19 @@ export default register({
           ].filter(Boolean);
           return on.join(' · ') || 'off';
         } },
-      { key: 'recordDays', type: 'number', label: 'Record (0 = hidden)', min: 0, step: 1, suffix: ' days',
+      { key: 'recordDays', type: 'number', label: 'Record (0 = hidden)', min: 0, step: 1, suffix: ' days', tier: 'advanced',
         help: 'Best streak so far — shown as a secondary line and highlighted once the current streak beats it.' },
-      { key: 'milestoneEvery', type: 'number', label: 'Milestone every (0 = off)', min: 0, step: 1, suffix: ' days',
+      { key: 'milestoneEvery', type: 'number', label: 'Milestone every (0 = off)', min: 0, step: 1, suffix: ' days', tier: 'advanced',
         help: 'Celebrates round numbers: on every Nth day the counter shows a milestone badge.' },
-      { key: 'goodAbove', type: 'number', label: 'Good above (0 = off)', min: 0, step: 1, suffix: ' days',
+      { key: 'goodAbove', type: 'number', label: 'Good above (0 = off)', min: 0, step: 1, suffix: ' days', tier: 'advanced',
         help: 'Once the streak reaches this many days, the count switches to the good colour — classic safety-board signalling.' },
-      { key: 'goodColor', type: 'color', label: 'Good colour', clearable: true,
+      { key: 'goodColor', type: 'color', label: 'Good colour', clearable: true, tier: 'advanced',
         showIf: c => (Number(c.goodAbove) || 0) > 0,
         help: 'Leave empty for the standard green.' },
 
       { type: 'section', key: 'appearance', label: 'Appearance',
         summary: c => `${c.textScale ?? 100}%` },
-      textScaleField(),
+      { ...textScaleField(), tier: 'advanced' },
 
       ...themeColorSection(),
     ],

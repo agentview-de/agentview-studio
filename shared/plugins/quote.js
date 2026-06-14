@@ -57,12 +57,12 @@ export default register({
           { value: 'fullscreen', label: 'Fullscreen' },
         ],
         help: 'Card shows the portrait next to the text, Minimal is centred type only, Fullscreen makes the quote giant with the portrait as a blurred backdrop.' },
-      { key: 'markStyle', type: 'select', label: 'Quotation mark', buttons: true, options: [
+      { key: 'markStyle', type: 'select', label: 'Quotation mark', buttons: true, tier: 'advanced', options: [
           { value: 'classic', label: '“ Classic' },
           { value: 'guillemet', label: '» Guillemet' },
           { value: 'none', label: 'Hidden' },
         ] },
-      textScaleField(),
+      { ...textScaleField(), tier: 'advanced' },
 
       { type: 'section', key: 'behavior', label: 'Behavior', collapsed: true,
         help: 'Rotate through extra quotes — a classic “quote of the day” loop.',
@@ -70,14 +70,14 @@ export default register({
           const n = rotationEntries(c).length;
           return n ? `${n + 1} quotes · ${Math.max(3, Number(c.rotateSecs) || 12)}s` : 'off';
         } },
-      { key: 'quotes', type: 'list', label: 'More quotes',
+      { key: 'quotes', type: 'list', label: 'More quotes', tier: 'advanced',
         itemShape: [
           { key: 'quote',  type: 'textarea', label: 'Quote' },
           { key: 'author', type: 'text', label: 'Author' },
           { key: 'source', type: 'text', label: 'Source' },
         ],
         help: 'The main quote above always comes first in the rotation. Drag to reorder.' },
-      { key: 'rotateSecs', type: 'duration', label: 'Show each quote for', min: 3,
+      { key: 'rotateSecs', type: 'duration', label: 'Show each quote for', min: 3, tier: 'advanced',
         showIf: c => rotationEntries(c).length > 0,
         help: 'How long each quote stays before cross-fading to the next.' },
 

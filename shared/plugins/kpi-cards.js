@@ -117,7 +117,7 @@ export default register({
       refreshField,
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
-      { key: 'columns', type: 'select', label: 'Columns', buttons: true,
+      { key: 'columns', type: 'select', label: 'Columns', buttons: true, tier: 'advanced',
         options: [
           { value: '',  label: 'Auto' },
           { value: '1', label: '1' },
@@ -126,25 +126,25 @@ export default register({
           { value: '4', label: '4' },
         ],
         help: 'Auto fits cards by available width; fix a count for a stable board layout.' },
-      { key: 'density', type: 'select', label: 'Density', buttons: true,
+      { key: 'density', type: 'select', label: 'Density', buttons: true, tier: 'advanced',
         options: [
           { value: 'comfortable', label: 'Comfortable' },
           { value: 'compact',     label: 'Compact' },
         ],
         help: 'Compact tightens spacing and hides sparklines — for narrow or side-panel widgets.' },
       { type: 'row', children: [
-        { key: 'showDelta',     type: 'toggle', label: 'Show delta' },
-        { key: 'showTarget',    type: 'toggle', label: 'Show target bar' },
-        { key: 'showSparkline', type: 'toggle', label: 'Show sparkline',
+        { key: 'showDelta',     type: 'toggle', label: 'Show delta', tier: 'advanced' },
+        { key: 'showTarget',    type: 'toggle', label: 'Show target bar', tier: 'advanced' },
+        { key: 'showSparkline', type: 'toggle', label: 'Show sparkline', tier: 'advanced',
           showIf: c => (c.density ?? 'comfortable') !== 'compact' },
       ] },
-      { key: 'numberFormat', type: 'select', label: 'Number format', buttons: true,
+      { key: 'numberFormat', type: 'select', label: 'Number format', buttons: true, tier: 'advanced',
         options: [
           { value: 'compact', label: 'Compact (124.5k)' },
           { value: 'full',    label: 'Full (124,500)' },
         ] },
-      localeField(),
-      textScaleField(),
+      { ...localeField(), tier: 'advanced' },
+      { ...textScaleField(), tier: 'advanced' },
 
       ...themeColorSection(),
     ] };

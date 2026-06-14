@@ -115,15 +115,15 @@ export default register({
       { key: 'source', type: 'code', label: 'Source code', placeholder: 'Paste your snippet…' },
       { key: 'language', type: 'select', label: 'Language', options: LANGS, search: true,
         help: 'Drives syntax-highlight colouring (when Prism is loaded on the display).' },
-      { key: 'filename', type: 'text', label: 'Filename', placeholder: 'src/app.js',
+      { key: 'filename', type: 'text', label: 'Filename', placeholder: 'src/app.js', tier: 'advanced',
         help: 'Shows an editor-style window bar with traffic-light dots above the code.' },
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
-      textScaleField(),
-      { key: 'showLineNumbers', type: 'toggle', label: 'Line numbers' },
-      { key: 'wrap', type: 'toggle', label: 'Wrap long lines',
+      { ...textScaleField(), tier: 'advanced' },
+      { key: 'showLineNumbers', type: 'toggle', label: 'Line numbers', tier: 'advanced' },
+      { key: 'wrap', type: 'toggle', label: 'Wrap long lines', tier: 'advanced',
         help: 'Soft-wraps long lines instead of clipping them at the edge of the widget.' },
-      { key: 'highlightLines', type: 'text', label: 'Highlight lines', placeholder: '3-5, 8',
+      { key: 'highlightLines', type: 'text', label: 'Highlight lines', placeholder: '3-5, 8', tier: 'advanced',
         help: 'Comma-separated line numbers or ranges to emphasise with an accent tint.',
         validate: (v) => {
           const s = String(v ?? '').trim();

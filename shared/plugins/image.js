@@ -66,18 +66,18 @@ export default register({
       { type: 'section', key: 'layout', label: 'Layout' },
       mediaFitField(),
       { type: 'row', children: [
-        { key: 'focusX', type: 'number', label: 'Focal X', min: 0, max: 100, step: 5, slider: true, suffix: '%',
+        { key: 'focusX', type: 'number', label: 'Focal X', min: 0, max: 100, step: 5, slider: true, suffix: '%', tier: 'advanced',
           help: 'Which part of the photo stays visible when Cover crops it — e.g. keep a face or logo centred.' },
-        { key: 'focusY', type: 'number', label: 'Focal Y', min: 0, max: 100, step: 5, slider: true, suffix: '%' },
+        { key: 'focusY', type: 'number', label: 'Focal Y', min: 0, max: 100, step: 5, slider: true, suffix: '%', tier: 'advanced' },
       ], showIf: c => (c.fit ?? 'cover') === 'cover' },
-      { key: 'letterboxColor', type: 'color', label: 'Letterbox colour', clearable: true,
+      { key: 'letterboxColor', type: 'color', label: 'Letterbox colour', clearable: true, tier: 'advanced',
         showIf: c => c.fit === 'contain',
         help: 'Fills the bars beside or above the photo when Contain letterboxes it. Empty = transparent, the slide background shows through.' },
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
       { key: 'overlay', type: 'number', label: 'Dark overlay', min: 0, max: 100, step: 5, slider: true, suffix: '%',
         help: 'Darkens the image so overlaid text stays readable.' },
-      { key: 'overlayStyle', type: 'select', label: 'Overlay style', buttons: true,
+      { key: 'overlayStyle', type: 'select', label: 'Overlay style', buttons: true, tier: 'advanced',
         options: [
           { value: 'solid',  label: 'Solid' },
           { value: 'bottom', label: 'Bottom gradient' },
@@ -85,16 +85,16 @@ export default register({
         ],
         showIf: c => (Number(c.overlay) || 0) > 0,
         help: 'Gradients darken only one edge — keeps a title readable without dimming the whole photo.' },
-      { key: 'kenBurns', type: 'toggle', label: 'Ken Burns zoom',
+      { key: 'kenBurns', type: 'toggle', label: 'Ken Burns zoom', tier: 'advanced',
         help: 'Slow continuous zoom that gives a static photo some life — nice for lobby and ambience slides.' },
-      { key: 'cornerRadius', type: 'number', label: 'Corner radius', min: 0, max: 48, step: 4, slider: true, suffix: 'px',
+      { key: 'cornerRadius', type: 'number', label: 'Corner radius', min: 0, max: 48, step: 4, slider: true, suffix: 'px', tier: 'advanced',
         help: 'Rounds the photo corners to match card-style layouts.' },
 
       { type: 'section', key: 'behavior', label: 'Behavior', collapsed: true,
         summary: c => (Number(c.refreshSec) || 0) > 0 ? `↻ ${Number(c.refreshSec)}s` : 'off' },
-      refreshSecField({
+      { ...refreshSecField({
         help: 'Reloads the image on a timer with a cache-buster — for webcam stills, exported dashboard PNGs or menu images regenerated server-side under the same URL. Positive values below 5 seconds are raised to the 5-second player minimum.',
-      }),
+      }), tier: 'advanced' },
     ],
   }),
   render(slide, container, ctx) {

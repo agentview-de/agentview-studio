@@ -139,7 +139,7 @@ export default register({
       }),
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
-      { key: 'decimals', type: 'select', label: 'Decimal places', buttons: true,
+      { key: 'decimals', type: 'select', label: 'Decimal places', buttons: true, tier: 'advanced',
         options: [
           { value: 'auto', label: 'Auto' },
           { value: '2', label: '2' },
@@ -148,12 +148,12 @@ export default register({
         ],
         help: 'Auto scales the precision to the rate’s magnitude (162.51 vs 1.0842); a fixed count keeps columns aligned on dense boards.' },
       { type: 'row', children: [
-        { key: 'showName', type: 'toggle', label: 'Currency names',
+        { key: 'showName', type: 'toggle', label: 'Currency names', tier: 'advanced',
           help: 'Shows the full name (“US Dollar”) under each code.' },
-        { key: 'trend', type: 'toggle', label: 'Trend arrows',
+        { key: 'trend', type: 'toggle', label: 'Trend arrows', tier: 'advanced',
           help: 'Marks each rate ▲ up / ▼ down / – flat against the previous daily fix, green = up, red = down.' },
       ] },
-      textScaleField(),
+      { ...textScaleField(), tier: 'advanced' },
 
       ...themeColorSection(),
     ],

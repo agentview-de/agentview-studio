@@ -62,12 +62,12 @@ export default register({
         help: 'Drives both the time and the date line — set the venue\'s zone, not the player\'s.' },
       { key: 'label', type: 'text', label: 'Label', placeholder: 'e.g. Berlin',
         help: 'Shown above the clock. Leave blank to show the time zone name.' },
-      localeField(),
-      { key: 'showOffset', type: 'toggle', label: 'Show UTC offset',
+      { ...localeField(), tier: 'advanced' },
+      { key: 'showOffset', type: 'toggle', label: 'Show UTC offset', tier: 'advanced',
         help: 'Appends the zone offset (e.g. UTC+2) next to the label — handy on multi-site boards.' },
 
       { type: 'section', key: 'format', label: 'Format' },
-      { key: 'display', type: 'select', label: 'Show', options: [
+      { key: 'display', type: 'select', label: 'Show', tier: 'advanced', options: [
         { value: 'time', label: 'Time (HH:MM)' },
         { value: 'time-seconds', label: 'Time with seconds' },
         { value: 'date-time', label: 'Date + time' },
@@ -82,6 +82,7 @@ export default register({
       ] },
       { key: 'customFormat', type: 'text', label: 'Custom format',
         placeholder: 'EEE, d MMM yyyy HH:mm',
+        tier: 'advanced',
         showIf: c => c.display === 'custom',
         help: 'Tokens: yyyy y MMMM MMM MM M d EEEE EEE HH H mm m ss s a (12h marker). Anything else passes through literally.',
         validate: v => {
@@ -90,7 +91,7 @@ export default register({
           return s.match(FMT_TOKENS) ? null
             : { level: 'warn', message: 'No recognised tokens — the pattern will render as literal text.' };
         } },
-      { key: 'hour12', type: 'toggle', label: '12-hour clock',
+      { key: 'hour12', type: 'toggle', label: '12-hour clock', tier: 'advanced',
         showIf: c => TIME_MODES.includes(c.display ?? 'date-time') || c.display === 'custom' },
       { key: 'style', type: 'select', label: 'Style', buttons: true,
         options: [
@@ -98,7 +99,7 @@ export default register({
           { value: 'analog', label: 'Analog' },
         ],
         showIf: c => TIME_MODES.includes(c.display ?? 'date-time') },
-      { key: 'faceStyle', type: 'select', label: 'Face style', buttons: true,
+      { key: 'faceStyle', type: 'select', label: 'Face style', buttons: true, tier: 'advanced',
         options: [
           { value: 'ticks',    label: 'Ticks' },
           { value: 'quarters', label: '12 · 3 · 6 · 9' },
@@ -107,21 +108,21 @@ export default register({
         showIf: c => c.style === 'analog' && TIME_MODES.includes(c.display ?? 'date-time') },
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
-      { key: 'align', type: 'align', label: 'Alignment' },
-      textScaleField(),
+      { key: 'align', type: 'align', label: 'Alignment', tier: 'advanced' },
+      { ...textScaleField(), tier: 'advanced' },
 
       { type: 'section', key: 'hours', label: 'Opening hours', collapsed: true,
         summary: c => c.showOpenBadge ? `${c.openFrom || '08:00'}–${c.openTo || '18:00'}` : 'Off' },
-      { key: 'showOpenBadge', type: 'toggle', label: 'Open/closed badge',
+      { key: 'showOpenBadge', type: 'toggle', label: 'Open/closed badge', tier: 'advanced',
         help: 'Shows a pill under the clock comparing the current time in the selected zone with the hours below. A "Closes at" earlier than "Opens at" wraps past midnight.' },
       { type: 'row', showIf: c => !!c.showOpenBadge, children: [
-        { key: 'openFrom', type: 'time', label: 'Opens at' },
-        { key: 'openTo',   type: 'time', label: 'Closes at' },
+        { key: 'openFrom', type: 'time', label: 'Opens at', tier: 'advanced' },
+        { key: 'openTo',   type: 'time', label: 'Closes at', tier: 'advanced' },
       ] },
       { type: 'row', showIf: c => !!c.showOpenBadge, children: [
-        { key: 'openText',   type: 'text', label: 'Text when open', placeholder: 'Auto',
+        { key: 'openText',   type: 'text', label: 'Text when open', placeholder: 'Auto', tier: 'advanced',
           help: 'Leave blank for an automatic word in the selected language.' },
-        { key: 'closedText', type: 'text', label: 'Text when closed', placeholder: 'Auto' },
+        { key: 'closedText', type: 'text', label: 'Text when closed', placeholder: 'Auto', tier: 'advanced' },
       ] },
 
       ...themeColorSection('Color theme (text/accent)'),

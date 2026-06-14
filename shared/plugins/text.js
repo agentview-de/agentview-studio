@@ -78,9 +78,9 @@ export default register({
       { type: 'section', key: 'appearance', label: 'Appearance' },
       { key: 'font', type: 'select', label: 'Default font', options: FONTS,
         help: 'Default for the whole widget — the editor toolbar can override font styling per selection.' },
-      textScaleField(),
-      { key: 'valign', type: 'align', vertical: true, label: 'Vertical alignment' },
-      { key: 'maxWidth', type: 'select', label: 'Content width', buttons: true, options: [
+      { ...textScaleField(), tier: 'advanced' },
+      { key: 'valign', type: 'align', vertical: true, label: 'Vertical alignment', tier: 'advanced' },
+      { key: 'maxWidth', type: 'select', label: 'Content width', buttons: true, tier: 'advanced', options: [
         { value: 'full',        label: 'Full' },
         { value: 'comfortable', label: 'Comfortable' },
         { value: 'narrow',      label: 'Narrow' },

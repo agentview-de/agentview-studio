@@ -110,7 +110,7 @@ export default register({
       refreshSecField({ showIf: c => !!String(c.sourceUrl ?? '').trim() }),
 
       { type: 'section', key: 'layout', label: 'Layout' },
-      { key: 'columns', type: 'select', buttons: true, label: 'Columns',
+      { key: 'columns', type: 'select', buttons: true, label: 'Columns', tier: 'advanced',
         options: [
           { value: '1', label: '1' },
           { value: '2', label: '2' },
@@ -118,16 +118,16 @@ export default register({
         ],
         help: 'Flows the text into multiple columns, so lists fill wide screens instead of a narrow left column.' },
       { type: 'row', children: [
-        { key: 'align', type: 'align', label: 'Alignment' },
-        { key: 'valign', type: 'align', vertical: true, label: 'Vertical alignment' },
+        { key: 'align', type: 'align', label: 'Alignment', tier: 'advanced' },
+        { key: 'valign', type: 'align', vertical: true, label: 'Vertical alignment', tier: 'advanced' },
       ] },
-      textScaleField(),
+      { ...textScaleField(), tier: 'advanced' },
 
       { type: 'section', key: 'behavior', label: 'Behavior' },
       { type: 'row', children: [
-        { key: 'autoScroll', type: 'toggle', label: 'Auto-scroll long content',
+        { key: 'autoScroll', type: 'toggle', label: 'Auto-scroll long content', tier: 'advanced',
           help: 'When the text is taller than the widget, it slowly scrolls to the end, pauses, and starts over. Skipped when the device prefers reduced motion.' },
-        { key: 'scrollSec', type: 'duration', label: 'Scroll duration', min: 5,
+        { key: 'scrollSec', type: 'duration', label: 'Scroll duration', min: 5, tier: 'advanced',
           showIf: c => !!c.autoScroll,
           help: 'Time for one full top-to-bottom pass.' },
       ] },

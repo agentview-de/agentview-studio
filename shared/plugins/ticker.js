@@ -77,37 +77,37 @@ export default register({
         ] },
       { key: 'leadLabel', type: 'text', label: 'Leading label', placeholder: '+++ BREAKING +++',
         help: 'Pinned badge at the start of the ticker — messages scroll past behind it. Leave empty for none.' },
-      { key: 'separator', type: 'text', label: 'Separator', placeholder: '•' },
+      { key: 'separator', type: 'text', label: 'Separator', placeholder: '•', tier: 'advanced' },
 
       { type: 'section', key: 'appearance', label: 'Appearance',
         summary: c => `${c.textScale ?? 100}%` },
-      { key: 'font', type: 'select', label: 'Font', options: FONTS,
+      { key: 'font', type: 'select', label: 'Font', options: FONTS, tier: 'advanced',
         help: 'Theme default follows the slide theme / brand-kit font.' },
-      textScaleField(),
-      { key: 'fontWeight', type: 'select', label: 'Weight', buttons: true, options: [
+      { ...textScaleField(), tier: 'advanced' },
+      { key: 'fontWeight', type: 'select', label: 'Weight', buttons: true, tier: 'advanced', options: [
         { value: 'regular',  label: 'Regular' },
         { value: 'medium',   label: 'Medium' },
         { value: 'semibold', label: 'Semibold' },
         { value: 'bold',     label: 'Bold' },
       ] },
       { type: 'row', children: [
-        { key: 'uppercase', type: 'toggle', label: 'Uppercase' },
-        { key: 'letterSpacing', type: 'select', label: 'Letter spacing', buttons: true, options: [
+        { key: 'uppercase', type: 'toggle', label: 'Uppercase', tier: 'advanced' },
+        { key: 'letterSpacing', type: 'select', label: 'Letter spacing', buttons: true, tier: 'advanced', options: [
           { value: 'normal', label: 'Normal' },
           { value: 'wide',   label: 'Wide' },
           { value: 'wider',  label: 'Wider' },
         ] },
       ] },
-      { key: 'barHeight', type: 'select', label: 'Bar height', buttons: true, options: [
+      { key: 'barHeight', type: 'select', label: 'Bar height', buttons: true, tier: 'advanced', options: [
         { value: 'full',   label: 'Full' },
         { value: 'slim',   label: 'Slim' },
         { value: 'normal', label: 'Normal' },
         { value: 'tall',   label: 'Tall' },
       ], help: 'Full fills the whole widget box. Slim / Normal / Tall make a strip you can place inside it.' },
-      { key: 'barPosition', type: 'align', vertical: true, label: 'Position in box',
+      { key: 'barPosition', type: 'align', vertical: true, label: 'Position in box', tier: 'advanced',
         showIf: c => (c.barHeight ?? 'full') !== 'full',
         help: 'Where the strip sits when it doesn’t fill the whole box.' },
-      { key: 'solidBackground', type: 'toggle', label: 'Solid background',
+      { key: 'solidBackground', type: 'toggle', label: 'Solid background', tier: 'advanced',
         help: 'Fills the bar with the theme background colour, turning the strip into a self-contained bar. Leave off to overlay the ticker transparently on the content behind it.' },
 
       { type: 'section', key: 'behavior', label: 'Behavior',
@@ -115,11 +115,11 @@ export default register({
       { key: 'speed', type: 'number', label: 'Speed', min: 20, max: 300, step: 10, slider: true, suffix: ' px/s' },
       // ltr (default) scrolls the text right→left; rtl scrolls left→right —
       // the natural direction for Arabic / Hebrew content and a popular flip.
-      { key: 'direction', type: 'select', label: 'Direction', buttons: true, options: [
+      { key: 'direction', type: 'select', label: 'Direction', buttons: true, tier: 'advanced', options: [
         { value: 'ltr', label: '← Right to left' },
         { value: 'rtl', label: '→ Left to right' },
       ], help: 'Right to left is the classic news-ticker direction; left to right suits Arabic and Hebrew content.' },
-      { key: 'pauseOnHover', type: 'toggle', label: 'Pause on hover / tap',
+      { key: 'pauseOnHover', type: 'toggle', label: 'Pause on hover / tap', tier: 'advanced',
         help: 'Useful for interactive kiosks — hovering or tapping pauses the ticker so a message can be read in full; it resumes on its own.' },
 
       ...themeColorSection(),

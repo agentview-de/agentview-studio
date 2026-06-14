@@ -48,8 +48,8 @@ export default register({
         placeholder: 'https://… or pick a PDF from the library',
         help: 'Upload to the library or paste a direct PDF link.' },
       { type: 'row', children: [
-        { key: 'startPage', type: 'number', label: 'Start page', min: 1 },
-        { key: 'endPage', type: 'number', label: 'End page', min: 0,
+        { key: 'startPage', type: 'number', label: 'Start page', min: 1, tier: 'advanced' },
+        { key: 'endPage', type: 'number', label: 'End page', min: 0, tier: 'advanced',
           help: '0 = through the last page of the document.',
           // Render shows only the start page when the range is inverted —
           // surface that instead of silently looping a single page forever.
@@ -64,6 +64,7 @@ export default register({
       { ...refreshSecField({
         help: 'Re-downloads the PDF on a timer, so a menu or shift plan re-uploaded under the same URL updates on screen without re-publishing. 0 = load once.',
       }),
+      tier: 'advanced',
       validate: val => {
         const v = Number(val) || 0;
         return v > 0 && v < 60
@@ -73,10 +74,11 @@ export default register({
 
       { type: 'section', label: 'Playback', key: 'playback' },
       { key: 'pageSec', type: 'duration', label: 'Time per page', min: 1,
+        tier: 'advanced',
         help: 'Set start page = end page to hold a single page statically.' },
       { type: 'row', children: [
-        { key: 'showCounter', type: 'toggle', label: 'Page counter' },
-        { key: 'counterPosition', type: 'select', label: 'Position', options: [
+        { key: 'showCounter', type: 'toggle', label: 'Page counter', tier: 'advanced' },
+        { key: 'counterPosition', type: 'select', label: 'Position', tier: 'advanced', options: [
           { value: 'bottom-right', label: 'Bottom right' },
           { value: 'bottom-left', label: 'Bottom left' },
           { value: 'top-right', label: 'Top right' },
@@ -92,6 +94,7 @@ export default register({
         { value: 'width', label: 'Fit width (may scroll vertically)' },
       ], help: 'Portrait PDFs on landscape screens waste pixels with "fit page". Use "fit width" to scale up.' },
       { key: 'background', type: 'color', clearable: true, label: 'Background',
+        tier: 'advanced',
         help: 'Fills the area around the page. Empty = dark default.' },
     ],
   }),

@@ -306,7 +306,7 @@ export default register({
         { key: 'vcardUrl', type: 'url',  label: 'Website', test: true, placeholder: 'https://example.com' },
       ], showIf: c => c.template === 'vcard' },
 
-      { key: 'showDetails', type: 'toggle', label: 'Show details under the code',
+      { key: 'showDetails', type: 'toggle', label: 'Show details under the code', tier: 'advanced',
         help: 'Prints the human-readable payload under the caption — the link, the Wi-Fi name + password, or the name + phone — so guests can also type it in.' },
 
       { type: 'section', key: 'layout-sec', label: 'Layout' },
@@ -316,14 +316,14 @@ export default register({
           { value: 'horizontal', label: 'Side by side' },
         ],
         help: 'Side by side puts the code on the left and the caption on the right — good for wide footer strips.' },
-      { key: 'label', type: 'text', label: 'Caption', placeholder: 'Scan to learn more' },
-      { ...textScaleField('Caption size'),
+      { key: 'label', type: 'text', label: 'Caption', placeholder: 'Scan to learn more', tier: 'advanced' },
+      { ...textScaleField('Caption size'), tier: 'advanced',
         help: '100% is the auto-scaled baseline. Push higher so the caption stays legible at TV viewing distance.' },
       { key: 'frameless', type: 'toggle', label: 'Frameless (edge-to-edge)',
         help: 'Removes the white card around the QR. The required quiet zone inside the code stays (scanners need it).' },
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
-      { key: 'moduleStyle', type: 'select', label: 'Module style', buttons: true,
+      { key: 'moduleStyle', type: 'select', label: 'Module style', buttons: true, tier: 'advanced',
         options: [
           { value: 'square', label: 'Square' },
           { value: 'rounded', label: 'Rounded' },
@@ -331,8 +331,8 @@ export default register({
         ],
         help: 'Stylises the QR dots for branded signage. The three corner finder patterns always stay square so the code keeps scanning.' },
       { type: 'row', children: [
-        { key: 'fgColor', type: 'color', label: 'Foreground' },
-        { key: 'bgColor', type: 'color', label: 'Background',
+        { key: 'fgColor', type: 'color', label: 'Foreground', tier: 'advanced' },
+        { key: 'bgColor', type: 'color', label: 'Background', tier: 'advanced',
           validate: c => {
             if (relLuminance(c.fgColor) > relLuminance(c.bgColor)) {
               return { level: 'warn', message: 'Inverted QR codes (light on dark) fail on many phone scanners — keep the foreground darker than the background.' };
@@ -345,7 +345,7 @@ export default register({
 
       { type: 'section', key: 'logo', label: 'Centre logo', collapsed: true,
         summary: c => c.logoUrl ? `logo · ${c.ecLevel === 'H' ? 'EC H' : 'EC ' + (c.ecLevel ?? 'M')}` : 'none' },
-      { key: 'logoUrl', type: 'asset', label: 'Logo image', accept: 'image/*',
+      { key: 'logoUrl', type: 'asset', label: 'Logo image', accept: 'image/*', tier: 'advanced',
         help: 'Drops a small logo into the centre of the QR. Use error correction H so the code stays scannable.',
         validate: c => {
           if (c.logoUrl && (c.ecLevel ?? 'M') !== 'H') {
@@ -353,10 +353,10 @@ export default register({
           }
           return null;
         } },
-      { key: 'logoSize', type: 'number', label: 'Logo size (% of QR, long edge)', min: 10, max: 30, step: 1, slider: true, suffix: '%',
+      { key: 'logoSize', type: 'number', label: 'Logo size (% of QR, long edge)', min: 10, max: 30, step: 1, slider: true, suffix: '%', tier: 'advanced',
         showIf: c => !!c.logoUrl,
         help: 'The logo keeps its aspect ratio. The value controls its long edge as a % of the QR. Keep ≤ 22% for reliable scanning, and pair with EC Level H.' },
-      { key: 'ecLevel', type: 'select', label: 'Error correction',
+      { key: 'ecLevel', type: 'select', label: 'Error correction', tier: 'advanced',
         options: [
           { value: 'L', label: 'Low (~7%)' },
           { value: 'M', label: 'Medium (~15%)' },

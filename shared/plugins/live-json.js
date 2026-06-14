@@ -95,13 +95,15 @@ export default register({
         } },
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
-      textScaleField(),
+      { ...textScaleField(), tier: 'advanced' },
       { key: 'maxDepth', type: 'number', label: 'Max depth (0 = unlimited)',
         min: 0, max: 8, step: 1, slider: true,
+        tier: 'advanced',
         help: 'Collapse anything nested deeper than this to {…} / [… n items] so large payloads stay on one screen.' },
       { key: 'showUpdated', type: 'toggle', label: 'Show last-updated stamp',
         help: 'Small footer with the time of the last successful refresh — a trust signal for status boards.' },
       { key: 'flashChanges', type: 'toggle', label: 'Highlight changes',
+        tier: 'advanced',
         help: 'Briefly flashes values that changed since the previous refresh, so live dashboards are visibly alive.',
         showIf: c => c.dataMode !== 'stored' },
 
