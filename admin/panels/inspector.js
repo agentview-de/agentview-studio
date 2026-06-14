@@ -562,6 +562,10 @@ export function renderWidgetInspector(host) {
     // collapsed-section state. Without it, every inspector re-render would
     // reset the user's folding.
     formKey: widget.type,
+    // The inline inspector shows only the essential controls; advanced fields
+    // (tier:'advanced') live in the Widget Designer reached via "Open designer".
+    // Widgets that tag no field as advanced are unaffected — they show all.
+    tierFilter: 'basic',
     onChange: v => {
       // Detect a switch INTO "provided offline" so we can fetch the data right
       // away (below) — the user shouldn't have to go to the header "Daten" action

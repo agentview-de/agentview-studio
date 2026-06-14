@@ -142,6 +142,8 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
     value: working,
     defaults: plugin.defaults?.(),
     formKey: widget.type,
+    // The Designer is the place for everything — show basic AND advanced fields.
+    tierFilter: 'all',
     onChange: v => { working = v; schedulePreview(); },
     assetPicker: async accept => await pickAsset(accept),
     assetsPicker: async accept => await pickAssets(accept),

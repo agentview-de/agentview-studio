@@ -108,30 +108,32 @@ export default register({
         { value: 'gauge', label: 'Gauge' },
       ] },
       { key: 'showValue', type: 'toggle', label: 'Show value' },
+      // tier:'advanced' — these fine-tuning controls live in the Widget Designer,
+      // not the quick inline inspector.
       { type: 'row', children: [
-        { key: 'align', type: 'select', label: 'Vertical position', buttons: true, options: [
+        { key: 'align', type: 'select', label: 'Vertical position', buttons: true, tier: 'advanced', options: [
           { value: 'top',    label: 'Top' },
           { value: 'center', label: 'Center' },
           { value: 'bottom', label: 'Bottom' },
         ] },
-        { key: 'labelPos', type: 'select', label: 'Label position', buttons: true, options: [
+        { key: 'labelPos', type: 'select', label: 'Label position', buttons: true, tier: 'advanced', options: [
           { value: 'above', label: 'Above' },
           { value: 'below', label: 'Below' },
         ] },
       ] },
-      { key: 'labelEmphasis', type: 'toggle', label: 'Emphasise label',
+      { key: 'labelEmphasis', type: 'toggle', label: 'Emphasise label', tier: 'advanced',
         help: 'Uppercase, full opacity and bolder — makes the label read as the headline instead of a caption.' },
-      { key: 'animate', type: 'toggle', label: 'Animate',
+      { key: 'animate', type: 'toggle', label: 'Animate', tier: 'advanced',
         help: 'Fills the bar or ring with a sweep and counts the value up when the slide appears or the value changes.' },
       { key: 'color', type: 'color', label: 'Fill colour', clearable: true,
         showIf: c => !c.useThresholds,
         help: 'Leave empty to follow the theme accent; click × to reset.' },
-      localeField(),
-      textScaleField(),
+      { ...localeField(), tier: 'advanced' },
+      { ...textScaleField(), tier: 'advanced' },
       { type: 'row', children: [
-        { key: 'labelScale', type: 'number', label: 'Label size', min: 50, max: 300, step: 10, slider: true, suffix: '%',
+        { key: 'labelScale', type: 'number', label: 'Label size', min: 50, max: 300, step: 10, slider: true, suffix: '%', tier: 'advanced',
           help: 'Scales the label on top of the overall text size — independent of the value.' },
-        { key: 'valueScale', type: 'number', label: 'Value size', min: 50, max: 300, step: 10, slider: true, suffix: '%',
+        { key: 'valueScale', type: 'number', label: 'Value size', min: 50, max: 300, step: 10, slider: true, suffix: '%', tier: 'advanced',
           help: 'Scales the value / percentage on top of the overall text size — independent of the label.' },
       ] },
 
@@ -139,21 +141,21 @@ export default register({
         summary: c => c.useThresholds
           ? `${c.thresholdWarn ?? 70}% · ${c.thresholdGood ?? 90}%${c.invertThresholds ? ' ↓' : ''}`
           : 'Off' },
-      { key: 'useThresholds', type: 'toggle', label: 'Use threshold colours',
+      { key: 'useThresholds', type: 'toggle', label: 'Use threshold colours', tier: 'advanced',
         help: 'Fill colour switches between good / warn / bad based on the percentage — a KPI-style traffic light.' },
-      { key: 'invertThresholds', type: 'toggle', label: 'Lower is better',
+      { key: 'invertThresholds', type: 'toggle', label: 'Lower is better', tier: 'advanced',
         showIf: c => !!c.useThresholds,
         help: 'Flips the bands so a LOW percentage is good — for capacity, error budgets or queue lengths.' },
       { type: 'row', children: [
-        { key: 'colorLow',  type: 'color', label: 'Bad' },
-        { key: 'colorMid',  type: 'color', label: 'Warn' },
-        { key: 'colorHigh', type: 'color', label: 'Good' },
+        { key: 'colorLow',  type: 'color', label: 'Bad',  tier: 'advanced' },
+        { key: 'colorMid',  type: 'color', label: 'Warn', tier: 'advanced' },
+        { key: 'colorHigh', type: 'color', label: 'Good', tier: 'advanced' },
       ], showIf: c => !!c.useThresholds },
       { type: 'row', children: [
-        { key: 'thresholdWarn', type: 'number', label: 'Warn at %', min: 0, max: 100, step: 5, slider: true,
+        { key: 'thresholdWarn', type: 'number', label: 'Warn at %', min: 0, max: 100, step: 5, slider: true, tier: 'advanced',
           validate: (v, c) => (c?.useThresholds && Number(v) >= Number(c?.thresholdGood ?? 90))
             ? { level: 'warn', message: 'Warn threshold should be below the Good threshold.' } : null },
-        { key: 'thresholdGood', type: 'number', label: 'Good at %', min: 0, max: 100, step: 5, slider: true,
+        { key: 'thresholdGood', type: 'number', label: 'Good at %', min: 0, max: 100, step: 5, slider: true, tier: 'advanced',
           validate: (v, c) => (c?.useThresholds && Number(v) <= Number(c?.thresholdWarn ?? 70))
             ? { level: 'warn', message: 'Good threshold should be above the Warn threshold.' } : null },
       ], showIf: c => !!c.useThresholds },

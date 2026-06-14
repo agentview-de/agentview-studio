@@ -74,7 +74,7 @@ const HEAVY_FIELD_TYPES = new Set([
   'markdown', 'code', 'textarea', 'location', 'icon', 'theme',
 ]);
 
-export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, codePicker, formKey, defaults, autoFold }) {
+export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, codePicker, formKey, defaults, autoFold, tierFilter }) {
   const root = document.createElement('div');
   root.className = 'bb-form';
   const refs = new Map(); // key → control element
@@ -267,8 +267,38 @@ export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, 
   //   `section` opens a collapsible group; subsequent fields mount into it.
   //   `row` wraps its `children` array in a horizontal flex container.
   // Anything else is a regular field.
+  // Tier filter: the inline inspector passes 'basic' to show only the essential
+  // controls (PowerPoint-simple); the Widget Designer passes 'all' (or omits
+  // this) to show everything. A field opts into advanced via `tier: 'advanced'`
+  // — everything else (no tier / 'basic') stays. Rows filter their children and
+  // drop when empty; section headers left with no content are dropped so the
+  // basic view shows no empty groups. Default 'all' → fully backward-compatible.
+  const tieredFields = (() => {
+    const src = schema.fields ?? [];
+    if (tierFilter !== 'basic') return src;
+    const isAdv = x => x && x.tier === 'advanced';
+    const kept = [];
+    for (const f of src) {
+      if (f.type === 'row') {
+        const children = (Array.isArray(f.children) ? f.children : []).filter(c => !isAdv(c));
+        if (children.length) kept.push({ ...f, children });
+        continue;
+      }
+      if (f.type === 'section') { kept.push(f); continue; }
+      if (isAdv(f)) continue;
+      kept.push(f);
+    }
+    // Drop section markers with no content before the next section / EOF.
+    const out = [];
+    for (let i = 0; i < kept.length; i++) {
+      if (kept[i].type === 'section' && (!kept[i + 1] || kept[i + 1].type === 'section')) continue;
+      out.push(kept[i]);
+    }
+    return out;
+  })();
+
   let currentTarget = root;
-  for (const f of (schema.fields ?? [])) {
+  for (const f of tieredFields) {
     if (f.type === 'section') {
       // Explicit section marker — opens a new container that subsequent
       // top-level fields mount into (until the next section / EOF).
