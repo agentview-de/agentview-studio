@@ -14,6 +14,7 @@
 // deepest tier and keeps its own launcher for `type === 'custom'`.
 
 import { openModal } from '../ui/modal.js';
+import { mountCustomCode } from './widget-designer.js';
 import { buildForm } from '../ui/inspector.js';
 import { mountWidget } from '../../shared/widget-host.js';
 import { isStored } from '../../shared/offline-data.js';
@@ -47,6 +48,7 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
   const plugin = getPlugin(widget.type);
   const looks = (typeof plugin?.looks === 'function' ? plugin.looks() : null) || [];
   const hasLooks = looks.length > 0;
+  const isCustom = widget.type === 'custom';
   const slideR = (slideRatio && slideRatio > 0) ? slideRatio : 16 / 9;
   // Working copy — nothing touches the real widget until Done.
   let working = clone(widget.content ?? plugin?.defaults?.() ?? {});
@@ -87,9 +89,11 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
         <div class="avs-dz-sidetabs">
           <button type="button" class="avs-dz-sidetab avs-on" data-side="design">${escapeHtml(tx('Settings'))}</button>
           ${hasLooks ? `<button type="button" class="avs-dz-sidetab" data-side="looks">${escapeHtml(tx('Looks'))}</button>` : ''}
+          ${isCustom ? `<button type="button" class="avs-dz-sidetab" data-side="code">${escapeHtml(tx('Code'))}</button>` : ''}
         </div>
         <div class="avs-dz-sidepane" data-pane="design"><div class="avs-dz-form" id="dz-form"></div></div>
         ${hasLooks ? '<div class="avs-dz-sidepane" data-pane="looks" hidden><div id="dz-looks"></div></div>' : ''}
+        ${isCustom ? '<div class="avs-dz-sidepane" data-pane="code" hidden><div id="dz-code"></div></div>' : ''}
       </div>
     </div>`;
 
@@ -357,11 +361,25 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
     }
   };
 
-  // ---- side tabs (Settings / Looks / …) ----
+  // ---- Code tab (Phase 6) — custom widgets edit template/CSS/fields here; the
+  // stage and Settings form (driven by working.fields) update live on change ----
+  let codeEditor = null;
+  const mountCode = () => {
+    if (codeEditor || !isCustom) return;
+    const host = body.querySelector('#dz-code');
+    if (!host) return;
+    codeEditor = mountCustomCode(working, {
+      onChange: () => { mountForm(); paintAll(); },
+    });
+    host.appendChild(codeEditor.root);
+  };
+
+  // ---- side tabs (Settings / Looks / Code) ----
   const switchSide = (which) => {
     body.querySelectorAll('.avs-dz-sidetab').forEach(b => b.classList.toggle('avs-on', b.dataset.side === which));
     body.querySelectorAll('.avs-dz-sidepane').forEach(p => { p.hidden = p.dataset.pane !== which; });
     if (which === 'looks') renderLooks();
+    if (which === 'code') mountCode();
   };
   body.querySelectorAll('.avs-dz-sidetab').forEach(btn => btn.addEventListener('click', () => switchSide(btn.dataset.side)));
 
@@ -389,6 +407,7 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
     clearTimeout(previewTimer);
     clearPanes();
     clearLooks();
+    codeEditor?.dispose?.();
     form?.dispose?.();
     if (result === 'apply') {
       widget.content = working;

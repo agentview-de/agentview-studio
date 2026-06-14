@@ -15,6 +15,8 @@ export const overlayDe = {
   "Edit this widget’s template, styling and fields.": "Bearbeite Vorlage, Styling und Felder dieses Widgets.",
   "Open designer": "Designer öffnen",
   "Open the full-screen designer with a large live preview.": "Öffnet den Vollbild-Designer mit großer Live-Vorschau.",
+  "Large live stage, all settings, and the template / CSS / fields editor.": "Große Live-Bühne, alle Einstellungen und der Vorlagen-/CSS-/Felder-Editor.",
+  "Code": "Code",
   "Live preview is off for this widget.": "Live-Vorschau ist für dieses Widget aus.",
   "Match slide": "Wie Folie",
   "Widget theme": "Widget-Theme",
