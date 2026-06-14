@@ -1902,15 +1902,17 @@
    because the plugin also puts these classes on the slide root as state markers.
    Without scoping, the rules below would override .bb-slide's sizing and turn
    the entire slide into a pill bar (the bar variant) or display:block container. */
-.bb-prog-label { font-size: calc(clamp(16px, 3.6cqmin, 52px) * var(--bb-prog-text-scale, 1)); opacity: .85; text-align: center; }
+.bb-prog-label { font-size: calc(clamp(16px, 3.6cqmin, 52px) * var(--bb-prog-text-scale, 1) * var(--bb-prog-label-scale, 1)); opacity: .85; text-align: center; }
+/* Emphasised label: reads as the headline rather than a caption. */
+.bb-prog-label--em { opacity: 1; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
 .bb-slide-progress .bb-prog-bar { width: 86%; height: min(48px, 12cqh); min-height: 16px; background: rgba(255,255,255,.1); border-radius: 999px; overflow: hidden; }
 .bb-prog-fill { height: 100%; border-radius: 999px; min-width: 2%; transition: width .6s cubic-bezier(.22,1,.36,1); }
-.bb-prog-value { font: 700 calc(clamp(16px, 4cqmin, 40px) * var(--bb-prog-text-scale, 1)) var(--bb-display); font-variant-numeric: tabular-nums; }
+.bb-prog-value { font: 700 calc(clamp(16px, 4cqmin, 40px) * var(--bb-prog-text-scale, 1) * var(--bb-prog-value-scale, 1)) var(--bb-display); font-variant-numeric: tabular-nums; }
 .bb-prog-ringwrap { position: relative; width: min(60cqw, 60cqh); height: min(60cqw, 60cqh); }
 .bb-slide-progress .bb-prog-ring { width: 100%; height: 100%; display: block; }
 .bb-prog-ringtext { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.bb-prog-pct { font: 800 calc(min(20cqw, 20cqh) * var(--bb-prog-text-scale, 1)) var(--bb-display); line-height: 1; font-variant-numeric: tabular-nums; }
-.bb-prog-sub { font-size: calc(min(7cqw, 7cqh) * var(--bb-prog-text-scale, 1)); opacity: .7; font-variant-numeric: tabular-nums; }
+.bb-prog-pct { font: 800 calc(min(20cqw, 20cqh) * var(--bb-prog-text-scale, 1) * var(--bb-prog-value-scale, 1)) var(--bb-display); line-height: 1; font-variant-numeric: tabular-nums; }
+.bb-prog-sub { font-size: calc(min(7cqw, 7cqh) * var(--bb-prog-text-scale, 1) * var(--bb-prog-value-scale, 1)); opacity: .7; font-variant-numeric: tabular-nums; }
 
 /* Days since */
 .bb-slide-dayssince { text-align: center; }

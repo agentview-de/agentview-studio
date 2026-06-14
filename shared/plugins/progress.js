@@ -69,8 +69,9 @@ export default register({
     value: 6800, target: 10000, unit: '€',
     source: 'inline', dataUrl: '', refreshSec: 60,
     style: 'bar', showValue: true, animate: true,
+    align: 'center', labelPos: 'above', labelEmphasis: false,
     color: STATUS_COLORS.good,
-    locale: '', textScale: 100,
+    locale: '', textScale: 100, labelScale: 100, valueScale: 100,
     useThresholds: false, invertThresholds: false,
     thresholdWarn: 70, thresholdGood: 90,
     colorLow: STATUS_COLORS.bad, colorMid: STATUS_COLORS.warn, colorHigh: STATUS_COLORS.good,
@@ -107,6 +108,19 @@ export default register({
         { value: 'gauge', label: 'Gauge' },
       ] },
       { key: 'showValue', type: 'toggle', label: 'Show value' },
+      { type: 'row', children: [
+        { key: 'align', type: 'select', label: 'Vertical position', buttons: true, options: [
+          { value: 'top',    label: 'Top' },
+          { value: 'center', label: 'Center' },
+          { value: 'bottom', label: 'Bottom' },
+        ] },
+        { key: 'labelPos', type: 'select', label: 'Label position', buttons: true, options: [
+          { value: 'above', label: 'Above' },
+          { value: 'below', label: 'Below' },
+        ] },
+      ] },
+      { key: 'labelEmphasis', type: 'toggle', label: 'Emphasise label',
+        help: 'Uppercase, full opacity and bolder — makes the label read as the headline instead of a caption.' },
       { key: 'animate', type: 'toggle', label: 'Animate',
         help: 'Fills the bar or ring with a sweep and counts the value up when the slide appears or the value changes.' },
       { key: 'color', type: 'color', label: 'Fill colour', clearable: true,
@@ -114,6 +128,12 @@ export default register({
         help: 'Leave empty to follow the theme accent; click × to reset.' },
       localeField(),
       textScaleField(),
+      { type: 'row', children: [
+        { key: 'labelScale', type: 'number', label: 'Label size', min: 50, max: 300, step: 10, slider: true, suffix: '%',
+          help: 'Scales the label on top of the overall text size — independent of the value.' },
+        { key: 'valueScale', type: 'number', label: 'Value size', min: 50, max: 300, step: 10, slider: true, suffix: '%',
+          help: 'Scales the value / percentage on top of the overall text size — independent of the label.' },
+      ] },
 
       { type: 'section', key: 'thresholds', label: 'Threshold colours', collapsed: true,
         summary: c => c.useThresholds
@@ -153,14 +173,21 @@ export default register({
     // Audience language, not player OS ('' falls through to the device default).
     const fmtNum = n => Number(n).toLocaleString(c.locale || undefined);
 
+    const align = c.align ?? 'center';
+    const justify = align === 'top' ? 'flex-start' : align === 'bottom' ? 'flex-end' : 'center';
+    const labelBelow = (c.labelPos ?? 'above') === 'below';
+
     const root = document.createElement('div');
     applyColorOverrides(root, c);
     root.className = `bb-slide bb-slide-progress bb-prog-${style} bb-theme-${c.theme ?? 'minimal-dark'}`;
     // container-type:size gives the cq* font clamps their container context.
-    root.style.cssText += 'container-type:size;width:100%;height:100%;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5em;';
-    // Text-size multiplier — the .bb-prog-* font clamps in slide-themes.css
-    // consume this var (see cssNeeds for the calc(... * var()) wrappers).
+    root.style.cssText += `container-type:size;width:100%;height:100%;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:${justify};gap:0.5em;`;
+    // Text-size multipliers — the .bb-prog-* font clamps in slide-themes.css
+    // consume these vars (see the calc(... * var()) wrappers). label/value scale
+    // independently so the label can headline while the value stays subordinate.
     root.style.setProperty('--bb-prog-text-scale', String((Number(c.textScale) || 100) / 100));
+    root.style.setProperty('--bb-prog-label-scale', String((Number(c.labelScale) || 100) / 100));
+    root.style.setProperty('--bb-prog-value-scale', String((Number(c.valueScale) || 100) / 100));
     container.appendChild(root);
 
     const titleHtml = slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : '';
@@ -190,21 +217,19 @@ export default register({
     // Build the markup once per render (or after an error note), with the fill
     // at `v` of `t`. Dynamic bits are spans updated via textContent, so the
     // JSON-sourced path needs no re-escaping.
+    const labelHtml = `<div class="bb-prog-label${c.labelEmphasis ? ' bb-prog-label--em' : ''}"></div>`;
     const build = (v, t) => {
       const clamped = Math.max(0, Math.min(1, t > 0 ? v / t : 0));
       const fill = fillFor(c, Math.round((t > 0 ? v / t : 0) * 100));
       // currentColor track instead of hardcoded white — visible on the light
       // 'editorial-mono' theme too (stylesheet fallback keeps old browsers OK).
       if (style === 'bar') {
-        root.innerHTML = `${titleHtml}
-          <div class="bb-prog-label"></div>
-          <div class="bb-prog-bar" style="background:color-mix(in srgb, currentColor 12%, transparent);"><div class="bb-prog-fill" style="width:${(clamped * 100).toFixed(1)}%;background:${escapeHtml(fill)};${animate ? '' : 'transition:none;'}"></div></div>
+        const barHtml = `<div class="bb-prog-bar" style="background:color-mix(in srgb, currentColor 12%, transparent);"><div class="bb-prog-fill" style="width:${(clamped * 100).toFixed(1)}%;background:${escapeHtml(fill)};${animate ? '' : 'transition:none;'}"></div></div>
           ${showValue ? '<div class="bb-prog-value"><span data-cur></span><span data-unit></span> / <span data-tgt></span><span data-unit></span> · <span data-pct></span>%</div>' : ''}`;
+        root.innerHTML = `${titleHtml}${labelBelow ? barHtml + labelHtml : labelHtml + barHtml}`;
       } else {
         const dash = style === 'gauge' ? `${ARC.toFixed(1)} ${C.toFixed(1)}` : C.toFixed(1);
-        root.innerHTML = `${titleHtml}
-          <div class="bb-prog-label"></div>
-          <div class="bb-prog-ringwrap">
+        const ringHtml = `<div class="bb-prog-ringwrap">
             <svg class="bb-prog-ring" viewBox="0 0 100 100">
               <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" stroke-opacity=".15" stroke-width="9"${style === 'gauge' ? ` stroke-linecap="round" stroke-dasharray="${dash}" transform="rotate(${ROT} 50 50)"` : ''}/>
               <circle data-arc cx="50" cy="50" r="42" fill="none" stroke="${escapeHtml(fill)}" stroke-width="9" stroke-linecap="round"
@@ -212,6 +237,7 @@ export default register({
             </svg>
             <div class="bb-prog-ringtext"><div class="bb-prog-pct"><span data-pct></span>%</div>${showValue ? '<div class="bb-prog-sub"><span data-cur></span><span data-unit></span></div>' : ''}</div>
           </div>`;
+        root.innerHTML = `${titleHtml}${labelBelow ? ringHtml + labelHtml : labelHtml + ringHtml}`;
       }
       labelEl = root.querySelector('.bb-prog-label');
       barFill = root.querySelector('.bb-prog-fill');
