@@ -148,6 +148,41 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
   });
   formHost.appendChild(form.root);
 
+  // ---- direct manipulation bridge (hover + click) ----
+  // Plugins annotate rendered elements with data-field="key1 key2 …" (the keys
+  // that drive the element; first = primary). buildForm tags each control group
+  // with data-field-key. Hover a control → glow the element(s) it drives; click
+  // an element → focus its primary control. Both are delegated on stable hosts
+  // so they survive preview re-renders. Widgets without annotations simply opt
+  // out — nothing breaks.
+  const fieldTokens = el => (el.getAttribute('data-field') || '').split(/\s+/).filter(Boolean);
+  const cssEscape = k => (window.CSS && CSS.escape) ? CSS.escape(k) : String(k).replace(/"/g, '\\"');
+  const glowFor = (key, on) => {
+    previewHost.querySelectorAll('[data-field]').forEach(el => {
+      if (fieldTokens(el).includes(key)) el.classList.toggle('avs-dz-hl', on);
+    });
+  };
+  formHost.addEventListener('mouseover', e => {
+    const grp = e.target.closest('[data-field-key]');
+    if (grp && formHost.contains(grp)) glowFor(grp.dataset.fieldKey, true);
+  });
+  formHost.addEventListener('mouseout', e => {
+    const grp = e.target.closest('[data-field-key]');
+    if (grp && formHost.contains(grp)) glowFor(grp.dataset.fieldKey, false);
+  });
+  previewHost.addEventListener('click', e => {
+    const el = e.target.closest('[data-field]');
+    if (!el || !previewHost.contains(el)) return;
+    const key = fieldTokens(el)[0];
+    if (!key) return;
+    const grp = formHost.querySelector(`[data-field-key="${cssEscape(key)}"]`);
+    if (!grp) return;
+    grp.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    // Focus the actual control, not the hover-revealed ↺ reset button.
+    grp.querySelector('input, select, textarea, [contenteditable], button:not(.bb-field-reset)')?.focus?.();
+    grp.classList.remove('avs-dz-flash'); void grp.offsetWidth; grp.classList.add('avs-dz-flash');
+  });
+
   const onResize = () => { fitPreview(); };
 
   return openModal({
@@ -199,6 +234,12 @@ function injectStylesOnce() {
     .avs-dz-preview { border-radius: 8px; overflow: hidden; position: relative; background: var(--bb-st-bg,#0f1218); box-shadow: 0 8px 34px rgba(0,0,0,.4); }
     .avs-dz-note { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; font-size: 13px; color: var(--bb-ink-muted,#aaa); }
     .avs-dz-side { min-width: 0; overflow-y: auto; padding-right: 4px; }
+    /* direct-manipulation bridge */
+    .avs-dz-preview [data-field] { cursor: pointer; }
+    .avs-dz-preview [data-field]:hover { outline: 1px dashed color-mix(in srgb, var(--bb-accent,#8b5cf6) 70%, transparent); outline-offset: 2px; }
+    .avs-dz-hl { outline: 2px solid var(--bb-accent,#8b5cf6) !important; outline-offset: 2px; border-radius: 3px; }
+    .avs-dz-form [data-field-key].avs-dz-flash { animation: avs-dz-flash 1.1s ease; }
+    @keyframes avs-dz-flash { 0%, 100% { background: transparent; } 15% { background: color-mix(in srgb, var(--bb-accent,#8b5cf6) 26%, transparent); } }
     @media (max-width: 860px) {
       .avs-dz-grid { grid-template-columns: 1fr; height: auto; }
       .avs-dz-stage { height: 46vh; }

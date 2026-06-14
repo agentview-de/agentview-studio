@@ -217,25 +217,29 @@ export default register({
     // Build the markup once per render (or after an error note), with the fill
     // at `v` of `t`. Dynamic bits are spans updated via textContent, so the
     // JSON-sourced path needs no re-escaping.
-    const labelHtml = `<div class="bb-prog-label${c.labelEmphasis ? ' bb-prog-label--em' : ''}"></div>`;
+    // data-field annotations let the Widget Designer bridge controls ↔ elements
+    // (hover a control to glow the element, click the element to focus the
+    // control). Each list names every field that drives the element; the first
+    // is the primary one a click jumps to. Inert outside the designer.
+    const labelHtml = `<div class="bb-prog-label${c.labelEmphasis ? ' bb-prog-label--em' : ''}" data-field="label labelScale labelEmphasis labelPos align locale"></div>`;
     const build = (v, t) => {
       const clamped = Math.max(0, Math.min(1, t > 0 ? v / t : 0));
       const fill = fillFor(c, Math.round((t > 0 ? v / t : 0) * 100));
       // currentColor track instead of hardcoded white — visible on the light
       // 'editorial-mono' theme too (stylesheet fallback keeps old browsers OK).
       if (style === 'bar') {
-        const barHtml = `<div class="bb-prog-bar" style="background:color-mix(in srgb, currentColor 12%, transparent);"><div class="bb-prog-fill" style="width:${(clamped * 100).toFixed(1)}%;background:${escapeHtml(fill)};${animate ? '' : 'transition:none;'}"></div></div>
-          ${showValue ? '<div class="bb-prog-value"><span data-cur></span><span data-unit></span> / <span data-tgt></span><span data-unit></span> · <span data-pct></span>%</div>' : ''}`;
+        const barHtml = `<div class="bb-prog-bar" data-field="value target style color useThresholds" style="background:color-mix(in srgb, currentColor 12%, transparent);"><div class="bb-prog-fill" style="width:${(clamped * 100).toFixed(1)}%;background:${escapeHtml(fill)};${animate ? '' : 'transition:none;'}"></div></div>
+          ${showValue ? '<div class="bb-prog-value" data-field="value target unit showValue valueScale"><span data-cur></span><span data-unit></span> / <span data-tgt></span><span data-unit></span> · <span data-pct></span>%</div>' : ''}`;
         root.innerHTML = `${titleHtml}${labelBelow ? barHtml + labelHtml : labelHtml + barHtml}`;
       } else {
         const dash = style === 'gauge' ? `${ARC.toFixed(1)} ${C.toFixed(1)}` : C.toFixed(1);
-        const ringHtml = `<div class="bb-prog-ringwrap">
+        const ringHtml = `<div class="bb-prog-ringwrap" data-field="value target style color useThresholds">
             <svg class="bb-prog-ring" viewBox="0 0 100 100">
               <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" stroke-opacity=".15" stroke-width="9"${style === 'gauge' ? ` stroke-linecap="round" stroke-dasharray="${dash}" transform="rotate(${ROT} 50 50)"` : ''}/>
               <circle data-arc cx="50" cy="50" r="42" fill="none" stroke="${escapeHtml(fill)}" stroke-width="9" stroke-linecap="round"
                 stroke-dasharray="${dash}" stroke-dashoffset="${(ARC * (1 - clamped)).toFixed(1)}" transform="rotate(${ROT} 50 50)"${animate ? ' style="transition:stroke-dashoffset .8s cubic-bezier(.22,1,.36,1),stroke .4s;"' : ''}/>
             </svg>
-            <div class="bb-prog-ringtext"><div class="bb-prog-pct"><span data-pct></span>%</div>${showValue ? '<div class="bb-prog-sub"><span data-cur></span><span data-unit></span></div>' : ''}</div>
+            <div class="bb-prog-ringtext"><div class="bb-prog-pct" data-field="value target valueScale"><span data-pct></span>%</div>${showValue ? '<div class="bb-prog-sub" data-field="value unit showValue valueScale"><span data-cur></span><span data-unit></span></div>' : ''}</div>
           </div>`;
         root.innerHTML = `${titleHtml}${labelBelow ? ringHtml + labelHtml : labelHtml + ringHtml}`;
       }

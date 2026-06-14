@@ -146,6 +146,11 @@ export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, 
   function mountField(f, { suppressLabel = false, suppressHelp = false } = {}) {
     const group = document.createElement('div');
     group.className = `bb-form-group bb-form-${f.type}`;
+    // Tag the wrapper with its content key so a host (e.g. the Widget Designer)
+    // can bridge controls to the rendered element they drive — hover a control
+    // to glow the matching [data-field] in the preview, click the element to
+    // focus its control. Purely additive; ignored everywhere else.
+    if (f.key != null) group.dataset.fieldKey = f.key;
 
     // Per-field reset: a small ghost ↺ next to the label (hover-revealed)
     // whenever the value differs from the caller-supplied defaults. Resets
