@@ -102,6 +102,7 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
   let themeOverride = null;   // null = use the widget's own content.theme
   let zoom = 1;
   let split = false;
+  let editing = false;        // true while an inline text edit is in progress
   let panes = [];             // current pane host elements
   const previewDisposers = [];
   let previewTimer = null;
@@ -182,7 +183,7 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
     const perW = split ? Math.max(0, (availW - STAGE_GAP) / 2) : availW;
     panes.forEach((host, i) => fitInto(host, ratios[i] ?? ratios[0], perW, availH));
   };
-  const schedulePreview = () => { clearTimeout(previewTimer); previewTimer = setTimeout(paintAll, 120); };
+  const schedulePreview = () => { if (editing) return; clearTimeout(previewTimer); previewTimer = setTimeout(paintAll, 120); };
 
   // ---- toolbar handlers ----
   body.querySelectorAll('.avs-dz-fmt').forEach(btn => btn.addEventListener('click', () => {
@@ -256,6 +257,7 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
     if (grp && formHost.contains(grp)) glowFor(grp.dataset.fieldKey, false);
   });
   stage.addEventListener('click', e => {
+    if (editing) return;
     const el = e.target.closest('[data-field]');
     if (!el || !stage.contains(el)) return;
     const key = fieldTokens(el)[0];
@@ -266,6 +268,50 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
     // Focus the actual control, not the hover-revealed ↺ reset button.
     grp.querySelector('input, select, textarea, [contenteditable], button:not(.bb-field-reset)')?.focus?.();
     grp.classList.remove('avs-dz-flash'); void grp.offsetWidth; grp.classList.add('avs-dz-flash');
+  });
+
+  // Inline text editing (Stage C): double-click a plain-text element in the
+  // preview to edit it in place. Only the primary field's plain-text types
+  // (text / textarea) are editable inline; richer fields are edited in the form.
+  const fieldTypeMap = () => {
+    const m = {};
+    const walk = arr => { for (const f of (arr || [])) { if (f.type === 'row') walk(f.children); else if (f.key) m[f.key] = f.type; } };
+    try { walk(plugin.schema(working).fields); } catch { /* ignore */ }
+    return m;
+  };
+  stage.addEventListener('dblclick', e => {
+    const el = e.target.closest('[data-field]');
+    if (!el || !stage.contains(el)) return;
+    const key = fieldTokens(el)[0];
+    if (!key) return;
+    const type = fieldTypeMap()[key];
+    if (type !== 'text' && type !== 'textarea') return; // inline-edit plain text only
+    e.preventDefault();
+    editing = true;
+    el.setAttribute('contenteditable', 'true');
+    el.classList.add('avs-dz-editing');
+    el.focus();
+    const range = document.createRange(); range.selectNodeContents(el);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    const finish = (commitIt) => {
+      el.removeEventListener('blur', onBlur);
+      el.removeEventListener('keydown', onKey);
+      el.removeAttribute('contenteditable');
+      el.classList.remove('avs-dz-editing');
+      editing = false;
+      if (commitIt) {
+        working = { ...working, [key]: el.innerText.replace(/\n+$/, '') };
+        mountForm();
+      }
+      paintAll();
+    };
+    const onBlur = () => finish(true);
+    const onKey = (ev) => {
+      if (ev.key === 'Enter' && type === 'text') { ev.preventDefault(); el.removeEventListener('blur', onBlur); finish(true); }
+      else if (ev.key === 'Escape') { ev.preventDefault(); el.removeEventListener('blur', onBlur); finish(false); }
+    };
+    el.addEventListener('blur', onBlur);
+    el.addEventListener('keydown', onKey);
   });
 
   // ---- Looks gallery (Phase 4) — curated starting points as live thumbnails ----
@@ -393,6 +439,7 @@ function injectStylesOnce() {
     .avs-dz-preview [data-field] { cursor: pointer; }
     .avs-dz-preview [data-field]:hover { outline: 1px dashed color-mix(in srgb, var(--bb-accent,#8b5cf6) 70%, transparent); outline-offset: 2px; }
     .avs-dz-hl { outline: 2px solid var(--bb-accent,#8b5cf6) !important; outline-offset: 2px; border-radius: 3px; }
+    .avs-dz-editing { outline: 2px solid var(--bb-accent,#8b5cf6) !important; outline-offset: 2px; cursor: text !important; background: color-mix(in srgb, var(--bb-accent,#8b5cf6) 8%, transparent); }
     .avs-dz-form [data-field-key].avs-dz-flash { animation: avs-dz-flash 1.1s ease; }
     @keyframes avs-dz-flash { 0%, 100% { background: transparent; } 15% { background: color-mix(in srgb, var(--bb-accent,#8b5cf6) 26%, transparent); } }
     @media (max-width: 860px) {
