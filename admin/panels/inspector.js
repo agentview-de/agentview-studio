@@ -21,7 +21,7 @@ import {
 import { renderScheduleEditor } from '../ui/schedule-editor.js';
 import { mountBackgroundEditor } from './background-editor.js';
 import { openModal } from '../ui/modal.js';
-import { openWidgetDesigner } from './widget-designer.js';
+import { openDesigner } from './designer.js';
 import { saveWidgetAsPreset } from '../ui/custom-widget-actions.js';
 import { pickAsset, pickAssets } from '../ui/asset-library.js';
 import { toast } from '../ui/toast.js';
@@ -561,6 +561,10 @@ export function renderWidgetInspector(host) {
     // collapsed-section state. Without it, every inspector re-render would
     // reset the user's folding.
     formKey: widget.type,
+    // The inline inspector shows only the essential controls; advanced fields
+    // (tier:'advanced') live in the Widget Designer reached via "Open designer".
+    // Widgets that tag no field as advanced are unaffected — they show all.
+    tierFilter: 'basic',
     onChange: v => {
       // Detect a switch INTO "provided offline" so we can fetch the data right
       // away (below) — the user shouldn't have to go to the header "Daten" action
@@ -594,25 +598,33 @@ export function renderWidgetInspector(host) {
   // Remember the live form so the NEXT rebuild can dispose its controls.
   prevForm = form;
 
-  // Custom widget: a prominent launcher for the Widget Designer (template / CSS
-  // / fields). Sits above the author-defined fields so "edit the structure" is
-  // the first thing offered. The form above already edits the field VALUES.
-  if (widget.type === 'custom') {
+  // One launcher for the full-screen Widget Designer (Ebene ②) for EVERY widget.
+  // The inline form above is the quick path; this graduates to a large live
+  // stage, device-format previews, Looks, and — for custom widgets — a Code tab
+  // (template / CSS / fields). Edits there are a transaction (Cancel discards).
+  {
     const dz = document.createElement('div');
     dz.className = 'avs-inspector-section';
     dz.style.cssText = 'margin-bottom:12px;';
-    dz.innerHTML = `<button class="bb-btn bb-btn-primary" id="ins-open-designer" style="width:100%;">🎨 ${esc(tx('Open Widget Designer'))}</button>
-      <p class="bb-form-help">${esc(tx('Edit this widget’s template, styling and fields.'))}</p>`;
-    dz.querySelector('#ins-open-designer').addEventListener('click', () => openWidgetDesigner(widget, {
-      onApply: () => {
-        commit('widget-design');
-        refreshWidget(widget.id);
-        // Field set may have changed → rebuild the inspector form (toggle
-        // through null so the selectedWidgetId subscriber re-runs).
-        state.ui.selectedWidgetId = null;
-        state.ui.selectedWidgetId = widget.id;
-      },
-    }));
+    const help = widget.type === 'custom'
+      ? tx('Large live stage, all settings, and the template / CSS / fields editor.')
+      : tx('Open the full-screen designer with a large live preview.');
+    dz.innerHTML = `<button class="bb-btn bb-btn-primary" id="ins-open-designer2" style="width:100%;">🎨 ${esc(tx('Open designer'))}</button>
+      <p class="bb-form-help">${esc(help)}</p>`;
+    dz.querySelector('#ins-open-designer2').addEventListener('click', () => {
+      const cv = resolveCanvas(state.playlist?.canvas);
+      openDesigner(widget, {
+        slideRatio: cv.h ? cv.w / cv.h : 16 / 9,
+        onApply: () => {
+          commit('widget-design');
+          refreshWidget(widget.id);
+          // Field set may have changed (custom Code tab) → rebuild the inline
+          // form (toggle through null so the selectedWidgetId subscriber re-runs).
+          state.ui.selectedWidgetId = null;
+          state.ui.selectedWidgetId = widget.id;
+        },
+      });
+    });
     host.querySelector('#ins-content').prepend(dz);
   }
 

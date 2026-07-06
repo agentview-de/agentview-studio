@@ -87,7 +87,7 @@ export default register({
           const u = { auto: 'Auto', dhms: 'D·H·M·S', dhm: 'D·H·M', dh: 'D·H', days: 'D', hms: 'H·M·S' }[c.units ?? 'auto'] ?? '';
           return c.locale ? `${u} · ${c.locale}` : u;
         } },
-      { key: 'units', type: 'select', label: 'Show units', options: [
+      { key: 'units', type: 'select', label: 'Show units', tier: 'advanced', options: [
         { value: 'auto',   label: 'Auto (hide finer units when target is far away)' },
         { value: 'dhms',   label: 'Days · hours · minutes · seconds' },
         { value: 'dhm',    label: 'Days · hours · minutes' },
@@ -95,15 +95,15 @@ export default register({
         { value: 'days',   label: 'Just days' },
         { value: 'hms',    label: 'Hours · minutes · seconds (≤24h)' },
       ], help: 'For long countdowns (≥1 week) "just days" or "days+hours" reads better than burning a seconds digit.' },
-      { key: 'unitStyle', type: 'select', label: 'Unit labels', buttons: true, options: [
+      { key: 'unitStyle', type: 'select', label: 'Unit labels', buttons: true, tier: 'advanced', options: [
         { value: 'short',  label: 'Short' },
         { value: 'full',   label: 'Full words' },
         { value: 'hidden', label: 'Hidden' },
       ], help: 'How the labels under the digits are written — they follow the language below.' },
-      localeField(),
-      { key: 'showTarget', type: 'toggle', label: 'Show target date',
+      { ...localeField(), tier: 'advanced' },
+      { key: 'showTarget', type: 'toggle', label: 'Show target date', tier: 'advanced',
         help: 'Shows the exact target date & time under the countdown.' },
-      textScaleField(),
+      { ...textScaleField(), tier: 'advanced' },
 
       { type: 'section', key: 'behavior', label: 'Behavior',
         summary: c => {
@@ -111,26 +111,33 @@ export default register({
           if (!s) return '';
           return s >= 3600 ? `< ${Math.round(s / 3600)} h` : s >= 60 ? `< ${Math.round(s / 60)} min` : `< ${s} s`;
         } },
-      { key: 'urgentBelow', type: 'duration', label: 'Urgent when below (0 = off)',
+      { key: 'urgentBelow', type: 'duration', label: 'Urgent when below (0 = off)', tier: 'advanced',
         help: 'When the remaining time drops below this, the digits switch to the urgency colour.' },
-      { key: 'urgentColor', type: 'color', label: 'Urgency colour', clearable: true,
+      { key: 'urgentColor', type: 'color', label: 'Urgency colour', clearable: true, tier: 'advanced',
         help: 'Leave empty to use the accent colour.',
         showIf: c => (c.urgentBelow ?? 0) > 0 },
 
       { type: 'section', key: 'finished', label: 'When finished',
         summary: c => ({ text: 'Show text', countup: 'Count up', freeze: 'Freeze at zero' }[c.finishedMode ?? 'text'] ?? '') },
-      { key: 'finishedMode', type: 'select', label: 'When the target is reached', buttons: true, options: [
+      { key: 'finishedMode', type: 'select', label: 'When the target is reached', buttons: true, tier: 'advanced', options: [
         { value: 'text',    label: 'Show text' },
         { value: 'countup', label: 'Count up' },
         { value: 'freeze',  label: 'Freeze at zero' },
       ], help: '“Count up” keeps counting past the target (time since), “Freeze at zero” holds the zeros.' },
-      { key: 'expiredText', type: 'text', label: 'Text when reached',
+      { key: 'expiredText', type: 'text', label: 'Text when reached', tier: 'advanced',
         help: 'Shown once the target is reached.',
         showIf: c => (c.finishedMode ?? 'text') === 'text' },
 
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'full-units', name: 'Full units', patch: { units: 'dhms', unitStyle: 'full' } },
+    { id: 'compact', name: 'Compact', patch: { units: 'dh', unitStyle: 'short' } },
+    { id: 'with-date', name: 'With date', patch: { showTarget: true, units: 'dhm' } },
+    { id: 'days-only', name: 'Just days', patch: { units: 'days', unitStyle: 'full' } },
+    { id: 'count-up', name: 'Count up after', patch: { finishedMode: 'countup', units: 'dhms' } },
+  ],
   render(slide, container) {
     const c = slide.content ?? {};
     const locale = c.locale || undefined;
@@ -142,11 +149,11 @@ export default register({
     root.className = `bb-slide bb-slide-countdown bb-theme-${c.theme ?? 'gradient-purple'}`;
     root.style.setProperty('--bb-countdown-text-scale', String((c.textScale ?? 100) / 100));
     const caption = c.showTarget && target && !isNaN(target.getTime())
-      ? `<div class="bb-cd-target" style="margin-top:18px;opacity:.7;font:500 calc(min(3.6cqw,5cqh) * var(--bb-countdown-text-scale,1))/1.3 var(--bb-st-font, Inter, sans-serif);">${escapeHtml(formatTarget(target, c.target?.tz, locale))}</div>`
+      ? `<div class="bb-cd-target" data-field="target showTarget locale textScale" style="margin-top:18px;opacity:.7;font:500 calc(min(3.6cqw,5cqh) * var(--bb-countdown-text-scale,1))/1.3 var(--bb-st-font, Inter, sans-serif);">${escapeHtml(formatTarget(target, c.target?.tz, locale))}</div>`
       : '';
     root.innerHTML = `
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
-      ${c.heading ? `<div class="bb-cd-heading">${escapeHtml(c.heading)}</div>` : ''}
+      ${c.heading ? `<div class="bb-cd-heading" data-field="heading textScale">${escapeHtml(c.heading)}</div>` : ''}
       <div class="bb-cd-grid"></div>
       ${caption}
     `;
@@ -154,8 +161,8 @@ export default register({
     const grid = root.querySelector('.bb-cd-grid');
     const urgentColor = c.urgentColor || 'var(--bb-st-accent)'; // || so '' inherits
     const cell = (k, count, v, urgent) =>
-      `<div><b class="bb-cd-${k}"${urgent ? ` style="color:${escapeHtml(urgentColor)};"` : ''}>${v}</b>${
-        unitStyle === 'hidden' ? '' : `<span class="bb-cd-u-${k}">${escapeHtml(unitLabel(k, count, locale, unitStyle))}</span>`}</div>`;
+      `<div><b class="bb-cd-${k}" data-field="target units finishedMode textScale urgentBelow urgentColor"${urgent ? ` style="color:${escapeHtml(urgentColor)};"` : ''}>${v}</b>${
+        unitStyle === 'hidden' ? '' : `<span class="bb-cd-u-${k}" data-field="unitStyle units locale">${escapeHtml(unitLabel(k, count, locale, unitStyle))}</span>`}</div>`;
     const pad = n => String(n).padStart(2, '0');
 
     // The grid only rebuilds its DOM when the SHAPE changes (unit mode,
@@ -175,7 +182,7 @@ export default register({
           // Responsive like the rest of the widget set, a fixed 84px overflowed
           // small tiles and looked lost on a wall-sized TV. .bb-cd-grid is inside
           // the .bb-slide size-container, so cq units track the actual tile.
-          grid.innerHTML = `<div style="font:800 calc(min(18cqw,26cqh) * var(--bb-countdown-text-scale,1))/1.05 var(--bb-st-font, Inter, sans-serif);">${escapeHtml(c.expiredText ?? 'Now!')}</div>`;
+          grid.innerHTML = `<div data-field="expiredText finishedMode textScale" style="font:800 calc(min(18cqw,26cqh) * var(--bb-countdown-text-scale,1))/1.05 var(--bb-st-font, Inter, sans-serif);">${escapeHtml(c.expiredText ?? 'Now!')}</div>`;
           lastSig = 'finished-text';
         }
         return 30000;

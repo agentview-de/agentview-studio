@@ -57,12 +57,12 @@ export default register({
           { value: 'fullscreen', label: 'Fullscreen' },
         ],
         help: 'Card shows the portrait next to the text, Minimal is centred type only, Fullscreen makes the quote giant with the portrait as a blurred backdrop.' },
-      { key: 'markStyle', type: 'select', label: 'Quotation mark', buttons: true, options: [
+      { key: 'markStyle', type: 'select', label: 'Quotation mark', buttons: true, tier: 'advanced', options: [
           { value: 'classic', label: '“ Classic' },
           { value: 'guillemet', label: '» Guillemet' },
           { value: 'none', label: 'Hidden' },
         ] },
-      textScaleField(),
+      { ...textScaleField(), tier: 'advanced' },
 
       { type: 'section', key: 'behavior', label: 'Behavior', collapsed: true,
         help: 'Rotate through extra quotes — a classic “quote of the day” loop.',
@@ -70,20 +70,26 @@ export default register({
           const n = rotationEntries(c).length;
           return n ? `${n + 1} quotes · ${Math.max(3, Number(c.rotateSecs) || 12)}s` : 'off';
         } },
-      { key: 'quotes', type: 'list', label: 'More quotes',
+      { key: 'quotes', type: 'list', label: 'More quotes', tier: 'advanced',
         itemShape: [
           { key: 'quote',  type: 'textarea', label: 'Quote' },
           { key: 'author', type: 'text', label: 'Author' },
           { key: 'source', type: 'text', label: 'Source' },
         ],
         help: 'The main quote above always comes first in the rotation. Drag to reorder.' },
-      { key: 'rotateSecs', type: 'duration', label: 'Show each quote for', min: 3,
+      { key: 'rotateSecs', type: 'duration', label: 'Show each quote for', min: 3, tier: 'advanced',
         showIf: c => rotationEntries(c).length > 0,
         help: 'How long each quote stays before cross-fading to the next.' },
 
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'portrait-card', name: 'Portrait card', patch: { layout: 'card', markStyle: 'classic', textScale: 100 } },
+    { id: 'minimal', name: 'Minimal', patch: { layout: 'minimal', markStyle: 'none', textScale: 110 } },
+    { id: 'big-quote', name: 'Big quote', patch: { layout: 'fullscreen', markStyle: 'classic', textScale: 140 } },
+    { id: 'guillemet', name: 'Guillemet', patch: { layout: 'minimal', markStyle: 'guillemet', textScale: 120 } },
+  ],
   render(slide, container) {
     const c = slide.content ?? {};
     const layout = LAYOUTS.includes(c.layout) ? c.layout : 'card';
@@ -159,11 +165,11 @@ export default register({
     const renderEntry = (entry) => {
       const showPortrait = !!entry.withPortrait && layout !== 'fullscreen';
       card.innerHTML = `
-        ${showPortrait ? `<img class="bb-quote-portrait" src="${escapeAttr(c.portrait)}" alt="">` : ''}
+        ${showPortrait ? `<img class="bb-quote-portrait" src="${escapeAttr(c.portrait)}" alt="" data-field="portrait layout">` : ''}
         <div class="bb-quote-text">
-          ${markGlyph ? `<span class="bb-quote-mark">${markGlyph}</span>` : ''}
-          <blockquote>${quoteHtmlFor(entry.quote)}</blockquote>
-          ${entry.author ? `<cite>— ${escapeHtml(entry.author)}${entry.source ? `<span class="bb-quote-source"> · ${escapeHtml(entry.source)}</span>` : ''}</cite>` : ''}
+          ${markGlyph ? `<span class="bb-quote-mark" data-field="markStyle">${markGlyph}</span>` : ''}
+          <blockquote data-field="quote textScale layout">${quoteHtmlFor(entry.quote)}</blockquote>
+          ${entry.author ? `<cite data-field="author source textScale layout">— ${escapeHtml(entry.author)}${entry.source ? `<span class="bb-quote-source" data-field="source"> · ${escapeHtml(entry.source)}</span>` : ''}</cite>` : ''}
         </div>
       `;
       // Child-level variant tweaks — re-applied after every innerHTML swap.

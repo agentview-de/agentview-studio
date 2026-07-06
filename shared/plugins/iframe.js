@@ -36,29 +36,29 @@ export default register({
         shared.url,
 
         { type: 'section', label: 'Layout', key: 'layout' },
-        { key: 'scale', type: 'number', label: 'Zoom', min: 25, max: 400, step: 5, slider: true, suffix: '%',
+        { key: 'scale', type: 'number', label: 'Zoom', min: 25, max: 400, step: 5, slider: true, suffix: '%', tier: 'advanced',
           help: 'Scale the embedded page to fit the widget, useful for desktop-sized pages on portrait screens.' },
         { type: 'row', children: [
-          { key: 'offsetX', type: 'number', label: 'Pan X', min: 0, step: 10, suffix: 'px',
+          { key: 'offsetX', type: 'number', label: 'Pan X', min: 0, step: 10, suffix: 'px', tier: 'advanced',
             help: 'Crops this many page pixels off the left edge — zoom into the region of a desktop-sized dashboard that matters.' },
-          { key: 'offsetY', type: 'number', label: 'Pan Y', min: 0, step: 10, suffix: 'px',
+          { key: 'offsetY', type: 'number', label: 'Pan Y', min: 0, step: 10, suffix: 'px', tier: 'advanced',
             help: 'Crops this many page pixels off the top edge.' },
         ] },
-        { key: 'background', type: 'color', clearable: true, label: 'Background',
+        { key: 'background', type: 'color', clearable: true, label: 'Background', tier: 'advanced',
           help: 'Shown behind transparent pages and while loading. Empty = theme background.' },
 
         { type: 'section', label: 'Behavior', key: 'behavior' },
-        shared.reloadSec,
+        { ...shared.reloadSec, tier: 'advanced' },
         { key: 'cacheBust', type: 'toggle', label: 'Bypass cache on reload',
-          showIf: c => (Number(c.reloadSec) || 0) > 0,
+          showIf: c => (Number(c.reloadSec) || 0) > 0, tier: 'advanced',
           help: 'Appends a unique timestamp parameter to the URL on every reload so aggressively cached status pages actually refresh.' },
 
         { type: 'section', label: 'Advanced', key: 'advanced', collapsed: true,
           summary: c => `${c.sandbox === false ? 'sandbox off' : 'sandboxed'} · ${c.lockInteraction !== false ? 'locked' : 'touch-enabled'}` },
-        shared.sandbox,
-        shared.allowForms,
-        shared.allowPopups,
-        { key: 'lockInteraction', type: 'toggle', label: 'Lock interaction',
+        { ...shared.sandbox, tier: 'advanced' },
+        { ...shared.allowForms, tier: 'advanced' },
+        { ...shared.allowPopups, tier: 'advanced' },
+        { key: 'lockInteraction', type: 'toggle', label: 'Lock interaction', tier: 'advanced',
           help: 'Blocks clicks and touches on the embedded page so kiosk visitors can’t click links and navigate it away. Turn off only for interactive touch displays.' },
       ],
     };
@@ -87,6 +87,7 @@ export default register({
     wrap.style.background = bg || 'var(--bb-st-bg, #0a0a10)';
 
     const f = document.createElement('iframe');
+    f.dataset.field = 'url scale offsetX offsetY background reloadSec cacheBust';
     f.src = c.url;
     const scale = Math.max(25, Math.min(400, Number(c.scale) || 100)) / 100;
     const offX = Math.max(0, Number(c.offsetX) || 0);

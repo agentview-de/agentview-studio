@@ -30,6 +30,7 @@ export default register({
       { key: 'url', type: 'asset', label: 'Audio URL', accept: 'audio/*',
         help: 'The visualiser needs CORS access (Access-Control-Allow-Origin) to read the audio. Files uploaded to the library always work; remote URLs may play without visuals.' },
       { key: 'nowPlaying', type: 'text', label: 'Now-playing caption', placeholder: 'Playlist: Smooth Jazz',
+        tier: 'advanced',
         help: 'Shown as a themed caption under the visualiser.' },
 
       { type: 'section', label: 'Appearance', key: 'appearance' },
@@ -41,21 +42,25 @@ export default register({
         { value: 'dots',     label: 'Dots' },
       ] },
       { key: 'barCount', type: 'number', label: 'Bar / dot count', min: 8, max: 256, slider: true,
+        tier: 'advanced',
         showIf: c => (c.style ?? 'bars') !== 'waveform',
         help: 'How many bars or dots the spectrum is split into — fewer for a chunky retro EQ, more for fine detail.' },
       { key: 'mirror', type: 'toggle', label: 'Mirror from centre',
+        tier: 'advanced',
         showIf: c => ['bars', 'dots'].includes(c.style ?? 'bars'),
         help: 'Draws the spectrum symmetrically outward from the middle — the classic equalizer look, great on wide screens.' },
       { key: 'sensitivity', type: 'number', label: 'Sensitivity', min: 50, max: 300, step: 10, slider: true, suffix: '%',
+        tier: 'advanced',
         help: 'Boosts the visual response for quiet tracks. 100 % = raw level; higher values amplify (capped at full height).' },
       { type: 'row', children: [
-        { key: 'colorA', type: 'color', label: 'Low (quiet)', clearable: true,
+        { key: 'colorA', type: 'color', label: 'Low (quiet)', clearable: true, tier: 'advanced',
           help: 'Gradient colour pair for quiet → loud frequencies. Click × to reset to the widget defaults.' },
-        { key: 'colorB', type: 'color', label: 'High (loud)', clearable: true },
+        { key: 'colorB', type: 'color', label: 'High (loud)', clearable: true, tier: 'advanced' },
       ] },
 
       { type: 'section', label: 'Playback', key: 'playback' },
       { key: 'volume', type: 'number', label: 'Volume', min: 0, max: 100, step: 5, slider: true, suffix: '%',
+        tier: 'advanced',
         help: 'Browsers may block un-muted autoplay until someone interacts with the page.' },
 
       ...themeColorSection(),
@@ -98,9 +103,9 @@ export default register({
 
     root.innerHTML = `
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
-      <canvas class="bb-audio-canvas" width="800" height="400" style="width:80%;max-width:1100px;flex:1 1 auto;min-height:0;"></canvas>
-      ${c.nowPlaying ? `<div class="bb-h2" style="margin:0;font-size:clamp(14px,3cqmin,32px);opacity:.85;">${escapeHtml(c.nowPlaying)}</div>` : ''}
-      <audio src="${escapeHtml(c.url)}" autoplay loop crossorigin="anonymous"></audio>
+      <canvas class="bb-audio-canvas" data-field="url style barCount mirror sensitivity colorA colorB" width="800" height="400" style="width:80%;max-width:1100px;flex:1 1 auto;min-height:0;"></canvas>
+      ${c.nowPlaying ? `<div class="bb-h2" data-field="nowPlaying" style="margin:0;font-size:clamp(14px,3cqmin,32px);opacity:.85;">${escapeHtml(c.nowPlaying)}</div>` : ''}
+      <audio src="${escapeHtml(c.url)}" data-field="url volume" autoplay loop crossorigin="anonymous"></audio>
     `;
     container.appendChild(root);
 

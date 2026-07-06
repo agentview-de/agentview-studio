@@ -10,6 +10,11 @@
 //   defaults: () => ({...}),               called per-new-slide; never reuse object
 //   schema: () => ({ fields: [...] }),     declarative form description
 //   render: (slide, container, ctx) => fn  returns a dispose() function
+//   looks?: () => [{ id, name, patch }]    optional. Curated "design ideas":
+//      each `patch` is a shallow set of content keys merged onto the current
+//      content to produce a styled variation (think PowerPoint Designer). The
+//      Widget Designer shows them as a gallery of live thumbnails; clicking one
+//      applies the patch (the user can keep tweaking). Pure data — no code.
 //   migrate?: (content, fromVersion) => content    optional. Run by
 //      applyWidgetMigrations on load when widget.contentVersion < schemaVersion.
 //      Receives the old content and the version it was stored at; returns the

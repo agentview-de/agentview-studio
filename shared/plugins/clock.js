@@ -62,12 +62,12 @@ export default register({
         help: 'Drives both the time and the date line — set the venue\'s zone, not the player\'s.' },
       { key: 'label', type: 'text', label: 'Label', placeholder: 'e.g. Berlin',
         help: 'Shown above the clock. Leave blank to show the time zone name.' },
-      localeField(),
-      { key: 'showOffset', type: 'toggle', label: 'Show UTC offset',
+      { ...localeField(), tier: 'advanced' },
+      { key: 'showOffset', type: 'toggle', label: 'Show UTC offset', tier: 'advanced',
         help: 'Appends the zone offset (e.g. UTC+2) next to the label — handy on multi-site boards.' },
 
       { type: 'section', key: 'format', label: 'Format' },
-      { key: 'display', type: 'select', label: 'Show', options: [
+      { key: 'display', type: 'select', label: 'Show', tier: 'advanced', options: [
         { value: 'time', label: 'Time (HH:MM)' },
         { value: 'time-seconds', label: 'Time with seconds' },
         { value: 'date-time', label: 'Date + time' },
@@ -82,6 +82,7 @@ export default register({
       ] },
       { key: 'customFormat', type: 'text', label: 'Custom format',
         placeholder: 'EEE, d MMM yyyy HH:mm',
+        tier: 'advanced',
         showIf: c => c.display === 'custom',
         help: 'Tokens: yyyy y MMMM MMM MM M d EEEE EEE HH H mm m ss s a (12h marker). Anything else passes through literally.',
         validate: v => {
@@ -90,7 +91,7 @@ export default register({
           return s.match(FMT_TOKENS) ? null
             : { level: 'warn', message: 'No recognised tokens — the pattern will render as literal text.' };
         } },
-      { key: 'hour12', type: 'toggle', label: '12-hour clock',
+      { key: 'hour12', type: 'toggle', label: '12-hour clock', tier: 'advanced',
         showIf: c => TIME_MODES.includes(c.display ?? 'date-time') || c.display === 'custom' },
       { key: 'style', type: 'select', label: 'Style', buttons: true,
         options: [
@@ -98,7 +99,7 @@ export default register({
           { value: 'analog', label: 'Analog' },
         ],
         showIf: c => TIME_MODES.includes(c.display ?? 'date-time') },
-      { key: 'faceStyle', type: 'select', label: 'Face style', buttons: true,
+      { key: 'faceStyle', type: 'select', label: 'Face style', buttons: true, tier: 'advanced',
         options: [
           { value: 'ticks',    label: 'Ticks' },
           { value: 'quarters', label: '12 · 3 · 6 · 9' },
@@ -107,26 +108,33 @@ export default register({
         showIf: c => c.style === 'analog' && TIME_MODES.includes(c.display ?? 'date-time') },
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
-      { key: 'align', type: 'align', label: 'Alignment' },
-      textScaleField(),
+      { key: 'align', type: 'align', label: 'Alignment', tier: 'advanced' },
+      { ...textScaleField(), tier: 'advanced' },
 
       { type: 'section', key: 'hours', label: 'Opening hours', collapsed: true,
         summary: c => c.showOpenBadge ? `${c.openFrom || '08:00'}–${c.openTo || '18:00'}` : 'Off' },
-      { key: 'showOpenBadge', type: 'toggle', label: 'Open/closed badge',
+      { key: 'showOpenBadge', type: 'toggle', label: 'Open/closed badge', tier: 'advanced',
         help: 'Shows a pill under the clock comparing the current time in the selected zone with the hours below. A "Closes at" earlier than "Opens at" wraps past midnight.' },
       { type: 'row', showIf: c => !!c.showOpenBadge, children: [
-        { key: 'openFrom', type: 'time', label: 'Opens at' },
-        { key: 'openTo',   type: 'time', label: 'Closes at' },
+        { key: 'openFrom', type: 'time', label: 'Opens at', tier: 'advanced' },
+        { key: 'openTo',   type: 'time', label: 'Closes at', tier: 'advanced' },
       ] },
       { type: 'row', showIf: c => !!c.showOpenBadge, children: [
-        { key: 'openText',   type: 'text', label: 'Text when open', placeholder: 'Auto',
+        { key: 'openText',   type: 'text', label: 'Text when open', placeholder: 'Auto', tier: 'advanced',
           help: 'Leave blank for an automatic word in the selected language.' },
-        { key: 'closedText', type: 'text', label: 'Text when closed', placeholder: 'Auto' },
+        { key: 'closedText', type: 'text', label: 'Text when closed', placeholder: 'Auto', tier: 'advanced' },
       ] },
 
       ...themeColorSection('Color theme (text/accent)'),
     ],
   }),
+  looks: () => [
+    { id: 'digital', name: 'Digital', patch: { style: 'digital', display: 'date-time' } },
+    { id: 'analog', name: 'Analog', patch: { style: 'analog', display: 'time', faceStyle: 'quarters' } },
+    { id: 'time-12h', name: '12-hour', patch: { display: 'time', hour12: true, style: 'digital' } },
+    { id: 'numerals', name: 'Numeral face', patch: { style: 'analog', faceStyle: 'numerals', display: 'time' } },
+    { id: 'open-badge', name: 'With open badge', patch: { showOpenBadge: true, align: 'left' } },
+  ],
   render(slide, container) {
     const c = slide.content ?? {};
     const tz = c.timezone || defaultTz();
@@ -191,10 +199,10 @@ export default register({
     // c.label || tz (NOT ??): defaults() stores '', which must still fall
     // through to the time zone name on a fresh clock.
     const labelHtml = `
-      <div class="bb-clock-label">${escapeHtml(c.label || tz)}${c.showOffset
-        ? '<span class="bb-clock-offset" style="opacity:.65;margin-left:.6em;font-size:.85em;letter-spacing:.05em;"></span>' : ''}</div>`;
+      <div class="bb-clock-label" data-field="label timezone showOffset align textScale locale">${escapeHtml(c.label || tz)}${c.showOffset
+        ? '<span class="bb-clock-offset" data-field="showOffset timezone locale" style="opacity:.65;margin-left:.6em;font-size:.85em;letter-spacing:.05em;"></span>' : ''}</div>`;
     const titleHtml = slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : '';
-    const badgeHtml = '<div class="bb-clock-badge" style="display:none"></div>';
+    const badgeHtml = '<div class="bb-clock-badge" data-field="showOpenBadge openFrom openTo openText closedText timezone locale textScale" style="display:none"></div>';
 
     if (analog) {
       const faceStyle = c.faceStyle ?? 'ticks';
@@ -213,7 +221,7 @@ export default register({
       root.innerHTML = `
         ${titleHtml}
         ${labelHtml}
-        <div class="bb-analog">
+        <div class="bb-analog" data-field="style faceStyle timezone hour12 display">
           <div class="bb-analog-face">
             ${ticksHtml}
             ${numsHtml}
@@ -223,14 +231,14 @@ export default register({
             <div class="bb-analog-center"></div>
           </div>
         </div>
-        <div class="bb-clock-date"></div>
+        <div class="bb-clock-date" data-field="display timezone locale textScale"></div>
         ${badgeHtml}`;
     } else {
       root.innerHTML = `
         ${titleHtml}
         ${labelHtml}
-        <div class="bb-digital">--</div>
-        <div class="bb-clock-date"></div>
+        <div class="bb-digital" data-field="display timezone hour12 customFormat textScale locale align">--</div>
+        <div class="bb-clock-date" data-field="display timezone locale textScale"></div>
         ${badgeHtml}`;
     }
     container.appendChild(root);

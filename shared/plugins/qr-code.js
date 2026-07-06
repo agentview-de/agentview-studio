@@ -75,7 +75,7 @@ function matrixToSvg(m, size, fgColor, bgColor, moduleStyle) {
   // crispEdges keeps square modules sharp; rounded/dots need anti-aliasing so we
   // switch to geometricPrecision when they're present.
   const rendering = style === 'square' ? 'crispEdges' : 'geometricPrecision';
-  return `<svg class="bb-qr-img" xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${total} ${total}" shape-rendering="${rendering}" role="img" aria-label="QR code">`
+  return `<svg class="bb-qr-img" data-field="template url text wifiSsid wifiPassword wifiEnc wifiHidden vcardName vcardPhone vcardEmail vcardOrg vcardUrl moduleStyle fgColor bgColor size ecLevel" xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${total} ${total}" shape-rendering="${rendering}" role="img" aria-label="QR code">`
     + `<rect width="${total}" height="${total}" fill="${bg}"/>`
     + (path ? `<path d="${path}" fill="${fg}"/>` : '')
     + (shapes ? `<g fill="${fg}">${shapes}</g>` : '')
@@ -306,7 +306,7 @@ export default register({
         { key: 'vcardUrl', type: 'url',  label: 'Website', test: true, placeholder: 'https://example.com' },
       ], showIf: c => c.template === 'vcard' },
 
-      { key: 'showDetails', type: 'toggle', label: 'Show details under the code',
+      { key: 'showDetails', type: 'toggle', label: 'Show details under the code', tier: 'advanced',
         help: 'Prints the human-readable payload under the caption — the link, the Wi-Fi name + password, or the name + phone — so guests can also type it in.' },
 
       { type: 'section', key: 'layout-sec', label: 'Layout' },
@@ -316,14 +316,14 @@ export default register({
           { value: 'horizontal', label: 'Side by side' },
         ],
         help: 'Side by side puts the code on the left and the caption on the right — good for wide footer strips.' },
-      { key: 'label', type: 'text', label: 'Caption', placeholder: 'Scan to learn more' },
-      { ...textScaleField('Caption size'),
+      { key: 'label', type: 'text', label: 'Caption', placeholder: 'Scan to learn more', tier: 'advanced' },
+      { ...textScaleField('Caption size'), tier: 'advanced',
         help: '100% is the auto-scaled baseline. Push higher so the caption stays legible at TV viewing distance.' },
       { key: 'frameless', type: 'toggle', label: 'Frameless (edge-to-edge)',
         help: 'Removes the white card around the QR. The required quiet zone inside the code stays (scanners need it).' },
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
-      { key: 'moduleStyle', type: 'select', label: 'Module style', buttons: true,
+      { key: 'moduleStyle', type: 'select', label: 'Module style', buttons: true, tier: 'advanced',
         options: [
           { value: 'square', label: 'Square' },
           { value: 'rounded', label: 'Rounded' },
@@ -331,8 +331,8 @@ export default register({
         ],
         help: 'Stylises the QR dots for branded signage. The three corner finder patterns always stay square so the code keeps scanning.' },
       { type: 'row', children: [
-        { key: 'fgColor', type: 'color', label: 'Foreground' },
-        { key: 'bgColor', type: 'color', label: 'Background',
+        { key: 'fgColor', type: 'color', label: 'Foreground', tier: 'advanced' },
+        { key: 'bgColor', type: 'color', label: 'Background', tier: 'advanced',
           validate: c => {
             if (relLuminance(c.fgColor) > relLuminance(c.bgColor)) {
               return { level: 'warn', message: 'Inverted QR codes (light on dark) fail on many phone scanners — keep the foreground darker than the background.' };
@@ -345,7 +345,7 @@ export default register({
 
       { type: 'section', key: 'logo', label: 'Centre logo', collapsed: true,
         summary: c => c.logoUrl ? `logo · ${c.ecLevel === 'H' ? 'EC H' : 'EC ' + (c.ecLevel ?? 'M')}` : 'none' },
-      { key: 'logoUrl', type: 'asset', label: 'Logo image', accept: 'image/*',
+      { key: 'logoUrl', type: 'asset', label: 'Logo image', accept: 'image/*', tier: 'advanced',
         help: 'Drops a small logo into the centre of the QR. Use error correction H so the code stays scannable.',
         validate: c => {
           if (c.logoUrl && (c.ecLevel ?? 'M') !== 'H') {
@@ -353,10 +353,10 @@ export default register({
           }
           return null;
         } },
-      { key: 'logoSize', type: 'number', label: 'Logo size (% of QR, long edge)', min: 10, max: 30, step: 1, slider: true, suffix: '%',
+      { key: 'logoSize', type: 'number', label: 'Logo size (% of QR, long edge)', min: 10, max: 30, step: 1, slider: true, suffix: '%', tier: 'advanced',
         showIf: c => !!c.logoUrl,
         help: 'The logo keeps its aspect ratio. The value controls its long edge as a % of the QR. Keep ≤ 22% for reliable scanning, and pair with EC Level H.' },
-      { key: 'ecLevel', type: 'select', label: 'Error correction',
+      { key: 'ecLevel', type: 'select', label: 'Error correction', tier: 'advanced',
         options: [
           { value: 'L', label: 'Low (~7%)' },
           { value: 'M', label: 'Medium (~15%)' },
@@ -368,6 +368,12 @@ export default register({
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'rounded', name: 'Rounded', patch: { moduleStyle: 'rounded' } },
+    { id: 'dots', name: 'Dots', patch: { moduleStyle: 'dots' } },
+    { id: 'inverted', name: 'Inverted', patch: { fgColor: '#ffffff', bgColor: '#000000' } },
+    { id: 'with-caption', name: 'With caption', patch: { showDetails: true, frameless: false } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const horizontal = (c.layout ?? 'vertical') === 'horizontal';
@@ -429,14 +435,14 @@ export default register({
     // No logo → inline SVG (crisp at any size). With a logo → a canvas we draw
     // the modules onto, then composite the raster logo over the centre.
     const qrMarkup = hasLogo
-      ? `<canvas class="bb-qr-img bb-qr-canvas" width="${size}" height="${size}" aria-label="QR code"></canvas>`
+      ? `<canvas class="bb-qr-img bb-qr-canvas" data-field="template url text wifiSsid wifiPassword wifiEnc wifiHidden vcardName vcardPhone vcardEmail vcardOrg vcardUrl moduleStyle fgColor bgColor size ecLevel logoUrl logoSize" width="${size}" height="${size}" aria-label="QR code"></canvas>`
       : matrixToSvg(matrix, size, c.fgColor, c.bgColor, moduleStyle);
 
     // Optional human-readable detail lines under the caption (showDetails).
     let detailsMarkup = '';
     if (c.showDetails) {
       const lines = detailLines(c).map(({ label, value }) =>
-        `<div class="bb-qr-detail">${label ? `<span class="bb-qr-detail-label">${escapeHtml(label)}:</span> ` : ''}<span class="bb-qr-detail-value">${escapeHtml(value)}</span></div>`
+        `<div class="bb-qr-detail" data-field="showDetails template url wifiSsid wifiPassword wifiEnc vcardName vcardPhone">${label ? `<span class="bb-qr-detail-label">${escapeHtml(label)}:</span> ` : ''}<span class="bb-qr-detail-value">${escapeHtml(value)}</span></div>`
       ).join('');
       if (lines) detailsMarkup = `<div class="bb-qr-details" style="color:${escapeAttr(captionColor)};">${lines}</div>`;
     }
@@ -444,7 +450,7 @@ export default register({
     // Caption + details cluster together; in horizontal layout they sit beside
     // the code rather than under it.
     const textMarkup = (c.label || detailsMarkup)
-      ? `<div class="bb-qr-text">${c.label ? `<div class="bb-qr-caption" style="color:${escapeAttr(captionColor)};">${escapeHtml(c.label)}</div>` : ''}${detailsMarkup}</div>`
+      ? `<div class="bb-qr-text">${c.label ? `<div class="bb-qr-caption" data-field="label textScale fgColor" style="color:${escapeAttr(captionColor)};">${escapeHtml(c.label)}</div>` : ''}${detailsMarkup}</div>`
       : '';
 
     root.innerHTML = `

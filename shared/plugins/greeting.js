@@ -121,36 +121,42 @@ export default register({
               evening: c.greetEvening, night: c.greetNight })[part] || GREETINGS_DEFAULT[part];
           } catch { return ''; }
         } },
-      { key: 'greetMorning',   type: 'text', label: 'Morning greeting' },
-      { key: 'greetAfternoon', type: 'text', label: 'Afternoon greeting' },
-      { key: 'greetEvening',   type: 'text', label: 'Evening greeting' },
-      { key: 'greetNight',     type: 'text', label: 'Night greeting' },
+      { key: 'greetMorning',   type: 'text', label: 'Morning greeting', tier: 'advanced' },
+      { key: 'greetAfternoon', type: 'text', label: 'Afternoon greeting', tier: 'advanced' },
+      { key: 'greetEvening',   type: 'text', label: 'Evening greeting', tier: 'advanced' },
+      { key: 'greetNight',     type: 'text', label: 'Night greeting', tier: 'advanced' },
 
       { type: 'section', key: 'hours', label: 'Hour boundaries', collapsed: true,
         help: 'Each greeting starts at its hour (0–24) in the venue’s time zone and runs until the next one.',
         summary: c => { const h = resolveHours(c); return `${h.morning} · ${h.afternoon} · ${h.evening} · ${h.night} h`; } },
       { type: 'row', children: [
-        { key: 'hourMorning',   type: 'number', label: 'Morning starts', min: 0, max: 24, suffix: 'h' },
-        { key: 'hourAfternoon', type: 'number', label: 'Afternoon starts', min: 0, max: 24, suffix: 'h',
+        { key: 'hourMorning',   type: 'number', label: 'Morning starts', min: 0, max: 24, suffix: 'h', tier: 'advanced' },
+        { key: 'hourAfternoon', type: 'number', label: 'Afternoon starts', min: 0, max: 24, suffix: 'h', tier: 'advanced',
           validate: startsAfter('hourMorning', 'Afternoon should start after morning.') },
       ] },
       { type: 'row', children: [
-        { key: 'hourEvening', type: 'number', label: 'Evening starts', min: 0, max: 24, suffix: 'h',
+        { key: 'hourEvening', type: 'number', label: 'Evening starts', min: 0, max: 24, suffix: 'h', tier: 'advanced',
           validate: startsAfter('hourAfternoon', 'Evening should start after afternoon.') },
-        { key: 'hourNight',   type: 'number', label: 'Night starts', min: 0, max: 24, suffix: 'h',
+        { key: 'hourNight',   type: 'number', label: 'Night starts', min: 0, max: 24, suffix: 'h', tier: 'advanced',
           validate: startsAfter('hourEvening', 'Night should start after evening.') },
       ] },
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
-      { key: 'showDate', type: 'toggle', label: 'Show today\'s date below' },
-      { key: 'showTime', type: 'toggle', label: 'Show current time',
+      { key: 'showDate', type: 'toggle', label: 'Show today\'s date below', tier: 'advanced' },
+      { key: 'showTime', type: 'toggle', label: 'Show current time', tier: 'advanced',
         help: 'Appends the current time (HH:mm) next to the date — handy when the lobby screen doubles as a clock.' },
-      { ...localeField(), showIf: c => c.showDate !== false || !!c.showTime },
-      textScaleField(),
+      { ...localeField(), tier: 'advanced', showIf: c => c.showDate !== false || !!c.showTime },
+      { ...textScaleField(), tier: 'advanced' },
 
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'lobby-clock', name: 'Lobby clock', patch: { showDate: true, showTime: true, textScale: 120 } },
+    { id: 'big-welcome', name: 'Big welcome', patch: { showDate: false, showTime: false, textScale: 200 } },
+    { id: 'date-only', name: 'Date only', patch: { showDate: true, showTime: false, textScale: 110 } },
+    { id: 'compact', name: 'Compact', patch: { showDate: false, showTime: true, textScale: 90 } },
+  ],
   render(slide, container) {
     const c = slide.content ?? {};
     const tz = c.timezone || defaultTz();
@@ -172,9 +178,9 @@ export default register({
     const fs = clamp => `font-size:calc(${clamp} * var(--bb-greeting-text-scale, 1));`;
     root.innerHTML = `
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
-      <div class="bb-greet-line" style="font-weight:700;${fs('clamp(28px, 8cqmin, 80px)')}line-height:1.1;font-family:var(--bb-st-font, Inter, sans-serif);">—</div>
-      ${c.subtitle ? `<div class="bb-greet-sub" style="font-weight:500;${fs('clamp(14px, 2.6cqmin, 22px)')}line-height:1.4;font-family:var(--bb-st-font, Inter, sans-serif);opacity:.75;margin-top:.4em;">${escapeHtml(c.subtitle)}</div>` : ''}
-      <div class="bb-greet-date" style="font-weight:600;${fs('clamp(13px, 2.2cqmin, 20px)')}line-height:1.3;font-family:var(--bb-st-font, Inter, sans-serif);opacity:.6;margin-top:1.2em;${metaVisible ? '' : 'display:none;'}">—</div>
+      <div class="bb-greet-line" data-field="venue welcomeTo greetMorning greetAfternoon greetEvening greetNight hourMorning hourAfternoon hourEvening hourNight timezone textScale" style="font-weight:700;${fs('clamp(28px, 8cqmin, 80px)')}line-height:1.1;font-family:var(--bb-st-font, Inter, sans-serif);">—</div>
+      ${c.subtitle ? `<div class="bb-greet-sub" data-field="subtitle textScale" style="font-weight:500;${fs('clamp(14px, 2.6cqmin, 22px)')}line-height:1.4;font-family:var(--bb-st-font, Inter, sans-serif);opacity:.75;margin-top:.4em;">${escapeHtml(c.subtitle)}</div>` : ''}
+      <div class="bb-greet-date" data-field="showDate showTime locale timezone textScale" style="font-weight:600;${fs('clamp(13px, 2.2cqmin, 20px)')}line-height:1.3;font-family:var(--bb-st-font, Inter, sans-serif);opacity:.6;margin-top:1.2em;${metaVisible ? '' : 'display:none;'}">—</div>
     `;
     container.appendChild(root);
     const lineEl = root.querySelector('.bb-greet-line');

@@ -115,15 +115,15 @@ export default register({
       { key: 'source', type: 'code', label: 'Source code', placeholder: 'Paste your snippet…' },
       { key: 'language', type: 'select', label: 'Language', options: LANGS, search: true,
         help: 'Drives syntax-highlight colouring (when Prism is loaded on the display).' },
-      { key: 'filename', type: 'text', label: 'Filename', placeholder: 'src/app.js',
+      { key: 'filename', type: 'text', label: 'Filename', placeholder: 'src/app.js', tier: 'advanced',
         help: 'Shows an editor-style window bar with traffic-light dots above the code.' },
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
-      textScaleField(),
-      { key: 'showLineNumbers', type: 'toggle', label: 'Line numbers' },
-      { key: 'wrap', type: 'toggle', label: 'Wrap long lines',
+      { ...textScaleField(), tier: 'advanced' },
+      { key: 'showLineNumbers', type: 'toggle', label: 'Line numbers', tier: 'advanced' },
+      { key: 'wrap', type: 'toggle', label: 'Wrap long lines', tier: 'advanced',
         help: 'Soft-wraps long lines instead of clipping them at the edge of the widget.' },
-      { key: 'highlightLines', type: 'text', label: 'Highlight lines', placeholder: '3-5, 8',
+      { key: 'highlightLines', type: 'text', label: 'Highlight lines', placeholder: '3-5, 8', tier: 'advanced',
         help: 'Comma-separated line numbers or ranges to emphasise with an accent tint.',
         validate: (v) => {
           const s = String(v ?? '').trim();
@@ -171,7 +171,7 @@ export default register({
     if (!src.trim()) {
       // Editor-only hint (player has no i18n). .bb-code brings its own dark
       // bg + light text, so this survives the light themes as-is.
-      body = `${chrome}<pre class="bb-code" style="opacity:.6;${preStyle}">Paste a code snippet in the inspector.</pre>`;
+      body = `${chrome}<pre class="bb-code" style="opacity:.6;${preStyle}" data-field="source language textScale showLineNumbers wrap highlightLines theme">Paste a code snippet in the inspector.</pre>`;
     } else if (showNums || hl.size) {
       // Per-line path: highlight via the synchronous Prism core API, then
       // split into rows (span-balanced) so the gutter and the accent stripes
@@ -195,12 +195,12 @@ export default register({
       }).join('');
       // min-width:max-content sizes every row to the longest line so the
       // accent stripes span the full scroll width (unless wrapping).
-      body = `${chrome}<pre class="bb-code" style="${preStyle}"><div style="${wrap ? '' : 'min-width:max-content;'}">${rows}</div></pre>`;
+      body = `${chrome}<pre class="bb-code" style="${preStyle}" data-field="source language textScale showLineNumbers wrap highlightLines theme"><div style="${wrap ? '' : 'min-width:max-content;'}">${rows}</div></pre>`;
     } else {
       // Plain path — unchanged from the original (single <code> block +
       // highlightAllUnder), so Prism autoloader setups keep working.
       const wrapStyle = wrap ? 'white-space:pre-wrap;overflow-wrap:anywhere;' : '';
-      body = `${chrome}<pre class="bb-code" style="${preStyle}${wrapStyle}"><code class="language-${escapeHtml(lang)}">${escapeHtml(src)}</code></pre>`;
+      body = `${chrome}<pre class="bb-code" style="${preStyle}${wrapStyle}" data-field="source language textScale showLineNumbers wrap highlightLines theme"><code class="language-${escapeHtml(lang)}">${escapeHtml(src)}</code></pre>`;
     }
 
     root.innerHTML = `

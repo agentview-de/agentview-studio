@@ -286,6 +286,132 @@ export function openWidgetDesigner(widget, { onApply } = {}) {
   });
 }
 
+// Mountable template / CSS / fields editor — the STRUCTURAL editor for a custom
+// widget, extracted so the general Widget Designer (designer.js) can host it as
+// a "Code" tab next to its live stage and value form. Operates on a live
+// `working` object ({ template, css, fields }, mutated in place); calls onChange
+// after any change so the host can rebuild the value form + repaint the preview.
+// No preview/data-form of its own — the host already provides those.
+export function mountCustomCode(working, { onChange } = {}) {
+  injectStylesOnce();
+  if (!Array.isArray(working.fields)) working.fields = [];
+  const root = document.createElement('div');
+  root.className = 'avs-wd avs-wd-codeonly';
+  root.innerHTML = `
+    <div class="avs-wd-tabs">
+      <button type="button" class="avs-wd-tab avs-on" data-tab="template">${escapeHtml(tx('Template'))}</button>
+      <button type="button" class="avs-wd-tab" data-tab="css">${escapeHtml(tx('Style (CSS)'))}</button>
+      <button type="button" class="avs-wd-tab" data-tab="fields">${escapeHtml(tx('Fields'))}</button>
+    </div>
+    <div class="avs-wd-pane" data-pane="template">
+      <p class="bb-form-help">${escapeHtml(tx('Write HTML. Insert a field value with {{key}}. Optional filter: {{value | number}}.'))}</p>
+      <textarea class="bb-mono avs-wd-code" id="cc-template" spellcheck="false"></textarea>
+      <div class="avs-wd-tokens" id="cc-tokens"></div>
+    </div>
+    <div class="avs-wd-pane" data-pane="css" hidden>
+      <p class="bb-form-help">${escapeHtml(tx('CSS is scoped to this widget automatically — selectors only affect what you build here.'))}</p>
+      <textarea class="bb-mono avs-wd-code" id="cc-css" spellcheck="false"></textarea>
+    </div>
+    <div class="avs-wd-pane" data-pane="fields" hidden>
+      <p class="bb-form-help">${escapeHtml(tx('Each field becomes an inspector control the user fills in. The field key is the {{token}} you reference in the template.'))}</p>
+      <div id="cc-fields"></div>
+      <button type="button" class="bb-btn bb-btn-secondary bb-btn-sm" id="cc-add-field">+ ${escapeHtml(tx('Add field'))}</button>
+    </div>`;
+
+  const templateTa = root.querySelector('#cc-template');
+  const cssTa = root.querySelector('#cc-css');
+  const fieldsHost = root.querySelector('#cc-fields');
+  const tokensHost = root.querySelector('#cc-tokens');
+  templateTa.value = working.template ?? '';
+  cssTa.value = working.css ?? '';
+
+  root.querySelectorAll('.avs-wd-tab').forEach(btn => btn.addEventListener('click', () => {
+    root.querySelectorAll('.avs-wd-tab').forEach(b => b.classList.toggle('avs-on', b === btn));
+    root.querySelectorAll('.avs-wd-pane').forEach(p => { p.hidden = p.dataset.pane !== btn.dataset.tab; });
+  }));
+
+  const validFields = () => working.fields.filter(f => f && typeof f.key === 'string' && f.key.trim() && f.type);
+  const renderTokens = () => {
+    const toks = tokensInTemplate(working.template ?? '');
+    const known = new Set(validFields().map(f => f.key.trim()));
+    tokensHost.innerHTML = !toks.length ? '' :
+      `<span class="avs-wd-tokens-h">${escapeHtml(tx('Tokens used:'))}</span> ` + toks.map(tk =>
+        `<code class="avs-wd-token${known.has(tk) ? '' : ' avs-wd-token-unknown'}">{{${escapeHtml(tk)}}}</code>`).join(' ');
+  };
+  const insertAtCursor = (ta, text) => {
+    const s = ta.selectionStart ?? ta.value.length, e = ta.selectionEnd ?? ta.value.length;
+    ta.value = ta.value.slice(0, s) + text + ta.value.slice(e);
+    ta.selectionStart = ta.selectionEnd = s + text.length; ta.focus();
+  };
+  templateTa.addEventListener('input', () => { working.template = templateTa.value; renderTokens(); onChange?.(); });
+  cssTa.addEventListener('input', () => { working.css = cssTa.value; onChange?.(); });
+
+  const renderFields = () => {
+    fieldsHost.replaceChildren();
+    working.fields.forEach((f, idx) => fieldsHost.appendChild(renderRow(f, idx)));
+    renderTokens();
+    onChange?.();
+  };
+  function renderRow(f, idx) {
+    const row = document.createElement('div');
+    row.className = 'avs-wd-fieldrow';
+    row.innerHTML = `
+      <div class="avs-wd-fieldmain">
+        <input class="avs-wd-fkey" placeholder="${escapeHtml(tx('key'))}" value="${escapeHtml(f.key ?? '')}">
+        <input class="avs-wd-flabel" placeholder="${escapeHtml(tx('Label'))}" value="${escapeHtml(f.label ?? '')}">
+        <select class="avs-wd-ftype">
+          ${FIELD_TYPES.map(o => `<option value="${o.value}" ${f.type === o.value ? 'selected' : ''}>${escapeHtml(tx(o.label))}</option>`).join('')}
+        </select>
+      </div>
+      <div class="avs-wd-fieldopts" ${f.type === 'select' ? '' : 'hidden'}>
+        <input class="avs-wd-foptions" placeholder="${escapeHtml(tx('Options: a, b, c  (or  val=Label)'))}" value="${escapeHtml(optionsToText(f.options))}">
+      </div>
+      <div class="avs-wd-fieldbtns">
+        <button type="button" class="avs-iconbtn" data-act="up" ${idx === 0 ? 'disabled' : ''}>↑</button>
+        <button type="button" class="avs-iconbtn" data-act="down" ${idx === working.fields.length - 1 ? 'disabled' : ''}>↓</button>
+        <button type="button" class="avs-iconbtn" data-act="copytoken" title="${escapeHtml(tx('Insert token into template'))}">{ }</button>
+        <button type="button" class="avs-iconbtn bb-btn-danger" data-act="del">✕</button>
+      </div>`;
+    const keyI = row.querySelector('.avs-wd-fkey');
+    const labelI = row.querySelector('.avs-wd-flabel');
+    const typeI = row.querySelector('.avs-wd-ftype');
+    const optsWrap = row.querySelector('.avs-wd-fieldopts');
+    const optsI = row.querySelector('.avs-wd-foptions');
+    keyI.addEventListener('input', () => { f.key = sanitizeKey(keyI.value); if (keyI.value !== f.key) keyI.value = f.key; renderTokens(); onChange?.(); });
+    labelI.addEventListener('input', () => { f.label = labelI.value; onChange?.(); });
+    typeI.addEventListener('change', () => {
+      f.type = typeI.value; optsWrap.hidden = f.type !== 'select';
+      if (f.type === 'select' && !Array.isArray(f.options)) f.options = textToOptions(optsI.value);
+      onChange?.();
+    });
+    optsI.addEventListener('input', () => { f.options = textToOptions(optsI.value); onChange?.(); });
+    row.querySelector('[data-act="up"]').addEventListener('click', () => moveRow(idx, -1));
+    row.querySelector('[data-act="down"]').addEventListener('click', () => moveRow(idx, 1));
+    row.querySelector('[data-act="del"]').addEventListener('click', () => { working.fields.splice(idx, 1); renderFields(); });
+    row.querySelector('[data-act="copytoken"]').addEventListener('click', () => {
+      if (!f.key) return;
+      root.querySelector('.avs-wd-tab[data-tab="template"]').click();
+      insertAtCursor(templateTa, `{{${f.key}}}`);
+      working.template = templateTa.value; renderTokens(); onChange?.();
+    });
+    return row;
+  }
+  const moveRow = (idx, dir) => {
+    const j = idx + dir; if (j < 0 || j >= working.fields.length) return;
+    const [m] = working.fields.splice(idx, 1); working.fields.splice(j, 0, m); renderFields();
+  };
+  root.querySelector('#cc-add-field').addEventListener('click', () => {
+    let i = working.fields.length + 1, key = `field${i}`;
+    const used = new Set(working.fields.map(f => f.key));
+    while (used.has(key)) { i++; key = `field${i}`; }
+    working.fields.push({ key, type: 'text', label: `Field ${i}` });
+    renderFields();
+  });
+
+  renderFields();
+  return { root, dispose() { /* no document-level listeners to remove */ } };
+}
+
 // ---- helpers ----
 function sanitizeKey(s) {
   // A {{token}} key: starts with a letter/_, then word chars. Strip the rest.

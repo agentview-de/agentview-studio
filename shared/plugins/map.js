@@ -57,7 +57,7 @@ export default register({
     fields: [
       { type: 'section', key: 'map', label: 'Map' },
       { key: 'location', type: 'location', label: 'Location & markers' },
-      { key: 'style', type: 'select', label: 'Tile style', buttons: true,
+      { key: 'style', type: 'select', label: 'Tile style', buttons: true, tier: 'advanced',
         options: [
           { value: 'osm', label: 'OpenStreetMap' },
           { value: 'carto-dark', label: 'CARTO Dark' },
@@ -65,12 +65,12 @@ export default register({
         ],
         showIf: c => !String(c.tileUrl ?? '').trim(),
         help: 'Public OSM/CARTO tiles are for light, non-commercial use only. For business or heavy use, set a custom tile provider below.' },
-      { key: 'fitMarkers', type: 'toggle', label: 'Auto-fit to markers',
+      { key: 'fitMarkers', type: 'toggle', label: 'Auto-fit to markers', tier: 'advanced',
         showIf: c => (Array.isArray(c.location?.markers) ? c.location.markers.length : 0) >= 2,
         help: 'Frames the view around all markers automatically instead of using the manual centre and zoom.' },
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
-      { key: 'tileFilter', type: 'select', label: 'Tile filter', buttons: true,
+      { key: 'tileFilter', type: 'select', label: 'Tile filter', buttons: true, tier: 'advanced',
         options: [
           { value: 'none', label: 'None' },
           { value: 'grayscale', label: 'Grayscale' },
@@ -78,15 +78,15 @@ export default register({
           { value: 'dark-boost', label: 'Dark boost' },
         ],
         help: 'Restyles the map tiles — Dark boost turns bright street maps dark for dark-themed screens.' },
-      { key: 'caption', type: 'text', label: 'Caption',
+      { key: 'caption', type: 'text', label: 'Caption', tier: 'advanced',
         placeholder: 'Falls back to the slide title',
         help: 'Floating chip in the top-left corner of the map — names the place on an otherwise edge-to-edge map.' },
 
       { type: 'section', key: 'behavior', label: 'Behavior' },
-      { key: 'tourSec', type: 'duration', label: 'Marker tour every (0 = off)',
+      { key: 'tourSec', type: 'duration', label: 'Marker tour every (0 = off)', tier: 'advanced',
         showIf: c => (Array.isArray(c.location?.markers) ? c.location.markers.length : 0) >= 2,
         help: 'Flies the map from marker to marker on a timer — turns a static map into an attract loop across your locations. Values below 3 seconds are raised to 3.' },
-      { key: 'lockInteraction', type: 'toggle', label: 'Lock interaction',
+      { key: 'lockInteraction', type: 'toggle', label: 'Lock interaction', tier: 'advanced',
         help: 'Blocks panning and zooming so viewers on touch displays can’t drag the map away.' },
 
       { type: 'section', key: 'tileProvider', label: 'Custom tile provider (optional)', collapsed: true,
@@ -95,7 +95,7 @@ export default register({
           if (!u) return 'built-in tiles';
           try { return new URL(u.replace('{s}.', '')).hostname; } catch { return 'custom URL'; }
         } },
-      { key: 'tileUrl', type: 'text', label: 'Tile URL template',
+      { key: 'tileUrl', type: 'text', label: 'Tile URL template', tier: 'advanced',
         placeholder: 'https://{s}.tiles.example.com/{z}/{x}/{y}.png',
         help: 'Bring your own tile provider for business or heavy use. Overrides the tile style above. Use {s} {z} {x} {y} placeholders.',
         // A template URL can't be probed with a test: button (the literal
@@ -112,7 +112,7 @@ export default register({
           }
           return null;
         } },
-      { key: 'tileAttribution', type: 'text', label: 'Tile attribution',
+      { key: 'tileAttribution', type: 'text', label: 'Tile attribution', tier: 'advanced',
         placeholder: '© My Tile Provider',
         showIf: c => !!String(c.tileUrl ?? '').trim(),
         help: 'The credit line your tile provider requires. Shown in the map’s attribution control.' },
@@ -127,6 +127,7 @@ export default register({
     // theme-derived so the brief flash before tiles load matches light themes.
     const mapEl = document.createElement('div');
     mapEl.className = 'bb-slide-map';
+    mapEl.dataset.field = 'location style fitMarkers tileFilter tourSec lockInteraction tileUrl tileAttribution';
     mapEl.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background:var(--bb-st-bg, #0a0a10);';
     container.appendChild(mapEl);
 
@@ -139,6 +140,7 @@ export default register({
     if (captionText) {
       chip = document.createElement('div');
       chip.className = 'bb-map-caption';
+      chip.dataset.field = 'caption';
       chip.style.cssText =
         'position:absolute;top:14px;left:14px;z-index:1100;pointer-events:none;' +
         'max-width:72%;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' +

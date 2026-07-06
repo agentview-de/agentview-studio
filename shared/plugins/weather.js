@@ -212,16 +212,16 @@ export default register({
         { value: 'hourly',    label: 'Hourly, next 12–24 hours strip' },
         { value: 'dashboard', label: 'Dashboard, premium full-canvas, all data' },
       ] },
-      { key: 'iconSet', type: 'select', label: 'Icon style', options: [
+      { key: 'iconSet', type: 'select', label: 'Icon style', tier: 'advanced', options: [
         { value: 'auto',  label: 'Auto (Dashboard = SVG, others = Emoji)' },
         { value: 'svg',   label: 'SVG, custom illustrated icons' },
         { value: 'emoji', label: 'Emoji, system color icons (☀️ ⛅ 🌧️)' },
       ] },
-      { key: 'colorTemperature', type: 'toggle', label: 'Colour-code temperature',
+      { key: 'colorTemperature', type: 'toggle', label: 'Colour-code temperature', tier: 'advanced',
         help: 'Tints the current temperature and forecast hi/lo by °C, blue for cold, amber for warm, red for hot.' },
-      textScaleField(),
-      localeField(),
-      { key: 'timeFormat', type: 'select', label: 'Time format', buttons: true, options: [
+      { ...textScaleField(), tier: 'advanced' },
+      { ...localeField(), tier: 'advanced' },
+      { key: 'timeFormat', type: 'select', label: 'Time format', buttons: true, tier: 'advanced', options: [
         { value: 'auto', label: 'Auto' },
         { value: '12h',  label: '12 h (AM/PM)' },
         { value: '24h',  label: '24 h' },
@@ -244,43 +244,43 @@ export default register({
       ] },
       { type: 'row', children: [
         { key: 'showIcon', type: 'toggle', label: 'Weather icon' },
-        { key: 'showDescription', type: 'toggle', label: 'Condition text',
+        { key: 'showDescription', type: 'toggle', label: 'Condition text', tier: 'advanced',
           help: 'English WMO label ("Clear sky", "Mainly clear"…). Off by default to keep widget international.' },
       ] },
       { type: 'row', children: [
-        { key: 'showHiLo',       type: 'toggle', label: 'High / Low today',
+        { key: 'showHiLo',       type: 'toggle', label: 'High / Low today', tier: 'advanced',
           showIf: c => designSupports(c.design, 'hilo') },
-        { key: 'showStats',      type: 'toggle', label: 'Wind / Humidity / Feels-like',
+        { key: 'showStats',      type: 'toggle', label: 'Wind / Humidity / Feels-like', tier: 'advanced',
           showIf: c => designSupports(c.design, 'stats') },
       ] },
       { type: 'row', children: [
-        { key: 'showWindVector', type: 'toggle', label: 'Wind direction arrow',
+        { key: 'showWindVector', type: 'toggle', label: 'Wind direction arrow', tier: 'advanced',
           showIf: c => designSupports(c.design, 'stats') && c.showStats !== false,
           help: 'Adds a small compass arrow next to the wind speed.' },
-        { key: 'showUv', type: 'toggle', label: 'UV index card',
+        { key: 'showUv', type: 'toggle', label: 'UV index card', tier: 'advanced',
           showIf: c => designSupports(c.design, 'stats') && c.showStats !== false,
           help: 'Adds a UV index card (Low / Moderate / High) to the stats row.' },
       ] },
       { type: 'row', children: [
-        { key: 'showPrecip',     type: 'toggle', label: 'Precipitation chance',
+        { key: 'showPrecip',     type: 'toggle', label: 'Precipitation chance', tier: 'advanced',
           showIf: c => designSupports(c.design, 'precip') },
-        { key: 'showSunrise',    type: 'toggle', label: 'Sunrise / Sunset',
+        { key: 'showSunrise',    type: 'toggle', label: 'Sunrise / Sunset', tier: 'advanced',
           showIf: c => designSupports(c.design, 'sunrise') },
       ] },
       { type: 'row', children: [
-        { key: 'showForecast', type: 'toggle', label: 'Daily forecast',
+        { key: 'showForecast', type: 'toggle', label: 'Daily forecast', tier: 'advanced',
           showIf: c => designSupports(c.design, 'forecast') },
-        { key: 'forecastDays', type: 'number', label: 'Forecast days', min: 1, max: 7, step: 1, slider: true, suffix: ' days',
+        { key: 'forecastDays', type: 'number', label: 'Forecast days', min: 1, max: 7, step: 1, slider: true, suffix: ' days', tier: 'advanced',
           showIf: c => designSupports(c.design, 'forecast') && c.showForecast !== false,
           help: 'Portrait screens often want 3–5, landscape can take all 7.' },
       ] },
       { type: 'row', children: [
-        { key: 'showHourly', type: 'toggle', label: 'Hourly strip (next N hours)',
+        { key: 'showHourly', type: 'toggle', label: 'Hourly strip (next N hours)', tier: 'advanced',
           showIf: c => designSupports(c.design, 'hourly') },
-        { key: 'hourlyHours', type: 'number', label: 'Hours to show', min: 4, max: 24, step: 1, slider: true, suffix: ' h',
+        { key: 'hourlyHours', type: 'number', label: 'Hours to show', min: 4, max: 24, step: 1, slider: true, suffix: ' h', tier: 'advanced',
           showIf: c => designSupports(c.design, 'hourly') && c.showHourly === true },
       ] },
-      { key: 'showAlerts', type: 'toggle', label: 'Severe-weather banner',
+      { key: 'showAlerts', type: 'toggle', label: 'Severe-weather banner', tier: 'advanced',
         help: 'Shows a warning banner when current or upcoming conditions are severe (heavy rain or snow, storms) — even when the condition text is off.' },
 
       // ── Data plumbing — rarely touched, folded by default ─────────────────
@@ -305,6 +305,18 @@ export default register({
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'current-only', name: 'Current only', patch: {
+      design: 'minimal', showForecast: false, showHourly: false, showStats: false, showHiLo: false, showDescription: false } },
+    { id: 'with-forecast', name: 'With forecast', patch: {
+      design: 'classic', showForecast: true, forecastDays: 5, showHourly: false, showHiLo: true } },
+    { id: 'detailed', name: 'Detailed', patch: {
+      design: 'dashboard', showStats: true, showHiLo: true, showForecast: true, showHourly: true, showDescription: true } },
+    { id: 'hourly-strip', name: 'Hourly strip', patch: {
+      design: 'hourly', showHourly: true, hourlyHours: 12, showForecast: false } },
+    { id: 'fahrenheit-hero', name: 'Fahrenheit hero', patch: {
+      design: 'hero', unit: 'F', showForecast: false, showStats: false } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const root = document.createElement('div');
@@ -391,64 +403,64 @@ export default register({
     root.innerHTML = `
       ${useSvgIcons ? WEATHER_SVG_DEFS : ''}
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
-      ${showAlerts ? `<div class="bb-weather-alert" role="status" style="display:none;grid-column:1 / -1;align-items:center;justify-content:center;gap:.5em;font-size:calc(clamp(13px, 2.4cqmin, 28px) * var(--bb-weather-text-scale, 1));font-weight:600;line-height:1.3;padding:.35em .9em;border:2px solid var(--bb-st-accent, #f5a85a);border-radius:.5em;background:color-mix(in srgb, var(--bb-st-accent, #f5a85a) 16%, transparent);"></div>` : ''}
+      ${showAlerts ? `<div class="bb-weather-alert" data-field="showAlerts accentColor textScale" role="status" style="display:none;grid-column:1 / -1;align-items:center;justify-content:center;gap:.5em;font-size:calc(clamp(13px, 2.4cqmin, 28px) * var(--bb-weather-text-scale, 1));font-weight:600;line-height:1.3;padding:.35em .9em;border:2px solid var(--bb-st-accent, #f5a85a);border-radius:.5em;background:color-mix(in srgb, var(--bb-st-accent, #f5a85a) 16%, transparent);"></div>` : ''}
       <div class="bb-weather-current">
-        <div class="bb-weather-icon">${iconHero}</div>
+        <div class="bb-weather-icon" data-field="showIcon iconSet">${iconHero}</div>
         <div class="bb-weather-meta">
-          <div class="bb-weather-city">${escapeHtml(c.location?.name ?? 'Munich')}</div>
-          <div class="bb-weather-temp">—°</div>
-          <div class="bb-weather-desc">Loading…</div>
-          ${showHiLo ? `<div class="bb-weather-hilo" hidden>
+          <div class="bb-weather-city" data-field="showCity location textScale">${escapeHtml(c.location?.name ?? 'Munich')}</div>
+          <div class="bb-weather-temp" data-field="showTemp unit colorTemperature textScale">—°</div>
+          <div class="bb-weather-desc" data-field="showDescription locale textScale">Loading…</div>
+          ${showHiLo ? `<div class="bb-weather-hilo" data-field="showHiLo unit colorTemperature" hidden>
             <span class="bb-weather-hi">H —°</span>
             <span class="bb-weather-lo">L —°</span>
           </div>` : ''}
         </div>
       </div>
       ${showStats ? `<div class="bb-weather-stats">
-        <div class="bb-stat-card bb-stat-card-wind">
+        <div class="bb-stat-card bb-stat-card-wind" data-field="showStats windUnit showWindVector">
           <span class="bb-stat-icon" aria-hidden="true">${statIcon('i-wind') ?? '💨'}</span>
           <span class="bb-stat-label">Wind</span>
           <b class="bb-stat-wind">—</b>
           <span class="bb-stat-sub bb-stat-wind-sub"></span>
         </div>
-        <div class="bb-stat-card bb-stat-card-hum">
+        <div class="bb-stat-card bb-stat-card-hum" data-field="showStats">
           <span class="bb-stat-icon" aria-hidden="true">${statIcon('i-drop', 'var(--bb-st-accent, #79b6ff)') ?? '💧'}</span>
           <span class="bb-stat-label">Humidity</span>
           <b class="bb-stat-hum">—</b>
           <span class="bb-stat-sub bb-stat-hum-sub"></span>
         </div>
-        <div class="bb-stat-card bb-stat-card-feels">
+        <div class="bb-stat-card bb-stat-card-feels" data-field="showStats unit">
           <span class="bb-stat-icon" aria-hidden="true">${statIcon('i-thermo') ?? '🌡️'}</span>
           <span class="bb-stat-label">Feels like</span>
           <b class="bb-stat-feels">—</b>
           <span class="bb-stat-sub bb-stat-feels-sub"></span>
         </div>
-        ${showUv ? `<div class="bb-stat-card bb-stat-card-uv">
+        ${showUv ? `<div class="bb-stat-card bb-stat-card-uv" data-field="showUv showStats">
           <span class="bb-stat-icon" aria-hidden="true">${statIcon('i-sun-small') ?? '🔆'}</span>
           <span class="bb-stat-label">UV</span>
           <b class="bb-stat-uv">—</b>
           <span class="bb-stat-sub bb-stat-uv-sub"></span>
         </div>` : ''}
-        ${isDashboard && showSunrise ? `<div class="bb-stat-card bb-stat-card-sun">
+        ${isDashboard && showSunrise ? `<div class="bb-stat-card bb-stat-card-sun" data-field="showSunrise design timeFormat locale">
           <span class="bb-stat-icon" aria-hidden="true">${statIcon('i-sunrise') ?? '🌅'}</span>
           <span class="bb-stat-label">Sun</span>
           <b class="bb-stat-sun-times">—:— · —:—</b>
           <span class="bb-stat-sub bb-stat-sun-sub"></span>
         </div>` : ''}
       </div>` : ''}
-      ${showSunrise && !isDashboard ? `<div class="bb-weather-sun" hidden>
+      ${showSunrise && !isDashboard ? `<div class="bb-weather-sun" data-field="showSunrise timeFormat locale" hidden>
         <span class="bb-weather-sunrise"><span aria-hidden="true">🌅</span> <b>—:—</b></span>
         <span class="bb-weather-sunset"><span aria-hidden="true">🌇</span> <b>—:—</b></span>
       </div>` : ''}
-      ${showHourly ? `${isDashboard ? `<div class="bb-weather-section-head">
+      ${showHourly ? `${isDashboard ? `<div class="bb-weather-section-head" data-field="showHourly hourlyHours design">
         <span class="bb-weather-section-title">Hourly forecast · Next ${hourlyCap} hours</span>
         <span class="bb-weather-section-meta bb-weather-updated"></span>
-      </div>` : ''}<div class="bb-weather-hourly" hidden></div>` : ''}
-      ${showForecast ? `${isDashboard ? `<div class="bb-weather-section-head">
+      </div>` : ''}<div class="bb-weather-hourly" data-field="showHourly hourlyHours unit iconSet timeFormat locale showPrecip colorTemperature" hidden></div>` : ''}
+      ${showForecast ? `${isDashboard ? `<div class="bb-weather-section-head" data-field="showForecast forecastDays design location">
         <span class="bb-weather-section-title">${forecastCap}-day forecast</span>
         <span class="bb-weather-section-meta bb-weather-coords"></span>
-      </div>` : ''}<div class="bb-weather-forecast"></div>` : ''}
-      <div class="bb-weather-attribution" style="font-size:calc(clamp(10px, 1.4cqmin, 18px) * var(--bb-weather-text-scale, 1));line-height:1.4;opacity:.55;margin-top:6px;text-align:center;">
+      </div>` : ''}<div class="bb-weather-forecast" data-field="showForecast forecastDays unit iconSet showPrecip colorTemperature locale"></div>` : ''}
+      <div class="bb-weather-attribution" data-field="textScale" style="font-size:calc(clamp(10px, 1.4cqmin, 18px) * var(--bb-weather-text-scale, 1));line-height:1.4;opacity:.55;margin-top:6px;text-align:center;">
         Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;">Open-Meteo.com</a>
       </div>
     `;

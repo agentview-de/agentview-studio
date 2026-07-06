@@ -107,23 +107,23 @@ export default register({
         { value: 'paginate', label: 'Paginate (rotate through pages)' },
         { value: 'ticker',   label: 'Live ticker (scroll horizontally)' },
       ]},
-      { key: 'showDesc', type: 'toggle', label: 'Show descriptions',
+      { key: 'showDesc', type: 'toggle', label: 'Show descriptions', tier: 'advanced',
         showIf: c => c.mode !== 'ticker' },
-      { key: 'showDate', type: 'toggle', label: 'Show item date',
+      { key: 'showDate', type: 'toggle', label: 'Show item date', tier: 'advanced',
         help: 'Shows each item’s publication time as a small accent-coloured label.' },
-      { key: 'dateFormat', type: 'select', label: 'Date format', options: [
+      { key: 'dateFormat', type: 'select', label: 'Date format', tier: 'advanced', options: [
         { value: 'relative', label: 'Relative (2 hr ago)' },
         { value: 'time',     label: 'Time (14:05)' },
         { value: 'date',     label: 'Weekday + time (Mon 14:05)' },
       ], showIf: c => !!c.showDate },
-      { ...localeField(), showIf: c => !!c.showDate },
-      textScaleField(),
+      { ...localeField(), tier: 'advanced', showIf: c => !!c.showDate },
+      { ...textScaleField(), tier: 'advanced' },
 
       { type: 'section', key: 'behavior', label: 'Behavior' },
-      { key: 'pageSec', type: 'duration', label: 'Time per page',
+      { key: 'pageSec', type: 'duration', label: 'Time per page', tier: 'advanced',
         min: 2, max: 30,
         showIf: c => c.mode === 'paginate' },
-      { key: 'tickerSpeed', type: 'number', label: 'Ticker speed',
+      { key: 'tickerSpeed', type: 'number', label: 'Ticker speed', tier: 'advanced',
         min: 20, max: 300, step: 10, slider: true, suffix: ' px/s',
         showIf: c => c.mode === 'ticker' },
       refreshSecField({ showIf: c => c.dataMode !== 'stored' }),
@@ -208,9 +208,9 @@ export default register({
         const dt = fmtDate(it.date);
         return `
         <li class="bb-rss-item">
-          <div class="bb-rss-title">${escapeHtml(it.title)}</div>
-          ${it.desc ? `<div class="bb-rss-desc">${escapeHtml(it.desc)}${it.truncated ? '…' : ''}</div>` : ''}
-          ${dt ? `<div class="bb-rss-date" data-ts="${it.date}" style="${DATE_STYLE}">${escapeHtml(dt)}</div>` : ''}
+          <div class="bb-rss-title" data-field="url maxItems textScale">${escapeHtml(it.title)}</div>
+          ${it.desc ? `<div class="bb-rss-desc" data-field="showDesc textScale">${escapeHtml(it.desc)}${it.truncated ? '…' : ''}</div>` : ''}
+          ${dt ? `<div class="bb-rss-date" data-field="showDate dateFormat locale" data-ts="${it.date}" style="${DATE_STYLE}">${escapeHtml(dt)}</div>` : ''}
         </li>`;
       }).join('') || '<li class="bb-rss-loading">Empty feed</li>';
     };
@@ -225,7 +225,7 @@ export default register({
       const buildCopy = () => entries
         .map(i => {
           const dt = fmtDate(i.date);
-          return `<span class="bb-rss-ticker-item">${escapeHtml(i.title)}${dt ? `<span data-ts="${i.date}" style="${TICKER_DATE_STYLE}">${escapeHtml(dt)}</span>` : ''}</span>`;
+          return `<span class="bb-rss-ticker-item" data-field="url maxItems mode tickerSpeed textScale">${escapeHtml(i.title)}${dt ? `<span data-field="showDate dateFormat locale" data-ts="${i.date}" style="${TICKER_DATE_STYLE}">${escapeHtml(dt)}</span>` : ''}</span>`;
         })
         .join(`<span class="bb-rss-ticker-sep">${sep}</span>`);
       tickerTrack.innerHTML = buildCopy() + `<span class="bb-rss-ticker-sep">${sep}</span>` + buildCopy();

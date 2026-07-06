@@ -82,7 +82,7 @@ export default register({
         { key: 'unitPlural', type: 'text', label: 'Unit (plural)', placeholder: 'days',
           help: 'Leave empty for the automatic, language-aware “day” / “days” — or repurpose the counter with your own unit (“shifts”, “deliveries”).' },
       ] },
-      localeField(),
+      { ...localeField(), tier: 'advanced' },
 
       { type: 'section', key: 'milestones', label: 'Milestones & status', collapsed: true,
         summary: (c) => {
@@ -93,23 +93,30 @@ export default register({
           ].filter(Boolean);
           return on.join(' · ') || 'off';
         } },
-      { key: 'recordDays', type: 'number', label: 'Record (0 = hidden)', min: 0, step: 1, suffix: ' days',
+      { key: 'recordDays', type: 'number', label: 'Record (0 = hidden)', min: 0, step: 1, suffix: ' days', tier: 'advanced',
         help: 'Best streak so far — shown as a secondary line and highlighted once the current streak beats it.' },
-      { key: 'milestoneEvery', type: 'number', label: 'Milestone every (0 = off)', min: 0, step: 1, suffix: ' days',
+      { key: 'milestoneEvery', type: 'number', label: 'Milestone every (0 = off)', min: 0, step: 1, suffix: ' days', tier: 'advanced',
         help: 'Celebrates round numbers: on every Nth day the counter shows a milestone badge.' },
-      { key: 'goodAbove', type: 'number', label: 'Good above (0 = off)', min: 0, step: 1, suffix: ' days',
+      { key: 'goodAbove', type: 'number', label: 'Good above (0 = off)', min: 0, step: 1, suffix: ' days', tier: 'advanced',
         help: 'Once the streak reaches this many days, the count switches to the good colour — classic safety-board signalling.' },
-      { key: 'goodColor', type: 'color', label: 'Good colour', clearable: true,
+      { key: 'goodColor', type: 'color', label: 'Good colour', clearable: true, tier: 'advanced',
         showIf: c => (Number(c.goodAbove) || 0) > 0,
         help: 'Leave empty for the standard green.' },
 
       { type: 'section', key: 'appearance', label: 'Appearance',
         summary: c => `${c.textScale ?? 100}%` },
-      textScaleField(),
+      { ...textScaleField(), tier: 'advanced' },
 
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'big-counter', name: 'Big counter', patch: { showDate: false, milestoneEvery: 0, recordDays: 0 } },
+    { id: 'with-milestones', name: 'With milestones', patch: { milestoneEvery: 100, showDate: true } },
+    { id: 'with-record', name: 'With record', patch: { recordDays: 365, showDate: true } },
+    { id: 'safety-board', name: 'Safety board', patch: { goodAbove: 30, showDate: true } },
+    { id: 'minimal', name: 'Minimal', patch: { showDate: false, milestoneEvery: 0, recordDays: 0, goodAbove: 0 } },
+  ],
   render(slide, container) {
     const c = slide.content ?? {};
     const at = (c.since && typeof c.since === 'object') ? c.since.at : null;
@@ -148,12 +155,12 @@ export default register({
     const subFont = 'calc(min(5cqw, 7cqh) * var(--bb-ds-text-scale, 1))';
     root.innerHTML = `
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
-      ${c.heading ? `<div class="bb-ds-heading">${escapeHtml(c.heading)}</div>` : ''}
-      <div class="bb-ds-count">—</div>
-      <div class="bb-ds-unit"></div>
-      <div class="bb-ds-milestone" style="display:none;font:700 calc(min(4.5cqw,6.5cqh) * var(--bb-ds-text-scale,1))/1.2 var(--bb-st-font,Inter,sans-serif);color:var(--bb-st-accent);background:color-mix(in srgb, var(--bb-st-accent) 16%, transparent);border-radius:999px;padding:.25em .9em;margin-top:.3em;"></div>
-      ${recordDays > 0 ? `<div class="bb-ds-record" style="font-size:${subFont};opacity:.75;margin-top:.3em;"></div>` : ''}
-      ${c.showDate ? `<div class="bb-ds-date"></div>` : ''}`;
+      ${c.heading ? `<div class="bb-ds-heading" data-field="heading textScale">${escapeHtml(c.heading)}</div>` : ''}
+      <div class="bb-ds-count" data-field="since textScale goodAbove goodColor locale">—</div>
+      <div class="bb-ds-unit" data-field="unitSingular unitPlural locale"></div>
+      <div class="bb-ds-milestone" data-field="milestoneEvery locale textScale" style="display:none;font:700 calc(min(4.5cqw,6.5cqh) * var(--bb-ds-text-scale,1))/1.2 var(--bb-st-font,Inter,sans-serif);color:var(--bb-st-accent);background:color-mix(in srgb, var(--bb-st-accent) 16%, transparent);border-radius:999px;padding:.25em .9em;margin-top:.3em;"></div>
+      ${recordDays > 0 ? `<div class="bb-ds-record" data-field="recordDays unitSingular unitPlural locale textScale" style="font-size:${subFont};opacity:.75;margin-top:.3em;"></div>` : ''}
+      ${c.showDate ? `<div class="bb-ds-date" data-field="showDate since locale textScale"></div>` : ''}`;
 
     const countEl = root.querySelector('.bb-ds-count');
     const unitEl = root.querySelector('.bb-ds-unit');

@@ -17,6 +17,7 @@ import { openModal } from './modal.js';
 import { sanitizeHtml } from '../../shared/sanitize-html.js';
 import { t, tx } from '../i18n.js';
 import { registerControl, getControl } from './field-controls/registry.js';
+import { filterFieldsByTier } from './tier-filter.js';
 
 // Register the rich field controls (each its own module) into the control
 // registry — the seam renderField() dispatches through first, mirroring the
@@ -74,7 +75,7 @@ const HEAVY_FIELD_TYPES = new Set([
   'markdown', 'code', 'textarea', 'location', 'icon', 'theme',
 ]);
 
-export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, codePicker, formKey, defaults, autoFold }) {
+export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, codePicker, formKey, defaults, autoFold, tierFilter }) {
   const root = document.createElement('div');
   root.className = 'bb-form';
   const refs = new Map(); // key → control element
@@ -146,6 +147,11 @@ export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, 
   function mountField(f, { suppressLabel = false, suppressHelp = false } = {}) {
     const group = document.createElement('div');
     group.className = `bb-form-group bb-form-${f.type}`;
+    // Tag the wrapper with its content key so a host (e.g. the Widget Designer)
+    // can bridge controls to the rendered element they drive — hover a control
+    // to glow the matching [data-field] in the preview, click the element to
+    // focus its control. Purely additive; ignored everywhere else.
+    if (f.key != null) group.dataset.fieldKey = f.key;
 
     // Per-field reset: a small ghost ↺ next to the label (hover-revealed)
     // whenever the value differs from the caller-supplied defaults. Resets
@@ -262,8 +268,12 @@ export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, 
   //   `section` opens a collapsible group; subsequent fields mount into it.
   //   `row` wraps its `children` array in a horizontal flex container.
   // Anything else is a regular field.
+  // Tier filter (see filterFieldsByTier): the inline inspector passes 'basic'
+  // to show only essentials; the Widget Designer passes 'all' (or omits it).
+  const tieredFields = filterFieldsByTier(schema.fields ?? [], tierFilter);
+
   let currentTarget = root;
-  for (const f of (schema.fields ?? [])) {
+  for (const f of tieredFields) {
     if (f.type === 'section') {
       // Explicit section marker — opens a new container that subsequent
       // top-level fields mount into (until the next section / EOF).

@@ -153,36 +153,42 @@ export default register({
       refreshSecField({ showIf: c => c.dataMode !== 'stored' }),
 
       { type: 'section', key: 'layout', label: 'Layout' },
-      { key: 'cardLayout', type: 'select', label: 'Card layout', buttons: true, options: [
+      { key: 'cardLayout', type: 'select', label: 'Card layout', buttons: true, tier: 'advanced', options: [
         { value: 'auto',         label: 'Auto' },
         { value: 'image-top',    label: 'Image top' },
         { value: 'image-left',   label: 'Image left' },
         { value: 'text-overlay', label: 'Text overlay' },
       ], help: 'Auto puts the image beside the text and stacks it on narrow widgets.' },
       mediaFitField(),
-      { key: 'columns', type: 'number', label: 'Columns',
+      { key: 'columns', type: 'number', label: 'Columns', tier: 'advanced',
         min: 0, max: 4, step: 1, slider: true,
         help: '0 = automatic — as many columns as fit the width.' },
-      { key: 'showDesc', type: 'toggle', label: 'Show descriptions' },
-      { key: 'showDate', type: 'toggle', label: 'Show date',
+      { key: 'showDesc', type: 'toggle', label: 'Show descriptions', tier: 'advanced' },
+      { key: 'showDate', type: 'toggle', label: 'Show date', tier: 'advanced',
         help: 'Shows how long ago each item was published.' },
-      { key: 'showSource', type: 'toggle', label: 'Show source',
+      { key: 'showSource', type: 'toggle', label: 'Show source', tier: 'advanced',
         help: 'Shows the publisher domain on each card.' },
-      { ...localeField(), showIf: c => !!c.showDate },
-      textScaleField(),
+      { ...localeField(), tier: 'advanced', showIf: c => !!c.showDate },
+      { ...textScaleField(), tier: 'advanced' },
 
       { type: 'section', key: 'behavior', label: 'Behavior' },
-      { key: 'mode', type: 'select', label: 'When too many items', options: [
+      { key: 'mode', type: 'select', label: 'When too many items', tier: 'advanced', options: [
         { value: 'fit',      label: 'Auto-fit (show as many as fit)' },
         { value: 'paginate', label: 'Paginate (rotate through pages)' },
       ]},
-      { key: 'pageSec', type: 'duration', label: 'Time per page',
+      { key: 'pageSec', type: 'duration', label: 'Time per page', tier: 'advanced',
         min: 2, max: 30,
         showIf: c => c.mode === 'paginate' },
 
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'grid',        name: 'Grid',          patch: { cardLayout: 'image-top', columns: 3, fit: 'cover' } },
+    { id: 'big-photo',   name: 'Big photo',     patch: { cardLayout: 'text-overlay', columns: 1, showDesc: false } },
+    { id: 'text-photo',  name: 'Text + photo',  patch: { cardLayout: 'image-left', columns: 2, showDesc: true } },
+    { id: 'compact',     name: 'Compact',       patch: { cardLayout: 'auto', columns: 4, showDesc: false, showSource: true } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const mode = c.mode ?? 'fit';
@@ -236,12 +242,12 @@ export default register({
         return `
         <article class="${cardClass}">
           ${bg
-            ? `<div class="bb-news-img" style="background-image:${bg};background-size:${bgSize};"></div>`
-            : '<div class="bb-news-img bb-news-img-empty"></div>'}
+            ? `<div class="bb-news-img" data-field="url cardLayout fit columns" style="background-image:${bg};background-size:${bgSize};"></div>`
+            : '<div class="bb-news-img bb-news-img-empty" data-field="url cardLayout fit columns"></div>'}
           <div class="bb-news-text">
-            <h3>${escapeHtml(it.title)}</h3>
-            <p>${escapeHtml(it.desc)}</p>
-            ${metaBits.length ? `<div class="bb-news-meta">${metaBits.join(' · ')}</div>` : ''}
+            <h3 data-field="url maxItems textScale">${escapeHtml(it.title)}</h3>
+            <p data-field="showDesc textScale">${escapeHtml(it.desc)}</p>
+            ${metaBits.length ? `<div class="bb-news-meta" data-field="showDate showSource locale">${metaBits.join(' · ')}</div>` : ''}
           </div>
         </article>
       `;

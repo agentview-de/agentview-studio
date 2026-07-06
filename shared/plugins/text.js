@@ -78,9 +78,9 @@ export default register({
       { type: 'section', key: 'appearance', label: 'Appearance' },
       { key: 'font', type: 'select', label: 'Default font', options: FONTS,
         help: 'Default for the whole widget — the editor toolbar can override font styling per selection.' },
-      textScaleField(),
-      { key: 'valign', type: 'align', vertical: true, label: 'Vertical alignment' },
-      { key: 'maxWidth', type: 'select', label: 'Content width', buttons: true, options: [
+      { ...textScaleField(), tier: 'advanced' },
+      { key: 'valign', type: 'align', vertical: true, label: 'Vertical alignment', tier: 'advanced' },
+      { key: 'maxWidth', type: 'select', label: 'Content width', buttons: true, tier: 'advanced', options: [
         { value: 'full',        label: 'Full' },
         { value: 'comfortable', label: 'Comfortable' },
         { value: 'narrow',      label: 'Narrow' },
@@ -104,6 +104,13 @@ export default register({
       ...themeColorSection('Color theme (text/accent)'),
     ],
   }),
+  looks: () => [
+    { id: 'centered-statement', name: 'Centered statement', patch: { valign: 'middle', maxWidth: 'comfortable', textScale: 130, font: 'serif', priority: 'normal' } },
+    { id: 'urgent-alert', name: 'Urgent alert', patch: { priority: 'urgent', pulse: true, valign: 'middle', textScale: 120, font: 'display' } },
+    { id: 'narrow-column', name: 'Narrow column', patch: { maxWidth: 'narrow', valign: 'top', textScale: 100, font: 'serif', priority: 'info' } },
+    { id: 'big-bold', name: 'Big & bold', patch: { font: 'display', textScale: 200, valign: 'middle', maxWidth: 'full', priority: 'normal' } },
+    { id: 'fine-print', name: 'Fine print', patch: { font: 'mono', textScale: 90, valign: 'bottom', maxWidth: 'comfortable', priority: 'normal' } },
+  ],
   render(slide, container) {
     const c = slide.content ?? {};
     const fam = FONT_STACK[c.font] ?? FONT_STACK.sans;
@@ -171,6 +178,8 @@ export default register({
     }
     const body = document.createElement('div');
     body.className = 'bb-body';
+    // data-field: lets the Widget Designer bridge controls ↔ this element.
+    body.dataset.field = 'body font textScale maxWidth valign priority';
     body.style.fontFamily = fam;
     cap(body);
     // Legacy widgets stored body as plain text with \n; new widgets store HTML.

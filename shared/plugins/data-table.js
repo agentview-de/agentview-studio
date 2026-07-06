@@ -80,7 +80,7 @@ export default register({
         refreshField,
 
         { type: 'section', key: 'layout', label: 'Layout' },
-        { key: 'align', type: 'text', label: 'Column alignment',
+        { key: 'align', type: 'text', label: 'Column alignment', tier: 'advanced',
           placeholder: 'lcrr',
           help: 'One letter per column, l=left, c=centre, r=right. e.g. "lrr" = label + two right-aligned number columns. Also applies to remote JSON columns (in key order). Leave blank for the default (left-aligned).',
           validate: (v, c) => {
@@ -94,8 +94,8 @@ export default register({
             return null;
           } },
         { type: 'row', children: [
-          { key: 'striped', type: 'toggle', label: 'Striped rows' },
-          { key: 'autoAlignNumbers', type: 'toggle', label: 'Auto-align numbers',
+          { key: 'striped', type: 'toggle', label: 'Striped rows', tier: 'advanced' },
+          { key: 'autoAlignNumbers', type: 'toggle', label: 'Auto-align numbers', tier: 'advanced',
             help: 'Columns where every cell is a number are right-aligned automatically. An explicit letter in the alignment string still wins.' },
         ] },
         { key: 'density', type: 'select', buttons: true, label: 'Density',
@@ -104,20 +104,20 @@ export default register({
             { value: 'compact', label: 'Compact' },
           ],
           help: 'Compact uses tighter padding so more rows fit on screen.' },
-        { key: 'headerStyle', type: 'select', buttons: true, label: 'Header style',
+        { key: 'headerStyle', type: 'select', buttons: true, label: 'Header style', tier: 'advanced',
           options: [
             { value: 'normal', label: 'Normal' },
             { value: 'accent', label: 'Accent' },
             { value: 'hidden', label: 'Hidden' },
           ],
           help: 'Accent tints the header row with the accent colour; hidden suits single-column lists.' },
-        textScaleField(),
+        { ...textScaleField(), tier: 'advanced' },
 
         { type: 'section', key: 'behavior', label: 'Behavior',
           help: 'Long tables can rotate page by page so rows stay readable on a TV.' },
         { type: 'row', children: [
-          { key: 'pageRows', type: 'number', label: 'Rows per page (0 = all)', min: 0, max: 99 },
-          { key: 'pageSec', type: 'duration', label: 'Page every', min: 1,
+          { key: 'pageRows', type: 'number', label: 'Rows per page (0 = all)', min: 0, max: 99, tier: 'advanced' },
+          { key: 'pageSec', type: 'duration', label: 'Page every', min: 1, tier: 'advanced',
             showIf: c => (Number(c.pageRows) || 0) > 0,
             help: 'How long each page stays on screen.' },
         ] },
@@ -131,7 +131,7 @@ export default register({
             const shown = kws.slice(0, 3).join(', ');
             return kws.length > 3 ? `${shown} +${kws.length - 3}` : shown;
           } },
-        { key: 'highlightRules', type: 'table', label: 'Rules',
+        { key: 'highlightRules', type: 'table', label: 'Rules', tier: 'advanced',
           help: 'When any cell in a row contains the keyword (case-insensitive), the row is tinted with the chosen colour. The first matching rule wins.',
           columns: [
             { key: 'keyword', label: 'Keyword', placeholder: 'e.g. DOWN' },
@@ -147,6 +147,16 @@ export default register({
       ],
     };
   },
+  looks: () => [
+    { id: 'compact', name: 'Compact',
+      patch: { density: 'compact', striped: false, headerStyle: 'normal' } },
+    { id: 'striped', name: 'Striped',
+      patch: { striped: true, density: 'comfortable', headerStyle: 'normal' } },
+    { id: 'bold-header', name: 'Bold header',
+      patch: { headerStyle: 'accent', striped: true, density: 'comfortable' } },
+    { id: 'numbers-right', name: 'Numbers right',
+      patch: { autoAlignNumbers: true, striped: true, density: 'compact' } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const root = document.createElement('div');
@@ -209,14 +219,14 @@ export default register({
       });
       const attr = (s) => (s ? ` style="${s}"` : '');
       const head = headerStyle === 'hidden' ? ''
-        : `<thead><tr>${headers.map((h, i) => `<th${attr((align[i] ? `text-align:${align[i]};` : '') + cellPad + thTint)}>${escapeHtml(h)}</th>`).join('')}</tr></thead>`;
+        : `<thead><tr data-field="headers headerStyle align">${headers.map((h, i) => `<th${attr((align[i] ? `text-align:${align[i]};` : '') + cellPad + thTint)}>${escapeHtml(h)}</th>`).join('')}</tr></thead>`;
       const bodyRow = (r) => `<tr${attr(rowTint(r))}>${headers.map((_, i) => `<td${attr((align[i] ? `text-align:${align[i]};` : '') + cellPad)}>${escapeHtml(r[i] ?? '')}</td>`).join('')}</tr>`;
       const per = Math.max(0, Math.floor(Number(c.pageRows) || 0));
       const pages = per > 0 ? Math.max(1, Math.ceil(rows.length / per)) : 1;
       let page = 0;
       const draw = () => {
         const slice = per > 0 ? rows.slice(page * per, page * per + per) : rows;
-        wrap.innerHTML = `<table class="bb-dt${striped ? ' bb-dt-striped' : ''}">${head}<tbody>${slice.map(bodyRow).join('')}</tbody></table>`
+        wrap.innerHTML = `<table class="bb-dt${striped ? ' bb-dt-striped' : ''}" data-field="rows headers source dataUrl align striped autoAlignNumbers density headerStyle textScale pageRows pageSec highlightRules">${head}<tbody>${slice.map(bodyRow).join('')}</tbody></table>`
           // Numbers-only page indicator: language-neutral, so the player needs
           // no i18n for it.
           + (pages > 1 ? `<div class="bb-dt-page" style="text-align:right;opacity:.55;font-variant-numeric:tabular-nums;padding:.4em 16px 0;font-size:calc(clamp(11px, 1.8cqmin, 26px) * var(--bb-dt-text-scale, 1));">${page + 1} / ${pages}</div>` : '');

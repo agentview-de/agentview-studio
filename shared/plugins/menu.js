@@ -102,7 +102,7 @@ export default register({
           { key: 'sold',     label: 'Sold',     type: 'toggle' },
           { key: 'featured', label: '★',        type: 'toggle' },
         ] },
-      { key: 'sectionFilter', type: 'text', label: 'Only show sections',
+      { key: 'sectionFilter', type: 'text', label: 'Only show sections', tier: 'advanced',
         placeholder: 'Starters, Mains',
         help: 'Comma-separated section names. Leave empty to show everything. Lets several screens share one menu — a Starters screen shows only Starters.' },
 
@@ -115,19 +115,19 @@ export default register({
         help: 'Turn off for a showcase menu with no prices — hides the price column and the dotted leader line entirely.' },
       { key: 'currency', type: 'currency', label: 'Currency',
         showIf: c => c.showPrices !== false },
-      { key: 'currencyPosition', type: 'select', buttons: true, label: 'Symbol position',
+      { key: 'currencyPosition', type: 'select', buttons: true, label: 'Symbol position', tier: 'advanced',
         showIf: c => c.showPrices !== false,
         options: [
           { value: 'after', label: '12 €' },
           { value: 'before', label: '€ 12' },
         ],
         help: 'Where the currency symbol sits relative to the amount — “12 €” (EUR style) or “$ 12” (USD/GBP style).' },
-      { key: 'hideZeroDecimals', type: 'toggle', label: 'Hide “.00” on whole prices',
+      { key: 'hideZeroDecimals', type: 'toggle', label: 'Hide “.00” on whole prices', tier: 'advanced',
         showIf: c => c.showPrices !== false,
         help: 'Shows whole amounts as “12” instead of “12.00”; amounts with cents (12.50) keep both decimals.' },
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
-      { key: 'columns', type: 'select', buttons: true, label: 'Columns',
+      { key: 'columns', type: 'select', buttons: true, label: 'Columns', tier: 'advanced',
         options: [
           { value: 'auto', label: 'Auto' },
           { value: '1', label: '1' },
@@ -137,14 +137,26 @@ export default register({
         help: 'Auto fits as many columns as the width allows. Pin a fixed count to serve a narrow sidebar (1) or a full wall (3).' },
       { key: 'showImages', type: 'toggle', label: 'Show dish thumbnails',
         help: 'Thumbnails appear only for items that have an Image URL set; rows without an image stay text-only.' },
-      { key: 'footnote', type: 'text', label: 'Footer note',
+      { key: 'footnote', type: 'text', label: 'Footer note', tier: 'advanced',
         placeholder: 'All prices incl. VAT · allergen info at the counter',
         help: 'Small dimmed line under the menu — handy for VAT / allergen disclaimers.' },
-      textScaleField(),
+      { ...textScaleField(), tier: 'advanced' },
 
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'with-photos', name: 'With photos', patch: {
+      showImages: true, showPrices: true, columns: '1' } },
+    { id: 'text-only', name: 'Text only', patch: {
+      showImages: false, showPrices: true, columns: 'auto' } },
+    { id: 'two-columns', name: 'Two columns', patch: {
+      columns: '2', showImages: false } },
+    { id: 'showcase', name: 'Showcase (no prices)', patch: {
+      showPrices: false, showImages: true, columns: '1' } },
+    { id: 'price-first', name: 'Price first', patch: {
+      showPrices: true, currencyPosition: 'before', showImages: false } },
+  ],
   render(slide, container, _ctx) {
     const c = slide.content ?? {};
     const root = document.createElement('div');
@@ -219,7 +231,7 @@ export default register({
       <div class="bb-menu-cols" style="${colStyle}">
         ${order.map(sec => `
           <section class="bb-menu-section">
-            ${sec ? `<h2>${escapeHtml(sec)}</h2>` : ''}
+            ${sec ? `<h2 data-field="rows sectionFilter">${escapeHtml(sec)}</h2>` : ''}
             <ul>
               ${bySection.get(sec).map(it => {
                 const isSold = !!String(it.sold ?? '').trim();
@@ -234,15 +246,15 @@ export default register({
                 return `
                 <li class="${itemCls}">
                   ${hasImage
-                    ? `<div class="bb-menu-thumb"><img src="${escapeAttr(it.image)}" alt="" loading="lazy" decoding="async" data-menu-thumb></div>`
+                    ? `<div class="bb-menu-thumb" data-field="rows showImages"><img src="${escapeAttr(it.image)}" alt="" loading="lazy" decoding="async" data-menu-thumb></div>`
                     : ''}
                   <div class="bb-menu-body">
                     <div class="bb-menu-row">
-                      <span class="bb-menu-name">${isFeatured ? '<span class="bb-menu-star" aria-hidden="true">★</span> ' : ''}${escapeHtml(it.name ?? '')}${renderTags(it.tags)}${isSold ? '<span class="bb-menu-soldlbl">Sold out</span>' : ''}</span>
+                      <span class="bb-menu-name" data-field="rows tags sold featured">${isFeatured ? '<span class="bb-menu-star" aria-hidden="true">★</span> ' : ''}${escapeHtml(it.name ?? '')}${renderTags(it.tags)}${isSold ? '<span class="bb-menu-soldlbl">Sold out</span>' : ''}</span>
                       ${showPrices ? '<span class="bb-menu-dots"></span>' : ''}
-                      ${showPrices ? `<span class="bb-menu-price">${priceStr}</span>` : ''}
+                      ${showPrices ? `<span class="bb-menu-price" data-field="rows showPrices currency currencyPosition hideZeroDecimals">${priceStr}</span>` : ''}
                     </div>
-                    ${it.desc ? `<div class="bb-menu-desc">${escapeHtml(it.desc)}</div>` : ''}
+                    ${it.desc ? `<div class="bb-menu-desc" data-field="rows">${escapeHtml(it.desc)}</div>` : ''}
                   </div>
                 </li>
               `;
@@ -251,7 +263,7 @@ export default register({
           </section>
         `).join('')}
       </div>
-      ${footnote ? `<div class="bb-menu-footnote" style="margin-top:1.4em;font-size:calc(clamp(11px, 1.6cqmin, 22px) * var(--bb-menu-text-scale, 1));opacity:.6;text-align:center;">${escapeHtml(footnote)}</div>` : ''}
+      ${footnote ? `<div class="bb-menu-footnote" data-field="footnote textScale" style="margin-top:1.4em;font-size:calc(clamp(11px, 1.6cqmin, 22px) * var(--bb-menu-text-scale, 1));opacity:.6;text-align:center;">${escapeHtml(footnote)}</div>` : ''}
     `;
     container.appendChild(root);
     // Wire up onerror for menu thumbs so a broken dish-image URL collapses

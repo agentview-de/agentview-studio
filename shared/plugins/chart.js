@@ -350,7 +350,7 @@ export default register({
           { key: 'label', label: 'Label' },
           { key: 'value', label: 'Value', type: 'number', placeholder: '42' },
         ] },
-      { key: 'sortOrder', type: 'select', label: 'Sort data points', options: [
+      { key: 'sortOrder', type: 'select', label: 'Sort data points', tier: 'advanced', options: [
           { value: 'none', label: 'As entered' },
           { value: 'desc', label: 'Largest first' },
           { value: 'asc', label: 'Smallest first' },
@@ -359,42 +359,52 @@ export default register({
 
       { type: 'section', key: 'axes', label: 'Axes & labels', showIf: notPie },
       { type: 'row', children: [
-        { key: 'xLabel', type: 'text', label: 'X-axis label' },
-        { key: 'yLabel', type: 'text', label: 'Y-axis label' },
+        { key: 'xLabel', type: 'text', label: 'X-axis label', tier: 'advanced' },
+        { key: 'yLabel', type: 'text', label: 'Y-axis label', tier: 'advanced' },
       ], showIf: notPie },
-      { key: 'yMax', type: 'number', label: 'Y-axis max', min: 0, step: 1,
+      { key: 'yMax', type: 'number', label: 'Y-axis max', min: 0, step: 1, tier: 'advanced',
         showIf: notPie,
         help: '0 = auto-fit data. Set a fixed ceiling so e.g. a fundraising goal renders honestly rather than auto-scaling to the highest value.' },
-      { key: 'goalValue', type: 'number', label: 'Goal line value', min: 0, step: 1,
+      { key: 'goalValue', type: 'number', label: 'Goal line value', min: 0, step: 1, tier: 'advanced',
         showIf: notPie,
         help: 'Draws a dashed target line across the plot at this value. 0 = off.' },
-      { key: 'goalLabel', type: 'text', label: 'Goal line label', placeholder: 'Target',
+      { key: 'goalLabel', type: 'text', label: 'Goal line label', placeholder: 'Target', tier: 'advanced',
         showIf: c => notPie(c) && Number(c.goalValue) > 0,
         help: 'Shown at the right end of the goal line. Leave empty to show the value.' },
-      { key: 'seriesLabel', type: 'text', label: 'Series name (for the legend)',
+      { key: 'seriesLabel', type: 'text', label: 'Series name (for the legend)', tier: 'advanced',
         showIf: c => notPie(c) && c.showLegend !== false },
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
       { type: 'row', children: [
-        { key: 'showLegend', type: 'toggle', label: 'Legend' },
-        { key: 'showValues', type: 'toggle', label: 'Value labels' },
+        { key: 'showLegend', type: 'toggle', label: 'Legend', tier: 'advanced' },
+        { key: 'showValues', type: 'toggle', label: 'Value labels', tier: 'advanced' },
       ] },
-      { key: 'valueFormat', type: 'select', label: 'Value format', buttons: true,
+      { key: 'valueFormat', type: 'select', label: 'Value format', buttons: true, tier: 'advanced',
         showIf: notPie,
         options: [
           { value: 'compact', label: 'Compact (1.2k)' },
           { value: 'full', label: 'Full (1,234)' },
           { value: 'percent', label: 'Percent' },
         ] },
-      { key: 'valueUnit', type: 'text', label: 'Value unit', placeholder: '€',
+      { key: 'valueUnit', type: 'text', label: 'Value unit', placeholder: '€', tier: 'advanced',
         showIf: c => notPie(c) && (c.valueFormat ?? 'compact') !== 'percent',
         help: 'Appended to tick and value labels, e.g. “1.2k €”.' },
-      { key: 'palette', type: 'list', label: 'Color palette',
+      { key: 'palette', type: 'list', label: 'Color palette', tier: 'advanced',
         itemShape: [{ key: 'color', type: 'color', label: 'Colour' }],
         help: 'Optional, override the default palette with brand colours. Bar/line use the first two for the gradient, pie cycles through all entries.' },
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'bars', name: 'Bars',
+      patch: { kind: 'bar', showLegend: false, showValues: true, valueFormat: 'compact' } },
+    { id: 'line', name: 'Line',
+      patch: { kind: 'line', showLegend: true, showValues: false, valueFormat: 'compact' } },
+    { id: 'pie', name: 'Pie',
+      patch: { kind: 'pie', showLegend: true, showValues: true } },
+    { id: 'labelled', name: 'Labelled',
+      patch: { kind: 'bar', showValues: true, showLegend: true, valueFormat: 'full' } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const root = document.createElement('div');
@@ -402,7 +412,7 @@ export default register({
     root.className = `bb-slide bb-slide-chart bb-theme-${c.theme ?? 'minimal-dark'}`;
     root.innerHTML = `
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
-      <canvas class="bb-chart-canvas" width="1100" height="540"></canvas>
+      <canvas class="bb-chart-canvas" width="1100" height="540" data-field="kind source data dataUrl sortOrder xLabel yLabel yMax goalValue goalLabel showLegend showValues seriesLabel valueFormat valueUnit palette"></canvas>
       <div class="bb-chart-msg" style="display:none;align-items:center;justify-content:center;width:100%;flex:1 1 auto;min-height:0;color:currentColor;opacity:.65;font:13px/1.5 var(--bb-font, Inter, sans-serif);text-align:center;padding:16px;"></div>
     `;
     container.appendChild(root);

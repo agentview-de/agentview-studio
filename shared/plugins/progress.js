@@ -108,30 +108,32 @@ export default register({
         { value: 'gauge', label: 'Gauge' },
       ] },
       { key: 'showValue', type: 'toggle', label: 'Show value' },
+      // tier:'advanced' — these fine-tuning controls live in the Widget Designer,
+      // not the quick inline inspector.
       { type: 'row', children: [
-        { key: 'align', type: 'select', label: 'Vertical position', buttons: true, options: [
+        { key: 'align', type: 'select', label: 'Vertical position', buttons: true, tier: 'advanced', options: [
           { value: 'top',    label: 'Top' },
           { value: 'center', label: 'Center' },
           { value: 'bottom', label: 'Bottom' },
         ] },
-        { key: 'labelPos', type: 'select', label: 'Label position', buttons: true, options: [
+        { key: 'labelPos', type: 'select', label: 'Label position', buttons: true, tier: 'advanced', options: [
           { value: 'above', label: 'Above' },
           { value: 'below', label: 'Below' },
         ] },
       ] },
-      { key: 'labelEmphasis', type: 'toggle', label: 'Emphasise label',
+      { key: 'labelEmphasis', type: 'toggle', label: 'Emphasise label', tier: 'advanced',
         help: 'Uppercase, full opacity and bolder — makes the label read as the headline instead of a caption.' },
-      { key: 'animate', type: 'toggle', label: 'Animate',
+      { key: 'animate', type: 'toggle', label: 'Animate', tier: 'advanced',
         help: 'Fills the bar or ring with a sweep and counts the value up when the slide appears or the value changes.' },
       { key: 'color', type: 'color', label: 'Fill colour', clearable: true,
         showIf: c => !c.useThresholds,
         help: 'Leave empty to follow the theme accent; click × to reset.' },
-      localeField(),
-      textScaleField(),
+      { ...localeField(), tier: 'advanced' },
+      { ...textScaleField(), tier: 'advanced' },
       { type: 'row', children: [
-        { key: 'labelScale', type: 'number', label: 'Label size', min: 50, max: 300, step: 10, slider: true, suffix: '%',
+        { key: 'labelScale', type: 'number', label: 'Label size', min: 50, max: 300, step: 10, slider: true, suffix: '%', tier: 'advanced',
           help: 'Scales the label on top of the overall text size — independent of the value.' },
-        { key: 'valueScale', type: 'number', label: 'Value size', min: 50, max: 300, step: 10, slider: true, suffix: '%',
+        { key: 'valueScale', type: 'number', label: 'Value size', min: 50, max: 300, step: 10, slider: true, suffix: '%', tier: 'advanced',
           help: 'Scales the value / percentage on top of the overall text size — independent of the label.' },
       ] },
 
@@ -139,21 +141,21 @@ export default register({
         summary: c => c.useThresholds
           ? `${c.thresholdWarn ?? 70}% · ${c.thresholdGood ?? 90}%${c.invertThresholds ? ' ↓' : ''}`
           : 'Off' },
-      { key: 'useThresholds', type: 'toggle', label: 'Use threshold colours',
+      { key: 'useThresholds', type: 'toggle', label: 'Use threshold colours', tier: 'advanced',
         help: 'Fill colour switches between good / warn / bad based on the percentage — a KPI-style traffic light.' },
-      { key: 'invertThresholds', type: 'toggle', label: 'Lower is better',
+      { key: 'invertThresholds', type: 'toggle', label: 'Lower is better', tier: 'advanced',
         showIf: c => !!c.useThresholds,
         help: 'Flips the bands so a LOW percentage is good — for capacity, error budgets or queue lengths.' },
       { type: 'row', children: [
-        { key: 'colorLow',  type: 'color', label: 'Bad' },
-        { key: 'colorMid',  type: 'color', label: 'Warn' },
-        { key: 'colorHigh', type: 'color', label: 'Good' },
+        { key: 'colorLow',  type: 'color', label: 'Bad',  tier: 'advanced' },
+        { key: 'colorMid',  type: 'color', label: 'Warn', tier: 'advanced' },
+        { key: 'colorHigh', type: 'color', label: 'Good', tier: 'advanced' },
       ], showIf: c => !!c.useThresholds },
       { type: 'row', children: [
-        { key: 'thresholdWarn', type: 'number', label: 'Warn at %', min: 0, max: 100, step: 5, slider: true,
+        { key: 'thresholdWarn', type: 'number', label: 'Warn at %', min: 0, max: 100, step: 5, slider: true, tier: 'advanced',
           validate: (v, c) => (c?.useThresholds && Number(v) >= Number(c?.thresholdGood ?? 90))
             ? { level: 'warn', message: 'Warn threshold should be below the Good threshold.' } : null },
-        { key: 'thresholdGood', type: 'number', label: 'Good at %', min: 0, max: 100, step: 5, slider: true,
+        { key: 'thresholdGood', type: 'number', label: 'Good at %', min: 0, max: 100, step: 5, slider: true, tier: 'advanced',
           validate: (v, c) => (c?.useThresholds && Number(v) <= Number(c?.thresholdWarn ?? 70))
             ? { level: 'warn', message: 'Good threshold should be above the Warn threshold.' } : null },
       ], showIf: c => !!c.useThresholds },
@@ -161,6 +163,15 @@ export default register({
       ...themeColorSection(),
     ] };
   },
+  // Curated "design ideas" for the Widget Designer's Looks gallery. Each patch
+  // is merged onto the current content, so colours/label/value are preserved.
+  looks: () => [
+    { id: 'headline', name: 'Big headline',  patch: { style: 'bar', labelScale: 180, valueScale: 70, labelEmphasis: true, align: 'top', labelPos: 'above' } },
+    { id: 'minimal',  name: 'Minimal ring',  patch: { style: 'ring', showValue: false, labelScale: 110, align: 'center' } },
+    { id: 'ring-sub', name: 'Ring + value',  patch: { style: 'ring', showValue: true, valueScale: 80, labelScale: 120, labelEmphasis: true, labelPos: 'below' } },
+    { id: 'gauge',    name: 'KPI gauge',     patch: { style: 'gauge', showValue: true, valueScale: 80, useThresholds: true, align: 'bottom' } },
+    { id: 'compact',  name: 'Compact bar',   patch: { style: 'bar', labelScale: 90, valueScale: 90, labelEmphasis: false, align: 'center', animate: true } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const style = c.style ?? 'bar';
@@ -217,25 +228,29 @@ export default register({
     // Build the markup once per render (or after an error note), with the fill
     // at `v` of `t`. Dynamic bits are spans updated via textContent, so the
     // JSON-sourced path needs no re-escaping.
-    const labelHtml = `<div class="bb-prog-label${c.labelEmphasis ? ' bb-prog-label--em' : ''}"></div>`;
+    // data-field annotations let the Widget Designer bridge controls ↔ elements
+    // (hover a control to glow the element, click the element to focus the
+    // control). Each list names every field that drives the element; the first
+    // is the primary one a click jumps to. Inert outside the designer.
+    const labelHtml = `<div class="bb-prog-label${c.labelEmphasis ? ' bb-prog-label--em' : ''}" data-field="label labelScale labelEmphasis labelPos align locale"></div>`;
     const build = (v, t) => {
       const clamped = Math.max(0, Math.min(1, t > 0 ? v / t : 0));
       const fill = fillFor(c, Math.round((t > 0 ? v / t : 0) * 100));
       // currentColor track instead of hardcoded white — visible on the light
       // 'editorial-mono' theme too (stylesheet fallback keeps old browsers OK).
       if (style === 'bar') {
-        const barHtml = `<div class="bb-prog-bar" style="background:color-mix(in srgb, currentColor 12%, transparent);"><div class="bb-prog-fill" style="width:${(clamped * 100).toFixed(1)}%;background:${escapeHtml(fill)};${animate ? '' : 'transition:none;'}"></div></div>
-          ${showValue ? '<div class="bb-prog-value"><span data-cur></span><span data-unit></span> / <span data-tgt></span><span data-unit></span> · <span data-pct></span>%</div>' : ''}`;
+        const barHtml = `<div class="bb-prog-bar" data-field="value target style color useThresholds" style="background:color-mix(in srgb, currentColor 12%, transparent);"><div class="bb-prog-fill" style="width:${(clamped * 100).toFixed(1)}%;background:${escapeHtml(fill)};${animate ? '' : 'transition:none;'}"></div></div>
+          ${showValue ? '<div class="bb-prog-value" data-field="value target unit showValue valueScale"><span data-cur></span><span data-unit></span> / <span data-tgt></span><span data-unit></span> · <span data-pct></span>%</div>' : ''}`;
         root.innerHTML = `${titleHtml}${labelBelow ? barHtml + labelHtml : labelHtml + barHtml}`;
       } else {
         const dash = style === 'gauge' ? `${ARC.toFixed(1)} ${C.toFixed(1)}` : C.toFixed(1);
-        const ringHtml = `<div class="bb-prog-ringwrap">
+        const ringHtml = `<div class="bb-prog-ringwrap" data-field="value target style color useThresholds">
             <svg class="bb-prog-ring" viewBox="0 0 100 100">
               <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" stroke-opacity=".15" stroke-width="9"${style === 'gauge' ? ` stroke-linecap="round" stroke-dasharray="${dash}" transform="rotate(${ROT} 50 50)"` : ''}/>
               <circle data-arc cx="50" cy="50" r="42" fill="none" stroke="${escapeHtml(fill)}" stroke-width="9" stroke-linecap="round"
                 stroke-dasharray="${dash}" stroke-dashoffset="${(ARC * (1 - clamped)).toFixed(1)}" transform="rotate(${ROT} 50 50)"${animate ? ' style="transition:stroke-dashoffset .8s cubic-bezier(.22,1,.36,1),stroke .4s;"' : ''}/>
             </svg>
-            <div class="bb-prog-ringtext"><div class="bb-prog-pct"><span data-pct></span>%</div>${showValue ? '<div class="bb-prog-sub"><span data-cur></span><span data-unit></span></div>' : ''}</div>
+            <div class="bb-prog-ringtext"><div class="bb-prog-pct" data-field="value target valueScale"><span data-pct></span>%</div>${showValue ? '<div class="bb-prog-sub" data-field="value unit showValue valueScale"><span data-cur></span><span data-unit></span></div>' : ''}</div>
           </div>`;
         root.innerHTML = `${titleHtml}${labelBelow ? ringHtml + labelHtml : labelHtml + ringHtml}`;
       }

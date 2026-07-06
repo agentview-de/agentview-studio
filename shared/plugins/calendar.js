@@ -95,12 +95,12 @@ export default register({
       // ---- View / layout (mode select first, then mode-specific knobs) ----
       { type: 'section', key: 'sec-view', label: 'Layout', icon: '🗂️' },
       { key: 'view', type: 'select', label: 'View', options: CALENDAR_VIEW_OPTIONS, search: true },
-      { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Upcoming',
+      { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Upcoming', tier: 'advanced',
         help: 'Title shown above the list. Leave empty for no heading.',
         showIf: c => ['agenda', 'today'].includes(c.view ?? 'agenda') },
-      { key: 'maxItems', type: 'number', label: 'Max events', min: 1, max: 20, slider: true,
+      { key: 'maxItems', type: 'number', label: 'Max events', min: 1, max: 20, slider: true, tier: 'advanced',
         showIf: c => (c.view ?? 'agenda') === 'agenda' },
-      { key: 'daysAhead', type: 'select', label: 'Look-ahead window', buttons: true,
+      { key: 'daysAhead', type: 'select', label: 'Look-ahead window', buttons: true, tier: 'advanced',
         options: [
           { value: 0, label: 'All' },
           { value: 7, label: '7 days' },
@@ -109,19 +109,19 @@ export default register({
         ],
         help: 'Only show events within this horizon from today.',
         showIf: c => (c.view ?? 'agenda') === 'agenda' },
-      { key: 'hidePast', type: 'toggle', label: 'Hide past events',
+      { key: 'hidePast', type: 'toggle', label: 'Hide past events', tier: 'advanced',
         showIf: c => ['agenda', 'today'].includes(c.view ?? 'agenda'),
         help: 'Keeps the agenda forward-looking, yesterday’s items drop off automatically. Turn off to show events that have already started.' },
-      { key: 'weekDays', type: 'select', label: 'Days shown', buttons: true,
+      { key: 'weekDays', type: 'select', label: 'Days shown', buttons: true, tier: 'advanced',
         options: [
           { value: 'full', label: 'Full week' },
           { value: 'work', label: 'Mon–Fri' },
         ],
         showIf: c => c.view === 'week' },
-      { key: 'perDayCap', type: 'number', label: 'Events per day', min: 0, max: 12, slider: true, suffix: '',
+      { key: 'perDayCap', type: 'number', label: 'Events per day', min: 0, max: 12, slider: true, suffix: '', tier: 'advanced',
         help: '0 keeps the default (6 in week grid, 3 dots in month grid).',
         showIf: c => ['week', 'month'].includes(c.view) },
-      { key: 'emptyText', type: 'text', label: 'Empty-state text',
+      { key: 'emptyText', type: 'text', label: 'Empty-state text', tier: 'advanced',
         placeholder: 'No upcoming events.',
         help: 'Shown when there is nothing to display, e.g. “Room free — book at the front desk”.',
         showIf: c => ['agenda', 'today'].includes(c.view ?? 'agenda') },
@@ -130,21 +130,28 @@ export default register({
       { type: 'section', key: 'sec-room', label: 'Room screen', icon: '🚪',
         showIf: c => c.view === 'now-next',
         help: 'Turns Now & Next into a meeting-room door panel.' },
-      { key: 'roomName', type: 'text', label: 'Room name', placeholder: 'Room 2 · 2nd floor',
+      { key: 'roomName', type: 'text', label: 'Room name', placeholder: 'Room 2 · 2nd floor', tier: 'advanced',
         showIf: c => c.view === 'now-next' },
-      { key: 'showClock', type: 'toggle', label: 'Show live clock',
+      { key: 'showClock', type: 'toggle', label: 'Show live clock', tier: 'advanced',
         help: 'A live HH:MM clock in the header (repaints every 15 seconds while shown).',
         showIf: c => c.view === 'now-next' },
 
       // ---- Appearance ----
       { type: 'section', key: 'sec-appearance', label: 'Appearance' },
-      localeField(),
-      textScaleField(),
+      { ...localeField(), tier: 'advanced' },
+      { ...textScaleField(), tier: 'advanced' },
 
       // ---- Theme & colours (terminal) ----
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'agenda',       name: 'Agenda',        patch: { view: 'agenda', maxItems: 6, hidePast: true } },
+    { id: 'week-grid',    name: 'Week grid',     patch: { view: 'week', weekDays: 'work', perDayCap: 4 } },
+    { id: 'compact-list', name: 'Compact list',  patch: { view: 'agenda', maxItems: 3, daysAhead: 7 } },
+    { id: 'room-panel',   name: 'Room panel',    patch: { view: 'now-next', showClock: true } },
+    { id: 'month',        name: 'Month',         patch: { view: 'month', perDayCap: 3 } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const view = CALENDAR_VIEW_OPTIONS.some(o => o.value === c.view) ? c.view : 'agenda';
@@ -159,10 +166,11 @@ export default register({
     root.style.setProperty('--bb-cal-text-scale', (c.textScale ?? 100) / 100);
     root.innerHTML = `
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
-      ${showHeading ? `<h2 class="bb-h2">${escapeHtml(c.heading)}</h2>` : ''}
+      ${showHeading ? `<h2 class="bb-h2" data-field="heading">${escapeHtml(c.heading)}</h2>` : ''}
       <div class="bb-cal-view"></div>`;
     container.appendChild(root);
     const viewHost = root.querySelector('.bb-cal-view');
+    viewHost.dataset.field = 'events view icsUrl maxItems hidePast daysAhead weekDays perDayCap emptyText roomName showClock locale textScale';
     const manualEvents = toEvents(c.events);
     // Live .ics events fetched from the URL (if any) are merged in. Starts empty
     // and is refreshed by the fetch loop below.

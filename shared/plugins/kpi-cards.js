@@ -117,7 +117,7 @@ export default register({
       refreshField,
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
-      { key: 'columns', type: 'select', label: 'Columns', buttons: true,
+      { key: 'columns', type: 'select', label: 'Columns', buttons: true, tier: 'advanced',
         options: [
           { value: '',  label: 'Auto' },
           { value: '1', label: '1' },
@@ -126,29 +126,39 @@ export default register({
           { value: '4', label: '4' },
         ],
         help: 'Auto fits cards by available width; fix a count for a stable board layout.' },
-      { key: 'density', type: 'select', label: 'Density', buttons: true,
+      { key: 'density', type: 'select', label: 'Density', buttons: true, tier: 'advanced',
         options: [
           { value: 'comfortable', label: 'Comfortable' },
           { value: 'compact',     label: 'Compact' },
         ],
         help: 'Compact tightens spacing and hides sparklines — for narrow or side-panel widgets.' },
       { type: 'row', children: [
-        { key: 'showDelta',     type: 'toggle', label: 'Show delta' },
-        { key: 'showTarget',    type: 'toggle', label: 'Show target bar' },
-        { key: 'showSparkline', type: 'toggle', label: 'Show sparkline',
+        { key: 'showDelta',     type: 'toggle', label: 'Show delta', tier: 'advanced' },
+        { key: 'showTarget',    type: 'toggle', label: 'Show target bar', tier: 'advanced' },
+        { key: 'showSparkline', type: 'toggle', label: 'Show sparkline', tier: 'advanced',
           showIf: c => (c.density ?? 'comfortable') !== 'compact' },
       ] },
-      { key: 'numberFormat', type: 'select', label: 'Number format', buttons: true,
+      { key: 'numberFormat', type: 'select', label: 'Number format', buttons: true, tier: 'advanced',
         options: [
           { value: 'compact', label: 'Compact (124.5k)' },
           { value: 'full',    label: 'Full (124,500)' },
         ] },
-      localeField(),
-      textScaleField(),
+      { ...localeField(), tier: 'advanced' },
+      { ...textScaleField(), tier: 'advanced' },
 
       ...themeColorSection(),
     ] };
   },
+  looks: () => [
+    { id: 'dense-grid', name: 'Dense grid',
+      patch: { density: 'compact', columns: '4', showSparkline: false } },
+    { id: 'big-numbers', name: 'Big numbers',
+      patch: { density: 'comfortable', columns: '2', numberFormat: 'full', showSparkline: false } },
+    { id: 'with-sparklines', name: 'With sparklines',
+      patch: { density: 'comfortable', showSparkline: true, showDelta: true, showTarget: true } },
+    { id: 'minimal', name: 'Minimal',
+      patch: { showDelta: false, showTarget: false, showSparkline: false, numberFormat: 'compact' } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const root = document.createElement('div');
@@ -157,7 +167,7 @@ export default register({
     // Text-size multiplier — the .bb-kpi-* font clamps in slide-themes.css
     // consume this var (see cssNeeds for the calc(... * var()) wrappers).
     root.style.setProperty('--bb-kpi-text-scale', String((Number(c.textScale) || 100) / 100));
-    root.innerHTML = `${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}<div class="bb-kpi-grid">Loading…</div>`;
+    root.innerHTML = `${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}<div class="bb-kpi-grid" data-field="cards columns density numberFormat textScale showDelta showTarget showSparkline">Loading…</div>`;
     container.appendChild(root);
     const grid = root.querySelector('.bb-kpi-grid');
 
@@ -196,7 +206,7 @@ export default register({
         const hasTarget = showTarget && Number.isFinite(target) && target > 0 && Number.isFinite(+card.value);
         const pct = hasTarget ? Math.max(0, Math.min(100, Math.round((+card.value / target) * 100))) : 0;
         const targetBar = hasTarget
-          ? `<div class="bb-kpi-target">
+          ? `<div class="bb-kpi-target" data-field="showTarget cards numberFormat">
                <div class="bb-kpi-targetbar"><div class="bb-kpi-targetfill" style="width:${pct}%;background:${statusColor};"></div></div>
                <div class="bb-kpi-targettext">${pct}% ${ofWord(c.locale)} ${fmt(target, card.unit, fmtOpts)}</div>
              </div>`
@@ -205,15 +215,15 @@ export default register({
         // colour carries the GOODNESS, so lower-is-better cards colour
         // correctly even though the stylesheet pins up=green / down=red.
         const deltaLine = showDelta
-          ? `<div class="bb-kpi-delta bb-kpi-${up ? 'up' : 'down'}" style="color:${statusColor};">${up ? '▲' : '▼'} ${delta.toFixed(1)}%</div>`
+          ? `<div class="bb-kpi-delta bb-kpi-${up ? 'up' : 'down'}" data-field="showDelta cards" style="color:${statusColor};">${up ? '▲' : '▼'} ${delta.toFixed(1)}%</div>`
           : '';
         const spark = showSparkline
-          ? `<div class="bb-kpi-spark">${sparkline(parseHistory(card.history), statusColor)}</div>`
+          ? `<div class="bb-kpi-spark" data-field="showSparkline cards density">${sparkline(parseHistory(card.history), statusColor)}</div>`
           : '';
         return `
-          <div class="bb-kpi-card"${cardStyle}>
-            <div class="bb-kpi-label">${escapeHtml(card.label ?? '')}</div>
-            <div class="bb-kpi-value">${fmt(card.value, card.unit, fmtOpts)}</div>
+          <div class="bb-kpi-card" data-field="cards density textScale"${cardStyle}>
+            <div class="bb-kpi-label" data-field="cards">${escapeHtml(card.label ?? '')}</div>
+            <div class="bb-kpi-value" data-field="cards numberFormat">${fmt(card.value, card.unit, fmtOpts)}</div>
             ${deltaLine}
             ${targetBar}
             ${spark}

@@ -54,40 +54,46 @@ export default register({
         help: 'Shown beneath (or beside) the glyph. It is also announced to screen readers, and the glyph becomes decorative when a caption is present.' },
 
       { type: 'section', key: 'sec_appearance', label: 'Appearance' },
-      { key: 'scale', type: 'number', label: 'Symbol size',
+      { key: 'scale', type: 'number', label: 'Symbol size', tier: 'advanced',
         min: 40, max: 160, step: 10, slider: true, suffix: '%',
         help: '100% fills most of the widget with a small margin. Increase to fill it edge-to-edge, decrease for a smaller symbol.' },
-      { key: 'color', type: 'color', label: 'Color', clearable: true,
+      { key: 'color', type: 'color', label: 'Color', clearable: true, tier: 'advanced',
         help: 'Leave empty to follow the slide accent colour; click × to reset.' },
       { type: 'row', children: [
-        { key: 'flipH', type: 'toggle', label: 'Flip horizontal' },
-        { key: 'flipV', type: 'toggle', label: 'Flip vertical' },
+        { key: 'flipH', type: 'toggle', label: 'Flip horizontal', tier: 'advanced' },
+        { key: 'flipV', type: 'toggle', label: 'Flip vertical', tier: 'advanced' },
       ] },
-      { key: 'labelPos', type: 'select', label: 'Caption position', buttons: true,
+      { key: 'labelPos', type: 'select', label: 'Caption position', buttons: true, tier: 'advanced',
         showIf: c => !!c.label,
         options: [
           { value: 'below', label: 'Below' },
           { value: 'above', label: 'Above' },
           { value: 'right', label: 'Right' },
         ] },
-      { key: 'labelScale', type: 'number', label: 'Caption size',
+      { key: 'labelScale', type: 'number', label: 'Caption size', tier: 'advanced',
         min: 50, max: 200, step: 10, slider: true, suffix: '%',
         showIf: c => !!c.label,
         help: 'Sizes the caption independently of the symbol so it stays legible when the glyph is small.' },
-      { key: 'badge', type: 'select', label: 'Badge shape', buttons: true,
+      { key: 'badge', type: 'select', label: 'Badge shape', buttons: true, tier: 'advanced',
         help: 'Paints a shape behind the glyph — a status-board / door-sign look without a separate shape widget.',
         options: [
           { value: 'none', label: 'None' },
           { value: 'circle', label: 'Circle' },
           { value: 'rounded', label: 'Rounded' },
         ] },
-      { key: 'badgeColor', type: 'color', label: 'Badge color', clearable: true,
+      { key: 'badgeColor', type: 'color', label: 'Badge color', clearable: true, tier: 'advanced',
         showIf: c => c.badge && c.badge !== 'none',
         help: 'Leave empty for the slide accent colour at low opacity.' },
-      { key: 'pulse', type: 'toggle', label: 'Attention pulse',
+      { key: 'pulse', type: 'toggle', label: 'Attention pulse', tier: 'advanced',
         help: 'Gently pulses the glyph to draw the eye (alerts, live-status dots). Respects reduced-motion settings.' },
     ],
   }),
+  looks: () => [
+    { id: 'big', name: 'Big', patch: { scale: 160 } },
+    { id: 'badged', name: 'With badge', patch: { badge: 'circle' } },
+    { id: 'pulsing', name: 'Pulsing', patch: { pulse: true } },
+    { id: 'label-below', name: 'Label below', patch: { labelPos: 'below', scale: 120 } },
+  ],
   render(slide, container) {
     const c = slide.content ?? {};
     const id = ICON_IDS.includes(c.symbol) ? c.symbol : 'arrow';
@@ -144,6 +150,7 @@ export default register({
       glyphCss += `box-sizing:border-box;padding:${(glyphCqmin * 0.18).toFixed(2)}cqmin;background:${badgeFill};border-radius:${badge === 'circle' ? '50%' : '18%'};`;
     }
     glyph.style.cssText = glyphCss;
+    glyph.dataset.field = 'symbol color scale flipH flipV badge badgeColor pulse';
     if (c.pulse) {
       ensureIconPulseStyle();
       glyph.classList.add('bb-icon-pulse');
@@ -163,6 +170,7 @@ export default register({
     if (hasLabel) {
       lab = document.createElement('div');
       lab.textContent = c.label;
+      lab.dataset.field = 'label labelScale labelPos';
       lab.style.cssText = `font:700 ${labelCqmin.toFixed(2)}cqmin var(--bb-st-font, Inter, sans-serif);text-align:center;line-height:1.1;`;
     }
 

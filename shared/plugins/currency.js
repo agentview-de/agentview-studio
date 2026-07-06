@@ -139,7 +139,7 @@ export default register({
       }),
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
-      { key: 'decimals', type: 'select', label: 'Decimal places', buttons: true,
+      { key: 'decimals', type: 'select', label: 'Decimal places', buttons: true, tier: 'advanced',
         options: [
           { value: 'auto', label: 'Auto' },
           { value: '2', label: '2' },
@@ -148,16 +148,22 @@ export default register({
         ],
         help: 'Auto scales the precision to the rate’s magnitude (162.51 vs 1.0842); a fixed count keeps columns aligned on dense boards.' },
       { type: 'row', children: [
-        { key: 'showName', type: 'toggle', label: 'Currency names',
+        { key: 'showName', type: 'toggle', label: 'Currency names', tier: 'advanced',
           help: 'Shows the full name (“US Dollar”) under each code.' },
-        { key: 'trend', type: 'toggle', label: 'Trend arrows',
+        { key: 'trend', type: 'toggle', label: 'Trend arrows', tier: 'advanced',
           help: 'Marks each rate ▲ up / ▼ down / – flat against the previous daily fix, green = up, red = down.' },
       ] },
-      textScaleField(),
+      { ...textScaleField(), tier: 'advanced' },
 
       ...themeColorSection(),
     ],
   }),
+  looks: () => [
+    { id: 'with-names', name: 'With names', patch: { showName: true } },
+    { id: 'trend-arrows', name: 'Trend arrows', patch: { trend: true } },
+    { id: 'precise', name: 'Precise', patch: { decimals: '4' } },
+    { id: 'dense', name: 'Dense', patch: { decimals: '2', showName: false, trend: true } },
+  ],
   render(slide, container, ctx) {
     const c = slide.content ?? {};
     const root = document.createElement('div');
@@ -174,11 +180,11 @@ export default register({
     const nameHtml = (sym) => {
       if (!showName) return '';
       const name = currencyByCode(sym)?.name;
-      return name ? `<span class="bb-fx-name" style="display:block;font-size:calc(clamp(11px, 1.5cqmin, 18px) * var(--bb-fx-text-scale, 1));line-height:1.2;opacity:.55;margin-top:2px;">${escapeHtml(name)}</span>` : '';
+      return name ? `<span class="bb-fx-name" data-field="showName symbols" style="display:block;font-size:calc(clamp(11px, 1.5cqmin, 18px) * var(--bb-fx-text-scale, 1));line-height:1.2;opacity:.55;margin-top:2px;">${escapeHtml(name)}</span>` : '';
     };
     root.innerHTML = `
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
-      <div class="bb-fx-base">1 ${escapeHtml(c.base ?? 'EUR')} =</div>
+      <div class="bb-fx-base" data-field="base">1 ${escapeHtml(c.base ?? 'EUR')} =</div>
       <div class="bb-fx-grid">Loading rates…</div>
       <div class="bb-fx-attribution" style="font-size:calc(clamp(10px, 1.4cqmin, 18px) * var(--bb-fx-text-scale, 1));line-height:1.4;opacity:.55;margin-top:6px;text-align:center;">
         Rates By <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;">Exchange Rate API</a>
@@ -192,7 +198,7 @@ export default register({
       const symbols = normSymbols(c.symbols);
       const fake = /^\d+$/.test(String(c.decimals ?? '')) ? (1).toFixed(Number(c.decimals)) : '1.00';
       root.querySelector('.bb-fx-grid').innerHTML = symbols.map(sym =>
-        `<div class="bb-fx-cell"><span class="bb-fx-sym">${escapeHtml(sym)}</span>${nameHtml(sym)}<span class="bb-fx-rate">${escapeHtml(currencySymbol(sym) + ' ' + fake)}</span></div>`
+        `<div class="bb-fx-cell"><span class="bb-fx-sym" data-field="symbols">${escapeHtml(sym)}</span>${nameHtml(sym)}<span class="bb-fx-rate" data-field="symbols decimals trend">${escapeHtml(currencySymbol(sym) + ' ' + fake)}</span></div>`
       ).join('') || '<div>(rates load in player)</div>';
       return composeDispose(() => root.remove());
     }
@@ -232,8 +238,8 @@ export default register({
             if (showTrend) rateHtml += trendHtml(baseline?.[sym], r);
           }
           return `<div class="bb-fx-cell">
-            <span class="bb-fx-sym">${escapeHtml(sym)}</span>${nameHtml(sym)}
-            <span class="bb-fx-rate">${rateHtml}</span>
+            <span class="bb-fx-sym" data-field="symbols">${escapeHtml(sym)}</span>${nameHtml(sym)}
+            <span class="bb-fx-rate" data-field="symbols decimals trend">${rateHtml}</span>
           </div>`;
         }).join('') || '<div>No symbols configured.</div>';
       },
