@@ -448,6 +448,42 @@ export function renderWidgetInspector(host) {
     { k: 'rot', label: 'R', unit: '°', hint: tx('R — rotation in degrees'),                    attrs: 'min="-180" max="180" step="1"', val: widget.rotation ?? 0 },
   ];
 
+  // Layout presets — snap the widget to common slide regions without typing
+  // numbers. Percentages of the slide; corner presets use 33% boxes so two
+  // corner widgets side-by-side leave room for a third. Each button draws a
+  // mini slide with the target region filled, generated from this same
+  // geometry — the layout is recognisable at a glance, no cryptic glyphs.
+  const PRESETS = {
+    full:   { x: 0,  y: 0,  w: 100, h: 100 },
+    left:   { x: 0,  y: 0,  w: 50,  h: 100 },
+    right:  { x: 50, y: 0,  w: 50,  h: 100 },
+    top:    { x: 0,  y: 0,  w: 100, h: 50 },
+    bot:    { x: 0,  y: 50, w: 100, h: 50 },
+    center: { x: 25, y: 25, w: 50,  h: 50 },
+    tl:     { x: 0,  y: 0,  w: 33,  h: 33 },
+    tr:     { x: 67, y: 0,  w: 33,  h: 33 },
+    bl:     { x: 0,  y: 67, w: 33,  h: 33 },
+    br:     { x: 67, y: 67, w: 33,  h: 33 },
+  };
+  const PRESET_TITLES = {
+    full: 'insp.preset.full', left: 'insp.preset.left', right: 'insp.preset.right',
+    top: 'insp.preset.top', bot: 'insp.preset.bottom', center: 'insp.preset.center',
+    tl: 'insp.preset.tl', tr: 'insp.preset.tr', bl: 'insp.preset.bl', br: 'insp.preset.br',
+  };
+  const presetButtonsHtml = Object.keys(PRESETS).map(key => {
+    const p = PRESETS[key];
+    const title = t(PRESET_TITLES[key]);
+    return `<button class="avs-geo-preset" data-preset="${key}" title="${esc(title)}" aria-label="${esc(title)}"><span class="avs-geo-mini"><span class="avs-geo-mini-fill" style="left:${p.x}%;top:${p.y}%;width:${p.w}%;height:${p.h}%"></span></span></button>`;
+  }).join('');
+
+  // The numeric grid + presets are rarely needed (most positioning happens by
+  // dragging on the canvas), so they live in a fold that's collapsed by
+  // default. Remembered globally — it's the same control on every widget — so
+  // power users who align by number keep it open.
+  const GEO_KEY = 'avs_geo_collapsed';
+  let geoCollapsed = true;
+  try { const gv = localStorage.getItem(GEO_KEY); if (gv !== null) geoCollapsed = gv === '1'; } catch {}
+
   host.innerHTML = `
     <div class="avs-inspector-head">
       <button class="avs-inspector-back" id="ins-back" title="${t('insp.backToLibrary')}" aria-label="${t('insp.backToLibrary')}">
@@ -463,29 +499,32 @@ export function renderWidgetInspector(host) {
       </div>
     </div>
     <div class="avs-inspector-body">
-      <div class="avs-geo-grid">
-        ${GEO_FIELDS.map(g => `
-          <label title="${esc(g.hint)}">
-            <span>${g.label}${g.unit ? `<span class="avs-geo-unit">${g.unit}</span>` : ''}</span>
-            <input type="number" data-geo="${g.k}" ${g.attrs} value="${g.val}" title="${esc(g.hint)}">
-          </label>`).join('')}
-      </div>
-      <div class="avs-geo-presets" aria-label="${t('insp.layoutPresets')}">
-        <button class="avs-geo-preset" data-preset="full"  title="${t('insp.preset.full')}">▣</button>
-        <button class="avs-geo-preset" data-preset="left"  title="${t('insp.preset.left')}">◧</button>
-        <button class="avs-geo-preset" data-preset="right" title="${t('insp.preset.right')}">◨</button>
-        <button class="avs-geo-preset" data-preset="top"   title="${t('insp.preset.top')}">⬒</button>
-        <button class="avs-geo-preset" data-preset="bot"   title="${t('insp.preset.bottom')}">⬓</button>
-        <button class="avs-geo-preset" data-preset="center" title="${t('insp.preset.center')}">⊕</button>
-        <button class="avs-geo-preset" data-preset="tl"  title="${t('insp.preset.tl')}">⌜</button>
-        <button class="avs-geo-preset" data-preset="tr"  title="${t('insp.preset.tr')}">⌝</button>
-        <button class="avs-geo-preset" data-preset="bl"  title="${t('insp.preset.bl')}">⌞</button>
-        <button class="avs-geo-preset" data-preset="br"  title="${t('insp.preset.br')}">⌟</button>
-      </div>
+      <section class="bb-form-section avs-geo-section${geoCollapsed ? ' bb-form-section-closed' : ''}">
+        <button class="bb-form-section-head" type="button" id="geo-toggle">
+          <span class="bb-form-section-chev">▾</span>
+          <span class="bb-form-section-label">${t('insp.geometry')}</span>
+        </button>
+        <div class="bb-form-section-body avs-geo-body">
+          <div class="avs-geo-grid">
+            ${GEO_FIELDS.map(g => `
+              <label title="${esc(g.hint)}">
+                <span>${g.label}${g.unit ? `<span class="avs-geo-unit">${g.unit}</span>` : ''}</span>
+                <input type="number" data-geo="${g.k}" ${g.attrs} value="${g.val}" title="${esc(g.hint)}">
+              </label>`).join('')}
+          </div>
+          <div class="avs-geo-presets" aria-label="${t('insp.layoutPresets')}">${presetButtonsHtml}</div>
+        </div>
+      </section>
       <div class="avs-inspector-content" id="ins-content"></div>
     </div>`;
 
   host.querySelector('#ins-back').addEventListener('click', () => { state.ui.selectedWidgetId = null; });
+  // Position & size fold — persisted via the global key above.
+  host.querySelector('#geo-toggle').addEventListener('click', () => {
+    const sec = host.querySelector('.avs-geo-section');
+    const nowClosed = sec.classList.toggle('bb-form-section-closed');
+    try { localStorage.setItem(GEO_KEY, nowClosed ? '1' : '0'); } catch {}
+  });
   host.querySelector('#ins-save-widget').addEventListener('click', () => saveWidgetAsPreset(widget));
   host.querySelector('#ins-dup').addEventListener('click', duplicateSelected);
   host.querySelector('#ins-del').addEventListener('click', deleteSelected);
@@ -507,21 +546,16 @@ export function renderWidgetInspector(host) {
     state.ui.selectedWidgetId = null;
     state.ui.selectedWidgetId = widget.id;
   });
-  // Geometry presets — quick alternatives to typing X/Y/W/H by hand.
-  // All values are percentages of the slide; corner presets use 33% boxes
-  // so two corner widgets side-by-side leave space for a third.
-  const PRESETS = {
-    full:   { x: 0,    y: 0,    w: 100, h: 100 },
-    left:   { x: 0,    y: 0,    w: 50,  h: 100 },
-    right:  { x: 50,   y: 0,    w: 50,  h: 100 },
-    top:    { x: 0,    y: 0,    w: 100, h: 50 },
-    bot:    { x: 0,    y: 50,   w: 100, h: 50 },
-    center: { x: 25,   y: 25,   w: 50,  h: 50 },
-    tl:     { x: 0,    y: 0,    w: 33,  h: 33 },
-    tr:     { x: 67,   y: 0,    w: 33,  h: 33 },
-    bl:     { x: 0,    y: 67,   w: 33,  h: 33 },
-    br:     { x: 67,   y: 67,   w: 33,  h: 33 },
-  };
+  // Highlight whichever preset matches the widget's current rect, so the active
+  // layout reads at a glance. Tolerance covers float drift from drag-resizing.
+  function markActivePreset() {
+    const r = widget.rect;
+    host.querySelectorAll('[data-preset]').forEach(btn => {
+      const p = PRESETS[btn.dataset.preset];
+      const match = p && ['x', 'y', 'w', 'h'].every(k => Math.abs((r[k] ?? 0) - p[k]) < 0.6);
+      btn.classList.toggle('is-active', !!match);
+    });
+  }
   host.querySelectorAll('[data-preset]').forEach(btn => {
     btn.addEventListener('click', () => {
       const p = PRESETS[btn.dataset.preset];
@@ -532,8 +566,10 @@ export function renderWidgetInspector(host) {
       host.querySelectorAll('[data-geo]').forEach(inp => {
         if (inp.dataset.geo in p) inp.value = p[inp.dataset.geo];
       });
+      markActivePreset();
     });
   });
+  markActivePreset();
   // Per-widget title field removed: titles are now their own Text widget
   // (gives full WYSIWYG control over size/colour/font/alignment, can be
   // placed anywhere on the slide). Legacy widgets with widget.title still
@@ -546,6 +582,7 @@ export function renderWidgetInspector(host) {
     // Canvas already moved above; defer only the undo snapshot so typing
     // "120" is one history entry, not three.
     geoDebounce(() => commit('widget-geo'));
+    markActivePreset();
   }));
 
   const form = buildForm({
@@ -637,18 +674,20 @@ export function renderWidgetInspector(host) {
   if (usage && (usage.tier === 'byo-key' || usage.tier === 'private-only')) {
     const tok = 'var(--bb-warn)';
     const tierKey = usage.tier === 'byo-key' ? 'usage.byoKey' : 'usage.privateOnly';
-    const note = document.createElement('div');
-    note.className = 'avs-inspector-usage';
-    note.style.cssText = `margin:0 0 10px;padding:8px 10px;border-radius:var(--bb-r-md,8px);`
-      + `border-left:3px solid ${tok};background:color-mix(in srgb, ${tok} 10%, transparent);`
-      + `font-size:11px;line-height:1.5;`;
-    const rows = [`<div style="font-weight:600;">${esc(t(tierKey))}</div>`];
-    if (usage.note) rows.push(`<div style="opacity:.85;margin-top:2px;">${esc(usage.note)}</div>`);
-    if (usage.attribution) rows.push(`<div style="opacity:.7;margin-top:4px;">${esc(usage.attribution)}</div>`);
+    // Compact + collapsible: the constraint headline is always visible; the
+    // details (note / attribution / terms) fold away so they don't push the
+    // widget's own settings down the panel.
+    const note = document.createElement('details');
+    note.className = 'avs-inspector-usage avs-note';
+    note.style.cssText = `border-left:3px solid ${tok};background:color-mix(in srgb, ${tok} 10%, transparent);`;
+    const rows = [];
+    if (usage.note) rows.push(`<div>${esc(usage.note)}</div>`);
+    if (usage.attribution) rows.push(`<div style="opacity:.8;margin-top:4px;">${esc(usage.attribution)}</div>`);
     if (usage.providerTerms && /^https:\/\//i.test(usage.providerTerms)) {
       rows.push(`<div style="margin-top:6px;"><a href="${esc(usage.providerTerms)}" target="_blank" rel="noopener noreferrer" style="color:${tok};text-decoration:underline;">${esc(t('usage.terms'))} ↗</a></div>`);
     }
-    note.innerHTML = rows.join('');
+    note.innerHTML = `<summary class="avs-note-summary"><span class="avs-note-title" style="color:${tok};">${esc(t(tierKey))}</span></summary>`
+      + (rows.length ? `<div class="avs-note-detail">${rows.join('')}</div>` : '');
     // Sits at the very top of the widget's own settings so the constraint is
     // the first thing seen when editing a flagged widget.
     host.querySelector('#ins-content').prepend(note);
@@ -662,31 +701,40 @@ export function renderWidgetInspector(host) {
   // live-preview toggle don't apply — the Studio, not the display, did the fetch.
   if (plugin?.network && !isStored(widget.content)) {
     const provider = usage?.attribution || t('privacy.providerGeneric');
-    const ipNote = document.createElement('div');
-    ipNote.className = 'avs-inspector-usage avs-inspector-ipnote';
-    ipNote.style.cssText = `margin:0 0 10px;padding:8px 10px;border-radius:var(--bb-r-md,8px);`
-      + `border-left:3px solid var(--bb-ink-faint);background:color-mix(in srgb, var(--bb-ink) 6%, transparent);`
-      + `font-size:11px;line-height:1.5;color:var(--bb-ink-muted);`;
-    const msg = document.createElement('div');
-    msg.textContent = '🛈 ' + t('privacy.ipInspector', { provider });
-    ipNote.appendChild(msg);
+    // Compact + collapsible: a one-line summary keeps the live-preview toggle
+    // always reachable, while the full IP/DSGVO explanation folds away.
+    const ipNote = document.createElement('details');
+    ipNote.className = 'avs-inspector-usage avs-inspector-ipnote avs-note';
+    ipNote.style.cssText = `border-left:3px solid var(--bb-ink-faint);background:color-mix(in srgb, var(--bb-ink) 6%, transparent);color:var(--bb-ink-muted);`;
+    const sum = document.createElement('summary');
+    sum.className = 'avs-note-summary';
+    const title = document.createElement('span');
+    title.className = 'avs-note-title';
+    title.textContent = '🛈 ' + t('privacy.ipSummary');
+    sum.appendChild(title);
     // Grant / withdraw the live-preview permission for this widget (Art. 7(3)
-    // DSGVO: as easy to revoke as to give). Label reflects the current state.
+    // DSGVO: as easy to revoke as to give). Lives in the summary so it stays one
+    // click away; stopPropagation keeps clicking it from toggling the fold.
     const toggle = document.createElement('button');
     toggle.type = 'button';
-    toggle.className = 'bb-btn bb-btn-secondary';
-    toggle.style.cssText = 'margin-top:6px;font-size:11px;';
+    toggle.className = 'bb-btn bb-btn-secondary avs-note-action';
     const syncLabel = () => {
       toggle.textContent = (isLivePreview(widget.id) ? '⏸ ' : '▶ ')
         + t(isLivePreview(widget.id) ? 'privacy.disableLive' : 'privacy.enableLive');
     };
     syncLabel();
-    toggle.addEventListener('click', () => {
+    toggle.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
       if (isLivePreview(widget.id)) disableLivePreview(widget.id);
       else enableLivePreview(widget.id);
       syncLabel(); // the canvas frame is re-rendered by the setter; just flip the label
     });
-    ipNote.appendChild(toggle);
+    sum.appendChild(toggle);
+    ipNote.appendChild(sum);
+    const detail = document.createElement('p');
+    detail.className = 'avs-note-detail';
+    detail.textContent = t('privacy.ipInspector', { provider });
+    ipNote.appendChild(detail);
     host.querySelector('#ins-content').prepend(ipNote);
   }
 

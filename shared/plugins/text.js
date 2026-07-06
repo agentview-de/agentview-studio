@@ -73,7 +73,7 @@ export default register({
     fields: [
       { type: 'section', key: 'content', label: 'Content' },
       { key: 'body', type: 'rich-text', label: 'Announcement Message',
-        help: 'Use the toolbar to bold, colour, align, and add lists, links or tables. Colours you set here override the theme.' },
+        help: 'Use the toolbar to style the text per selection: bold, colour (e.g. one word red), size (pick a preset or type any pixel value), alignment, lists, links and tables.' },
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
       { key: 'font', type: 'select', label: 'Default font', options: FONTS,

@@ -220,6 +220,17 @@ textarea { resize: vertical; min-height: 100px; }
 }
 .bb-form-tools-btn:hover { color: var(--bb-ink); background: color-mix(in srgb, var(--bb-ink) 6%, transparent); }
 
+/* Inspector field search + its empty state — only rendered on schemas with
+   more than 10 leaf fields (see buildForm). */
+.bb-form-search { padding: 0 0 8px; }
+.bb-form-search-input {
+  width: 100%; box-sizing: border-box;
+  background: var(--bb-bg-2); border: 1px solid var(--bb-border); color: var(--bb-ink);
+  border-radius: var(--bb-r-sm); padding: 7px 10px; font-size: 12px;
+}
+.bb-form-search-input:focus { outline: none; border-color: var(--bb-accent); }
+.bb-form-noresults { color: var(--bb-ink-faint); font-size: 12px; text-align: center; padding: 14px 6px; margin: 0; }
+
 /* Label row — label + hover-revealed per-field reset (↺ back to the plugin
    default). The reset is hidden entirely while the value matches the default. */
 .bb-form-labelrow { display: flex; align-items: center; gap: 6px; min-height: 14px; max-width: 100%; }
@@ -496,6 +507,17 @@ textarea { resize: vertical; min-height: 100px; }
 .bb-field-msg[data-level="ok"] { color: var(--bb-success); border-color: color-mix(in srgb, var(--bb-success) 40%, transparent); background: color-mix(in srgb, var(--bb-success) 10%, transparent); }
 .bb-field-msg[data-level="warn"] { color: var(--bb-warn); border-color: color-mix(in srgb, var(--bb-warn) 40%, transparent); background: color-mix(in srgb, var(--bb-warn) 10%, transparent); }
 .bb-field-msg[data-level="error"] { color: var(--bb-danger); border-color: color-mix(in srgb, var(--bb-danger) 40%, transparent); background: color-mix(in srgb, var(--bb-danger) 10%, transparent); }
+/* A ⚠ marker on warn/error so the message reads as a problem at a glance. */
+.bb-field-msg[data-level="warn"]::before,
+.bb-field-msg[data-level="error"]::before { content: "⚠ "; }
+/* Tint the control itself when the field is invalid, not just the message box. */
+.bb-form-group.has-error { --bb-invalid: var(--bb-danger); }
+.bb-form-group.has-warn { --bb-invalid: var(--bb-warn); }
+.bb-form-group.has-error :is(input, select, textarea),
+.bb-form-group.has-warn :is(input, select, textarea) {
+  border-color: color-mix(in srgb, var(--bb-invalid) 60%, var(--bb-border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bb-invalid) 30%, transparent);
+}
 
 /* Table field (column editor + paste) */
 .bb-table-field { display: flex; flex-direction: column; gap: 8px; }
@@ -707,6 +729,14 @@ textarea { resize: vertical; min-height: 100px; }
   font-size: 11px; font-weight: 600;
   letter-spacing: .02em;
 }
+/* Editable font-size field — preset dropdown (datalist) + free pixel entry. */
+.bb-richtext-sizewrap { display: inline-flex; align-items: center; height: 28px; }
+.bb-richtext-size-input {
+  width: 48px; height: 28px; padding: 0 6px; box-sizing: border-box;
+  background: var(--bb-bg-1); border: 1px solid var(--bb-border); color: var(--bb-ink);
+  border-radius: var(--bb-r-sm); font-size: 12px; text-align: center;
+}
+.bb-richtext-size-input:focus { outline: none; border-color: var(--bb-accent); }
 .bb-richtext-editor {
   min-height: 120px; max-height: 320px;
   padding: 10px 12px;

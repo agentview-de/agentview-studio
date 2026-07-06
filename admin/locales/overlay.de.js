@@ -8,6 +8,9 @@
 //
 // Generated/merged from the i18n extraction + wiring workflows; edit here.
 export const overlayDe = {
+  // --- Inspector field search ---
+  "Search settings…": "Einstellungen suchen…",
+  "No matching settings": "Keine passenden Einstellungen",
   // --- Widget Designer / My widgets ---
   "Custom Widget": "Eigenes Widget",
   "Widget Designer": "Widget-Designer",
@@ -939,7 +942,7 @@ export const overlayDe = {
   "Data source is set to a URL, but no URL is entered yet.": "Als Datenquelle ist eine URL gewählt, aber noch keine URL eingetragen.",
   "Offline: the Studio fetches the JSON URL on “Refresh data” and stores it; the display reads that — no live call, no internet needed on the screen.": "Offline: das Studio ruft die JSON-URL bei „Daten aktualisieren“ ab und speichert sie; das Display liest diese Daten — kein Live-Abruf, kein Internet am Bildschirm nötig.",
   "Polls the JSON URL on a timer so live data stays current. Positive values below 5 seconds are raised to the 5-second player minimum.": "Ruft die JSON-URL in festen Abständen ab, damit Live-Daten aktuell bleiben. Positive Werte unter 5 Sekunden werden auf das 5-Sekunden-Minimum des Players angehoben.",
-  "Use the toolbar to bold, colour, align, and add lists, links or tables. Colours you set here override the theme.": "Nutze die Toolbar zum Fetten, Färben, Ausrichten sowie zum Hinzufügen von Listen, Links oder Tabellen. Farben, die du hier setzt, überschreiben das Theme.",
+  "Use the toolbar to style the text per selection: bold, colour (e.g. one word red), size (pick a preset or type any pixel value), alignment, lists, links and tables.": "Style den Text per Auswahl über die Toolbar: fett, Farbe (z. B. ein Wort rot), Größe (Voreinstellung wählen oder beliebigen Pixelwert eintippen), Ausrichtung, Listen, Links und Tabellen.",
   "Text colour": "Textfarbe",
   "Overrides the theme's text colour for this widget only. Leave empty to follow the theme / brand kit; click × to reset.": "Überschreibt die Textfarbe des Themes nur für dieses Widget. Leer lassen, um dem Theme / Brand-Kit zu folgen; × klicken zum Zurücksetzen.",
   "Accent colour": "Akzentfarbe",

@@ -342,27 +342,54 @@ button { font-family: inherit; }
 .avs-geo-grid input { width: 100%; min-width: 0; padding: 6px 5px; }
 /* Tiny muted unit suffix next to the single-letter geo labels (%, °). */
 .avs-geo-unit { opacity: .65; margin-left: 2px; font-size: 10px; }
-/* Layout preset row — small icon buttons under the X/Y/W/H grid that snap
-   the widget to common slide regions without typing numbers. */
+/* Position & size lives in a collapsible section (collapsed by default) — the
+   numeric grid is rarely needed since most layout is done by dragging. */
+.avs-geo-body { padding: 8px 2px 10px; }
+.avs-geo-body .avs-geo-grid { margin: 0 0 8px; }
+.avs-geo-body .avs-geo-presets { margin: 0; }
+/* Layout preset row — each button is a mini slide with the target region
+   filled, so the layout is recognisable at a glance (no cryptic glyphs). */
 .avs-geo-presets {
-  display: flex; flex-wrap: wrap; gap: 4px;
+  display: flex; flex-wrap: wrap; gap: 5px;
   margin: 0 0 14px;
-  padding: 6px;
+  padding: 7px;
   background: var(--bb-bg-2); border: 1px solid var(--bb-border);
   border-radius: var(--bb-r-sm);
 }
 .avs-geo-preset {
-  width: 28px; height: 28px;
   display: inline-flex; align-items: center; justify-content: center;
-  padding: 0;
-  font: 600 16px/1 inherit;
-  color: var(--bb-ink-muted);
+  padding: 4px;
   background: transparent; border: 1px solid transparent;
   border-radius: var(--bb-r-sm); cursor: pointer;
-  transition: var(--bb-trans-fast);
+  transition: background var(--bb-trans-fast), border-color var(--bb-trans-fast);
 }
-.avs-geo-preset:hover { background: var(--bb-bg-3); color: var(--bb-ink); border-color: var(--bb-border); }
+.avs-geo-preset:hover { background: var(--bb-bg-3); border-color: var(--bb-border); }
+.avs-geo-mini {
+  position: relative; display: block; width: 26px; height: 16px;
+  background: var(--bb-bg-0); border: 1px solid var(--bb-border-strong); border-radius: 2px;
+}
+.avs-geo-mini-fill { position: absolute; background: var(--bb-ink-muted); border-radius: 1px; transition: background var(--bb-trans-fast); }
+.avs-geo-preset:hover .avs-geo-mini-fill { background: var(--bb-ink); }
+.avs-geo-preset.is-active { border-color: var(--bb-accent); background: color-mix(in srgb, var(--bb-accent) 12%, transparent); }
+.avs-geo-preset.is-active .avs-geo-mini-fill { background: var(--bb-accent); }
 .avs-inspector-content { border-top: 1px solid var(--bb-border); padding-top: 12px; }
+
+/* Compact, collapsible inspector notes (live-preview / data-privacy, BYO-key /
+   private-only). A one-line summary by default; the detail folds away so it
+   doesn't shove the widget's own settings down the panel. */
+.avs-note { font-size: 11px; line-height: 1.5; border-radius: var(--bb-r-md); margin: 0 0 10px; padding: 6px 10px; }
+.avs-note > summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.avs-note > summary::-webkit-details-marker { display: none; }
+.avs-note > summary::before {
+  content: '▸'; color: var(--bb-ink-faint); font-size: 10px; flex: 0 0 auto;
+  transition: transform var(--bb-trans-fast);
+}
+.avs-note[open] > summary::before { transform: rotate(90deg); }
+/* Title keeps to one line; if the action button doesn't fit beside it, the
+   button wraps to its own line instead of fracturing the title. */
+.avs-note-title { font-weight: 600; flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.avs-note-action { flex: 0 0 auto; padding: 3px 8px; font-size: 11px; }
+.avs-note-detail { margin: 6px 0 0; opacity: .9; }
 
 /* ---------- Library ---------- */
 .avs-lib-tabs { display: flex; gap: 2px; padding: 0 12px 10px; flex-wrap: wrap; }

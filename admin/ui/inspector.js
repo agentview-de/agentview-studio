@@ -86,6 +86,8 @@ export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, 
   const summaryUpdaters = []; // closed-state header summaries, re-run on change
   const validators = [];      // ALL field validators — cross-field rules need every change
   const resetUpdaters = [];   // per-field ↺ visibility, re-run on change
+  let searchTerm = '';        // active field-filter (lowercased), '' = off
+  let noResults = null;       // "No matching settings" hint, toggled by search
   let disposed = false;
 
   // Wrap any element in a `.bb-form-section` with a clickable header. Used
@@ -185,6 +187,11 @@ export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, 
     msg.className = 'bb-field-msg';
     msg.hidden = true;
     const showMsg = res => {
+      // Tint the control itself (red/amber border via has-error/has-warn) so an
+      // invalid field reads as a problem even before the message is spotted.
+      const level = res?.level ?? null;
+      group.classList.toggle('has-error', level === 'error');
+      group.classList.toggle('has-warn', level === 'warn');
       if (!res) { msg.hidden = true; msg.textContent = ''; return; }
       msg.hidden = false;
       // validate() messages are English source strings (plugins are i18n-free
@@ -342,14 +349,90 @@ export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, 
     root.prepend(tools);
   }
 
+  // Number of real (leaf) fields after tier filtering — drives whether the
+  // search box is worth its chrome.
+  function countLeafFields(fields) {
+    let n = 0;
+    for (const f of fields) {
+      if (f.type === 'section') continue;
+      if (f.type === 'row') n += (f.children?.length ?? 0);
+      else n++;
+    }
+    return n;
+  }
+  // Does a field match the active search term? Label, help and key all count,
+  // routed through tx() so German users can search in German.
+  function fieldMatches(f) {
+    if (!searchTerm) return true;
+    return `${tx(f.label) ?? ''} ${tx(f.help) ?? ''} ${f.key ?? ''}`.toLowerCase().includes(searchTerm);
+  }
+
+  // Field search — only on schemas big enough to get lost in. Filters live;
+  // sections auto-expand to show hits and restore their persisted collapse
+  // state when the box clears.
+  if (countLeafFields(tieredFields) > 10) {
+    const sb = document.createElement('div');
+    sb.className = 'bb-form-search';
+    const searchInput = document.createElement('input');
+    searchInput.type = 'search';
+    searchInput.className = 'bb-form-search-input';
+    searchInput.placeholder = tx('Search settings…');
+    searchInput.setAttribute('aria-label', tx('Search settings…'));
+    searchInput.addEventListener('input', () => {
+      searchTerm = searchInput.value.trim().toLowerCase();
+      applyVisibility();
+    });
+    sb.appendChild(searchInput);
+    root.prepend(sb);
+    noResults = document.createElement('p');
+    noResults.className = 'bb-form-noresults';
+    noResults.textContent = tx('No matching settings');
+    noResults.hidden = true;
+    root.appendChild(noResults);
+  }
+
   // Conditional fields: re-evaluate showIf(content) whenever any value changes.
   // Sections + rows can themselves have showIf — useful for "advanced" groups
   // that only matter when a switch above is enabled. Doubles as the per-change
-  // refresh for section summaries and per-field reset visibility.
+  // refresh for section summaries, per-field reset visibility, and the search
+  // filter (effective visibility = showIf AND search match).
   function applyVisibility() {
+    // Pass 1 — fields & rows. Auto-folded fields sit inside their own section
+    // element: pop it open while a search hit is inside so the control is
+    // actually visible, and restore the persisted state when the search clears.
+    let anyVisibleField = false;
     for (const { f, group } of groups) {
-      if (typeof f.showIf === 'function') group.style.display = f.showIf(cur) ? '' : 'none';
+      if (f.type === 'section') continue;
+      const byIf = typeof f.showIf === 'function' ? f.showIf(cur) : true;
+      let show = byIf;
+      if (byIf && searchTerm) {
+        show = f.type === 'row' ? (f.children ?? []).some(fieldMatches) : fieldMatches(f);
+      }
+      group.style.display = show ? '' : 'none';
+      if (show && f.type !== 'row') anyVisibleField = true;
+      if (group.classList.contains('bb-form-section')) {
+        if (searchTerm && show) group.classList.remove('bb-form-section-closed');
+        else if (!searchTerm) group.classList.toggle('bb-form-section-closed', loadCollapsed(formKey, sectionKeyFor(f), !!f.collapsed));
+      }
     }
+    // Pass 2 — explicit sections: visible while any child field survived pass 1;
+    // auto-expanded during a search (never persisted), restored when cleared.
+    for (const { f, group } of groups) {
+      if (f.type !== 'section') continue;
+      const byIf = typeof f.showIf === 'function' ? f.showIf(cur) : true;
+      if (!byIf) { group.style.display = 'none'; continue; }
+      if (searchTerm) {
+        const secBody = group.querySelector('.bb-form-section-body');
+        const hasVisible = !!secBody && [...secBody.children].some(ch =>
+          (ch.classList?.contains('bb-form-group') || ch.classList?.contains('bb-form-row-cluster')) && ch.style.display !== 'none');
+        group.style.display = hasVisible ? '' : 'none';
+        if (hasVisible) group.classList.remove('bb-form-section-closed');
+      } else {
+        group.style.display = '';
+        group.classList.toggle('bb-form-section-closed', loadCollapsed(formKey, sectionKeyFor(f), !!f.collapsed));
+      }
+    }
+    if (noResults) noResults.hidden = !(searchTerm && !anyVisibleField);
     for (const u of summaryUpdaters) u();
     for (const u of resetUpdaters) u();
   }

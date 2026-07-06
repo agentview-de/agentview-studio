@@ -19,6 +19,10 @@ import { sanitizeHtml, plainToHtml, looksLikeHtml } from '../../../shared/saniti
 import { h, esc, escAttr, escText } from './_shared.js';
 import { buildTableHtml } from './rich-text-table.js';
 
+// Unique-id counter so each editor's size <datalist> has its own id (the expand
+// modal mounts a second editor instance in the same document).
+let rtInstanceSeq = 0;
+
 export function renderRichText(f, v, set, opts = {}) {
   const wrap = h('div', 'bb-richtext-field');
   const bar = h('div', 'bb-richtext-toolbar bb-richtext-toolbar-primary');
@@ -75,6 +79,32 @@ export function renderRichText(f, v, set, opts = {}) {
     refreshActiveStates();
   }
 
+  // Apply an ARBITRARY font size to the current selection. execCommand('fontSize')
+  // only accepts the 1–7 keyword scale, so we set the top sentinel size (7 →
+  // xxx-large) and then rewrite exactly those just-created nodes to the requested
+  // px value. Lets a user type any size (e.g. 72) instead of only S/M/L/XL.
+  function applyFontSize(px) {
+    restoreSelection();
+    const sel = document.getSelection();
+    if (!sel || !sel.rangeCount || sel.isCollapsed) return;
+    try { document.execCommand('styleWithCSS', false, true); } catch {}
+    document.execCommand('fontSize', false, '7');
+    // styleWithCSS=true → <span style="font-size: xxx-large">; some engines may
+    // still emit <font size="7">. Rewrite both to the exact pixel value.
+    editor.querySelectorAll('font[size="7"]').forEach(fEl => {
+      const span = document.createElement('span');
+      span.style.fontSize = px;
+      while (fEl.firstChild) span.appendChild(fEl.firstChild);
+      fEl.replaceWith(span);
+    });
+    editor.querySelectorAll('span').forEach(s => {
+      const fs = s.style.fontSize;
+      if (fs === 'xxx-large' || fs === '-webkit-xxx-large') s.style.fontSize = px;
+    });
+    commit();
+    refreshActiveStates();
+  }
+
   function btn(label, title, onClick, opts = {}) {
     const b = h('button', 'bb-richtext-btn', label);
     b.type = 'button';
@@ -113,19 +143,35 @@ export function renderRichText(f, v, set, opts = {}) {
   colorWrap.append(colorBtn);
   bar.append(colorWrap);
 
-  // Sizes
+  // Font size — editable: pick a preset from the dropdown OR type any pixel
+  // value (e.g. 72) and press Enter. Applies to the selected text.
   sep(bar);
-  // execCommand('fontSize', N) accepts N in 1-7; styleWithCSS makes the
-  // browser emit <span style="font-size: small|medium|large|...">.
-  const SIZES = [
-    { v: '2', l: 'S',  title: t('rt.sizeS') },
-    { v: '3', l: 'M',  title: t('rt.sizeM') },
-    { v: '5', l: 'L',  title: t('rt.sizeL') },
-    { v: '7', l: 'XL', title: t('rt.sizeXL') },
-  ];
-  for (const s of SIZES) {
-    bar.append(btn(s.l, s.title, () => exec('fontSize', s.v), { extraClass: 'bb-richtext-size-btn' }));
+  const sizeListId = `bb-richtext-sizes-${++rtInstanceSeq}`;
+  const sizeWrap = h('label', 'bb-richtext-sizewrap');
+  sizeWrap.title = t('rt.size');
+  const sizeInput = h('input');
+  sizeInput.type = 'text';
+  sizeInput.inputMode = 'numeric';
+  sizeInput.className = 'bb-richtext-size-input';
+  sizeInput.placeholder = t('rt.sizePlaceholder');
+  sizeInput.setAttribute('aria-label', t('rt.size'));
+  sizeInput.setAttribute('list', sizeListId);
+  const sizeList = h('datalist');
+  sizeList.id = sizeListId;
+  for (const n of [16, 20, 24, 32, 40, 48, 64, 72, 96, 128]) {
+    const o = h('option'); o.value = String(n); sizeList.append(o);
   }
+  // Keep the editor selection alive when clicking the field chrome — but not the
+  // input itself, which must take focus to type.
+  sizeWrap.addEventListener('mousedown', e => { if (e.target !== sizeInput) e.preventDefault(); });
+  const applySize = () => {
+    const n = parseInt(sizeInput.value, 10);
+    if (n > 0) applyFontSize(`${n}px`);
+  };
+  sizeInput.addEventListener('change', applySize);
+  sizeInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); applySize(); } });
+  sizeWrap.append(sizeInput, sizeList);
+  bar.append(sizeWrap);
 
   // Lists
   sep(bar);
