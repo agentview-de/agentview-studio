@@ -74,6 +74,12 @@ export const auth = {
   apiKeyCreate: (params) => request('POST', '/api/v1/agent/api-keys', params),
   apiKeyRevoke: (id) => request('DELETE', `/api/v1/agent/api-keys/${encodeURIComponent(id)}`),
   licenseInfo: () => request('GET', '/api/v1/agent/license-info'),
+  // Current session introspection (token claims, scope, expiry) — new in the
+  // 2.1.x API (listed on /agent-instructions).
+  sessionInfo: () => request('GET', '/api/v1/agent/session/info'),
+  // Personal billing-portal link for the connected account — pairs with the
+  // /agent/pricing plan comparison.
+  billingUrl: () => request('GET', '/api/v1/agent/billing-url'),
   rotateApprovalSecret: () => request('POST', '/api/v1/agent/account/approval-secret/rotate'),
   // Exchange a one-time dashboard handoff code for a fresh, scoped API key so
   // a user arriving from the agentView dashboard lands already connected.
@@ -115,6 +121,19 @@ export const displays = {
       { html, contentDescription: 'agentView Studio idle' }),
   clear: (id) => request('POST', `/api/v1/agent/displays/${id}/clear`),
   broadcast: (body) => request('POST', '/api/v1/agent/displays/broadcast', body),
+  // Server-side category broadcast (2.1.x): sends to every display in the
+  // given categories in ONE call — no client-side membership resolution, no
+  // stale-member race; locked displays are skipped with reason='locked'.
+  // Body mirrors the MCP broadcast_to_categories tool (camelCased):
+  // { includeCategoryIds, html, description?, includeDescendants?, dryRun? }.
+  broadcastByCategory: (categoryIds, html, opts = {}) =>
+    request('POST', '/api/v1/owner/displays/broadcast-by-category', {
+      includeCategoryIds: Array.isArray(categoryIds) ? categoryIds : [categoryIds],
+      html,
+      description: opts.description ?? 'agentView Studio',
+      ...(opts.includeDescendants != null ? { includeDescendants: opts.includeDescendants } : {}),
+      ...(opts.dryRun ? { dryRun: true } : {}),
+    }),
   // Which content is currently running → { currentContentDescription, … }
   contentState: (id) => request('GET', `/api/v1/agent/displays/${id}/content`),
   // Raw rendered HTML currently on the display (live or idle). Server replaces
@@ -153,6 +172,11 @@ export const groups = {
   // Resolve the displays in a category (membership lives behind this filter).
   membersOf: (categoryId) =>
     request('GET', `/api/v1/agent/displays?categoryId=${encodeURIComponent(categoryId)}`),
+  // Bulk add/remove ONE category across many displays (2.1.x). Owner-scoped:
+  // touches only the caller's assignment rows. mode: 'add' | 'remove'.
+  bulkAssign: (categoryId, displayIds, mode = 'add') =>
+    request('POST', '/api/v1/owner/display-categories/bulk-assign',
+      { categoryId, displayIds, mode }),
 };
 
 // ---------- Assets ----------
@@ -211,6 +235,14 @@ export const orgs = {
   remove: (id) => request('DELETE', `/api/v1/agent/organizations/${id}`),
   invite: (id, body) => request('POST', `/api/v1/agent/organizations/${id}/invite`, body),
   displays: (id) => request('GET', `/api/v1/agent/organizations/${id}/displays`),
+  // Org-owned displays (2.1.x): pre-provision a display inside the org without
+  // pairing hardware (org needs a free license slot; per /agent-instructions
+  // this is plain display-create with an orgId), and eject one — removal
+  // clears its group assignment and all display grants.
+  createDisplay: (id, name) =>
+    request('POST', '/api/v1/agent/displays', { name, orgId: id }),
+  removeDisplay: (id, displayId) =>
+    request('DELETE', `/api/v1/agent/organizations/${id}/displays/${encodeURIComponent(displayId)}`),
   // Verified (2026-05-28 reply): PUT with /role subpath; DELETE on the bare
   // member URL. Self-removal is server-side blocked (owners cannot eject
   // themselves from their own org).
@@ -222,8 +254,15 @@ export const orgs = {
 
 // ---------- Public APIs discovery ----------
 export const publicApis = {
-  search: (q) => request('GET', `/api/v1/agent/public-apis?query=${encodeURIComponent(q ?? '')}&cors_only=true`),
+  search: (q, opts = {}) => {
+    const qs = new URLSearchParams({ query: q ?? '', cors_only: 'true' });
+    if (opts.category) qs.set('category', opts.category);
+    if (opts.limit) qs.set('limit', String(opts.limit));
+    return request('GET', `/api/v1/agent/public-apis?${qs.toString()}`);
+  },
   categories: () => request('GET', '/api/v1/agent/public-apis/categories'),
+  // Full catalog entry (endpoints, CORS, auth notes) for one API by slug (2.1.x).
+  details: (slug) => request('GET', `/api/v1/agent/public-apis/${encodeURIComponent(slug)}`),
 };
 
 // ---------- Audit log ----------
@@ -368,11 +407,12 @@ export const connectivity = {
 };
 
 // ---------- Pricing ----------
-// Structured JSON (verified 2026-05-28 reply): plan-name, monthly/annual
-// price, included licenses, feature list. Used for the in-app plan comparison
-// when a user hits a quota wall.
+// Moved in the 2.1.x API: the old public /api/v1/pricing now 404s; the live
+// path is /api/v1/agent/pricing (verified 2026-07-07 — returns { plans:[
+// { name, price, monthlyPrice, displays, features } ] }). Used for the in-app
+// plan comparison when a user hits a quota wall.
 export const pricing = {
-  get: () => request('GET', '/api/v1/pricing'),
+  get: () => request('GET', '/api/v1/agent/pricing'),
 };
 
 // ---------- Misc ----------

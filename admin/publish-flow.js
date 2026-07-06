@@ -454,6 +454,9 @@ async function doPublish({ mode, displayIds = [], groupId }) {
 
     let ids = displayIds;
     if (mode === 'group') {
+      // Members are still resolved client-side — the empty-group guard, the
+      // version snapshot and the "currently running" refresh below all need
+      // the concrete ids even when the server fans out the send itself.
       const m = await groupsApi.membersOf(groupId);
       ids = (m?.displays ?? (Array.isArray(m) ? m : [])).map(d => d.id ?? d.profileId).filter(Boolean);
       if (!ids.length) { toast(t('pub.groupEmpty'), { kind: 'warn' }); return; }
@@ -463,10 +466,23 @@ async function doPublish({ mode, displayIds = [], groupId }) {
       const last = await displaysApi.sendContent(ids[0], html, { description: name });
       toast(t('pub.success'), { kind: 'success' });
       if (last?.hint) toast(last.hint, { kind: 'info', ttl: 6000 });
+    } else if (mode === 'group') {
+      // Prefer the server-side category broadcast (2.1.x): one call, no
+      // stale-membership race, locked displays are skipped server-side. Fall
+      // back to the classic resolved-ids broadcast where the endpoint isn't
+      // available yet (older server) or rejects the body.
+      try {
+        await displaysApi.broadcastByCategory(groupId, html, { description: name });
+      } catch (e) {
+        if (e.status === 404 || e.status === 400 || e.status === 405) {
+          await displaysApi.broadcast({ displayIds: ids, html, description: name, contentDescription: name });
+        } else throw e;
+      }
+      toast(t('pub.successGroup'), { kind: 'success' });
     } else {
-      // Group + multi → one broadcast call with resolved displayIds.
+      // Multi → one broadcast call with the picked displayIds.
       await displaysApi.broadcast({ displayIds: ids, html, description: name, contentDescription: name });
-      toast(mode === 'group' ? t('pub.successGroup') : t('pub.success'), { kind: 'success' });
+      toast(t('pub.success'), { kind: 'success' });
     }
     // v3: best-effort version snapshot after a successful publish.
     snapshotVersion(sourcePlaylist ?? state.playlist, ids).catch(() => {});

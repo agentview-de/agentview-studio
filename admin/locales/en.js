@@ -677,6 +677,7 @@ export const en = {
   'lic.orYear': 'or {price}/year',
   'lic.includedLicenses': '{n} licenses included',
   'lic.compareLink': 'Compare plans at agentview.de ↗',
+  'lic.billingPortal': 'Manage billing',
 
   // Versions tab
   'ver.empty': 'No publish has happened yet.',

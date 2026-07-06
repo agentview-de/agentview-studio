@@ -64,8 +64,9 @@ export function mountLicenses(body) {
   });
 }
 
-// Plan-comparison modal from the public /api/v1/pricing endpoint. Opened from the
-// Licenses Tab. Response shape is structured JSON.
+// Plan-comparison modal from /api/v1/agent/pricing (the old public
+// /api/v1/pricing 404s since the 2.1.x API). Live shape (2026-07-07):
+// { plans: [{ name, price:"Free"|"€4/month per display", monthlyPrice, displays, features[] }] }.
 async function openPricingComparison() {
   const box = document.createElement('div');
   box.innerHTML = '<p class="avs-muted">…</p>';
@@ -73,6 +74,15 @@ async function openPricingComparison() {
     title: t('lic.compareTitle'), body: box,
     actions: [{ label: t('common.close'), kind: 'primary' }],
   });
+  // A positive numeric monthlyPrice renders as "€N /month"; otherwise show the
+  // server's own price string ("Free", "€4/month per display") without a
+  // suffix so the label isn't doubled.
+  const priceHtml = pl => {
+    if (typeof pl.monthlyPrice === 'number' && pl.monthlyPrice > 0) {
+      return `€${esc(pl.monthlyPrice)}<span class="avs-muted" style="font-size:12px;">${t('lic.perMonth')}</span>`;
+    }
+    return esc(pl.pricePerMonth ?? pl.monthly ?? pl.price ?? '—');
+  };
   try {
     const data = await pricingApi.get();
     const plans = data?.plans ?? data?.tiers ?? (Array.isArray(data) ? data : []);
@@ -82,15 +92,25 @@ async function openPricingComparison() {
         plans.map(pl => `
           <div class="avs-admin-card" style="text-align:center;">
             <h3 style="margin-bottom:6px;">${esc(pl.name ?? pl.id ?? '—')}</h3>
-            <p style="font-size:22px;font-weight:700;margin:8px 0;">${esc(pl.pricePerMonth ?? pl.monthly ?? pl.price ?? '—')}<span class="avs-muted" style="font-size:12px;">${t('lic.perMonth')}</span></p>
+            <p style="font-size:22px;font-weight:700;margin:8px 0;">${priceHtml(pl)}</p>
             ${pl.pricePerYear != null ? `<p class="avs-muted" style="font-size:11px;">${esc(t('lic.orYear', { price: pl.pricePerYear }))}</p>` : ''}
             ${pl.includedLicenses != null ? `<p>${esc(t('lic.includedLicenses', { n: pl.includedLicenses }))}</p>` : ''}
             ${Array.isArray(pl.features) ? `<ul style="text-align:left;font-size:12px;margin-top:10px;padding-left:18px;">${pl.features.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}
           </div>`).join('')
       }</div>`;
+      // Account-specific billing portal (2.1.x) — best-effort: the button only
+      // appears when the endpoint answers with a URL.
+      authApi.billingUrl().then(r => {
+        const url = r?.url ?? r?.billingUrl;
+        if (!url || !/^https:\/\//i.test(url)) return;
+        const row = document.createElement('p');
+        row.style.cssText = 'margin-top:12px;text-align:center;';
+        row.innerHTML = `<a href="${esc(url)}" target="_blank" rel="noopener" class="bb-btn bb-btn-secondary">${t('lic.billingPortal')} ↗</a>`;
+        box.appendChild(row);
+      }).catch(() => {});
     }
   } catch (e) {
-    // Server may 404 /api/v1/pricing in some envs — link out instead of erroring.
+    // Older servers may not expose the pricing endpoint — link out instead of erroring.
     box.innerHTML = `<p class="avs-muted">${esc(e.message)}</p>
       <p style="margin-top:10px;"><a href="https://agentview.de/pricing" target="_blank" rel="noopener" class="bb-btn">${t('lic.compareLink')}</a></p>`;
   }

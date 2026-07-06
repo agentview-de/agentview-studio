@@ -685,6 +685,7 @@ export const de = {
   'lic.orYear': 'oder {price}/Jahr',
   'lic.includedLicenses': '{n} Lizenzen inklusive',
   'lic.compareLink': 'Plan-Vergleich auf agentview.de ↗',
+  'lic.billingPortal': 'Abrechnung verwalten',
 
   // Versionen-Tab
   'ver.empty': 'Noch keine Veröffentlichung passiert.',
