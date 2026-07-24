@@ -7,24 +7,26 @@
 import { state, commit, subscribe } from '../store.js';
 import { get as getPlugin } from '../../shared/plugins/registry.js';
 import { createWidget, resolveCanvas } from '../../shared/slide-schema.js';
-import { mountWidget } from '../../shared/widget-host.js';
+import { mountWidget, widgetSlotZ } from '../../shared/widget-host.js';
 import { isStored, offlineSlugFor } from '../../shared/offline-data.js';
 import { getOfflinePreview, setOfflinePreview } from '../offline-preview.js';
 import { slots } from '../api.js';
 import { applyDesign } from '../../shared/designs.js';
-import { applyBackground, applySlideBackground, applySlideContrast, isPainted } from '../../shared/background.js';
+import { applySlideBackground, applySlideContrast, applyWidgetBg, isPainted } from '../../shared/background.js';
 import { playBuildOnce, applyLoop, clearLoop, isLoop } from '../../shared/animations.js';
 import { addHandles, makeInteractive, clampRect } from './widget-frame.js';
 import { clampZoom, fitTransform, centerTransform, zoomAroundPoint, widgetTransform, computeSnap } from './canvas-math.js';
-import { buildInlineToolbar, buildInlineLinkPopover, buildInlineTableBar } from './inline-editor.js';
+import {
+  isLivePreview, enableLivePreview, disableLivePreview, resetLivePreviews,
+  mountPrivacyPlaceholder, configureLivePreview,
+} from './live-preview.js';
+import { enterInlineTextEdit, exitInlineTextEdit } from './inline-text-edit.js';
 import { openContextMenu } from '../ui/context-menu.js';
 import { open as openPalette } from '../ui/command-palette.js';
 import { openModal } from '../ui/modal.js';
 import { mountBackgroundEditor } from '../panels/background-editor.js';
 import { pickAsset } from '../ui/asset-library.js';
-import { sanitizeHtml } from '../../shared/sanitize-html.js';
 import { t } from '../i18n.js';
-import { escapeHtml } from '../../shared/utils/escape.js';
 
 const BASE_W = 1600, BASE_H = 900;          // 16:9 design space
 
@@ -36,6 +38,9 @@ let canvasW = BASE_W, canvasH = BASE_H;   // design space in px, driven by playl
 
 export function mountCanvas(host, { onSelect } = {}) {
   onSelectCb = onSelect;
+  // Wire the live-preview registry's re-render hooks (kept out of its import
+  // graph so canvas ↔ live-preview don't form a cycle).
+  configureLivePreview({ refreshWidget, renderSlide });
   host.classList.add('avs-canvas');
   host.innerHTML = `
     <div class="avs-canvas-toolbar">
@@ -240,14 +245,10 @@ export function renderSlide() {
   reflectSelection();
 }
 
-// ONE stacking formula for EVERY render/update path. The slide-bg layer is
-// pinned far behind (see .avs-slide-bg), so frames start one level above z=0.
-// Past bug: the inspector geometry path set zIndex = `widget.z` while buildFrame
-// set `widget.z + 1`, so any edit silently dropped a widget one level — which
-// created z-index ties that made the widget unselectable (a lower-z frame caught
-// the click) or hid it behind an opaque neighbour, while it still showed as a
-// block in the slide-rail thumbnail. Keep the two paths literally identical.
-const frameZ = w => (w.z ?? 0) + 1;
+// ONE stacking formula for EVERY render/update path here AND in the player —
+// see widgetSlotZ (shared/widget-host.js) for the rationale and the past bug it
+// guards against. Aliased locally so the frame-order call sites stay terse.
+const frameZ = widgetSlotZ;
 
 // Insert (or move) a frame so the stage's DOM order always ascends by z. This
 // keeps a single-frame refreshWidget() consistent with a full renderSlide():
@@ -267,47 +268,11 @@ function insertFrameInOrder(frameEl, widget) {
   if (frameEl.parentNode !== stage || frameEl.nextSibling !== ref) stage.insertBefore(frameEl, ref);
 }
 
-// Editor data-minimisation (DSGVO): ids of network widgets the user has opted to
-// preview live this session. Empty by default — nothing is fetched until asked,
-// so building slides doesn't transmit the device IP to third-party APIs.
-const _livePreviewIds = new Set();
-
-// Live-preview opt-in API (DSGVO): the user grants/withdraws permission for a
-// network widget to fetch live in the editor — which transmits the device IP.
-// Each setter re-renders the affected frame(s) so the canvas reflects it. The
-// state is in-memory only (a page reload also resets it).
-export function isLivePreview(id) { return _livePreviewIds.has(id); }
-export function enableLivePreview(id) { _livePreviewIds.add(id); refreshWidget(id); }
-export function disableLivePreview(id) { if (_livePreviewIds.delete(id)) refreshWidget(id); }
-// Withdraw ALL granted live previews at once. Returns how many were active.
-export function resetLivePreviews() {
-  const n = _livePreviewIds.size;
-  if (n) { _livePreviewIds.clear(); renderSlide(); }
-  return n;
-}
-
-// Click-to-load placeholder shown instead of a live network-widget render in the
-// editor. Returns a dispose() like mountWidget does. The live fetch (and the
-// device-IP transmission it implies) only happens after an explicit click.
-function mountPrivacyPlaceholder(content, widget, plugin) {
-  const provider = plugin?.usage?.attribution || t('privacy.providerGeneric');
-  const el = document.createElement('div');
-  el.className = 'avs-live-preview-ph';
-  el.innerHTML = `
-    <div class="avs-lpp-icon">${escapeHtml(plugin?.icon ?? '◻')}</div>
-    <div class="avs-lpp-title">${escapeHtml(plugin?.label ?? widget.type)} · ${escapeHtml(t('privacy.livePreviewTitle'))}</div>
-    <div class="avs-lpp-body">${escapeHtml(t('privacy.livePreviewBody', { provider }))}</div>
-    <button type="button" class="bb-btn bb-btn-secondary avs-lpp-btn">${escapeHtml(t('privacy.loadPreview'))}</button>`;
-  const btn = el.querySelector('.avs-lpp-btn');
-  // Stop the frame's drag/select gesture from swallowing the button click.
-  btn.addEventListener('pointerdown', e => e.stopPropagation());
-  btn.addEventListener('click', e => {
-    e.stopPropagation();
-    enableLivePreview(widget.id); // re-renders this single frame, now live
-  });
-  content.appendChild(el);
-  return () => el.remove();
-}
+// The DSGVO live-preview registry (opt-in Set + click-to-load placeholder) lives
+// in its own module now. Re-exported here so callers that import these from the
+// canvas keep working unchanged; mountCanvas wires its re-render callbacks via
+// configureLivePreview so the extracted module needs no back-reference to canvas.
+export { isLivePreview, enableLivePreview, disableLivePreview, resetLivePreviews };
 
 function buildFrame(slide, widget) {
   const frameEl = document.createElement('div');
@@ -318,16 +283,9 @@ function buildFrame(slide, widget) {
 
   const bgLayer = document.createElement('div');
   bgLayer.className = 'avs-widget-bg';
-  // The widget's own theme class on the bg layer makes "Theme background" work:
-  // applySlideBackground falls back to var(--bb-st-bg) when no custom paint is
-  // set, and the theme class on the layer is what resolves that variable.
-  const widgetTheme = widget.content?.theme;
-  if (widgetTheme) {
-    bgLayer.classList.add(`bb-theme-${widgetTheme}`);
-    applySlideBackground(bgLayer, widget.background);
-  } else {
-    applyBackground(bgLayer, widget.background);
-  }
+  // Theme-aware widget background (shared with the player) — a themed widget
+  // falls back to var(--bb-st-bg), a themeless one stays transparent.
+  applyWidgetBg(bgLayer, widget);
   frameEl.appendChild(bgLayer);
 
   const content = document.createElement('div');
@@ -365,7 +323,7 @@ function buildFrame(slide, widget) {
     const w = preview ? { ...widget, content: { ...widget.content, _offline: preview } } : widget;
     dispose = mountWidget(w, slide, content, { mode: 'preview', t: k => k });
     if (!preview) loadOfflinePreview(widget.id);
-  } else if (plugin?.network && !_livePreviewIds.has(widget.id)) {
+  } else if (plugin?.network && !isLivePreview(widget.id)) {
     dispose = mountPrivacyPlaceholder(content, widget, plugin);
   } else {
     dispose = mountWidget(widget, slide, content, { mode: 'preview', t: k => k });
@@ -493,10 +451,8 @@ export function setWidgetBackground(id, bg) {
   const frame = frames.get(id);
   const layer = frame?.frameEl.querySelector('.avs-widget-bg');
   if (!layer) return;
-  // Mirror buildFrame: themed widgets fall back to theme bg, themeless ones
-  // stay truly transparent when no custom paint is set.
-  if (widget.content?.theme) applySlideBackground(layer, widget.background);
-  else applyBackground(layer, widget.background);
+  // Same theme-aware fallback buildFrame + the player use.
+  applyWidgetBg(layer, widget);
 }
 export function setSlideBackground(bg) {
   const slide = activeSlide();
@@ -580,24 +536,41 @@ export function addWidget(type, content) {
 // slide. Each portable widget keeps its relative rect; ids are regenerated and
 // the whole group is stacked above whatever is already on the slide. Returns
 // the created widgets (or null if there's no slide / nothing to add).
+// Largest z among a slide's widgets (0 when empty) — the base for "insert on top".
+const maxZ = slide => (slide?.widgets ?? []).reduce((m, w) => Math.max(m, w.z ?? 0), 0);
+
+// Build a widget for INSERTION from a source widget (duplicate / paste /
+// composite). Carries content/title/background/anim/loop/rotation, clamps the
+// target rect, and stamps contentVersion to the plugin's current version when the
+// source lacks one. `clone` (default true) deep-copies the reactive fields via
+// JSON so the copy doesn't alias the source's reactive Proxy subtree
+// (structuredClone throws DataCloneError on a Proxy); pass false when the source
+// is already a plain object (a saved composite). ONE place owns this now — it was
+// hand-written three times (duplicate / paste / composite) with subtle drift.
+function widgetForInsert(source, { rect, z, clone = true }) {
+  const c = clone ? (v => (v == null ? v : JSON.parse(JSON.stringify(v)))) : (v => v);
+  return createWidget(source.type ?? 'text', {
+    rect: clampRect(rect ?? { x: 30, y: 30, w: 40, h: 30 }),
+    z,
+    content: c(source.content ?? {}),
+    title: source.title,
+    background: c(source.background),
+    anim: c(source.anim),
+    loop: source.loop,
+    rotation: source.rotation,
+    contentVersion: source.contentVersion ?? getPlugin(source.type)?.schemaVersion ?? 1,
+  });
+}
+
 export function addComposite(widgets) {
   const slide = activeSlide();
   if (!slide || !Array.isArray(widgets) || !widgets.length) return null;
-  let z = slide.widgets.reduce((m, w) => Math.max(m, w.z ?? 0), 0);
+  let z = maxZ(slide);
   const created = [];
   for (const w of widgets) {
     z += 1;
-    const cw = createWidget(w.type ?? 'text', {
-      rect: clampRect(w.rect ?? { x: 30, y: 30, w: 40, h: 30 }),
-      z,
-      content: w.content ?? {},
-      title: w.title,
-      background: w.background,
-      rotation: w.rotation,
-      anim: w.anim,
-      loop: w.loop,
-      contentVersion: w.contentVersion ?? getPlugin(w.type)?.schemaVersion ?? 1,
-    });
+    // Composite widgets come from a saved template (already plain) → no clone.
+    const cw = widgetForInsert(w, { rect: w.rect, z, clone: false });
     slide.widgets.push(cw);
     created.push(cw);
   }
@@ -633,15 +606,9 @@ export function duplicateSelected() {
   const id = state.ui.selectedWidgetId;
   const w = slide?.widgets.find(x => x.id === id);
   if (!w) return;
-  // JSON-clone, not structuredClone — content/background are reactive Proxies
-  // and structuredClone throws DataCloneError on a Proxy.
-  const clone = v => (v == null ? v : JSON.parse(JSON.stringify(v)));
-  const copy = createWidget(w.type, {
-    content: clone(w.content), title: w.title, background: clone(w.background),
-    rect: clampRect({ ...w.rect, x: w.rect.x + 3, y: w.rect.y + 3 }),
-    z: (slide.widgets.reduce((m, x) => Math.max(m, x.z ?? 0), 0)) + 1,
-    contentVersion: w.contentVersion ?? getPlugin(w.type)?.schemaVersion ?? 1,
-    anim: clone(w.anim), loop: w.loop, rotation: w.rotation,
+  const copy = widgetForInsert(w, {
+    rect: { ...w.rect, x: w.rect.x + 3, y: w.rect.y + 3 },
+    z: maxZ(slide) + 1,
   });
   slide.widgets.push(copy);
   commit('duplicate-widget');
@@ -654,7 +621,7 @@ export function bringToFront() {
   const slide = activeSlide();
   const w = slide?.widgets.find(x => x.id === state.ui.selectedWidgetId);
   if (!w) return;
-  w.z = slide.widgets.reduce((m, x) => Math.max(m, x.z ?? 0), 0) + 1;
+  w.z = maxZ(slide) + 1;
   commit('z-front'); renderSlide(); selectWidget(w.id);
 }
 export function sendToBack() {
@@ -679,15 +646,10 @@ export function pasteWidget(point) {
   const slide = activeSlide();
   if (!slide || !clipboard) return;
   const c = clipboard;
-  const z = slide.widgets.reduce((m, x) => Math.max(m, x.z ?? 0), 0) + 1;
   const rect = point
-    ? clampRect({ x: point.x - c.rect.w / 2, y: point.y - c.rect.h / 2, w: c.rect.w, h: c.rect.h })
-    : clampRect({ ...c.rect, x: c.rect.x + 3, y: c.rect.y + 3 });
-  const copy = createWidget(c.type, {
-    content: cloneJson(c.content), title: c.title, background: cloneJson(c.background), rect, z,
-    contentVersion: c.contentVersion ?? getPlugin(c.type)?.schemaVersion ?? 1,
-    anim: cloneJson(c.anim), loop: c.loop, rotation: c.rotation,
-  });
+    ? { x: point.x - c.rect.w / 2, y: point.y - c.rect.h / 2, w: c.rect.w, h: c.rect.h }
+    : { ...c.rect, x: c.rect.x + 3, y: c.rect.y + 3 };
+  const copy = widgetForInsert(c, { rect, z: maxZ(slide) + 1 });
   slide.widgets.push(copy);
   commit('paste-widget'); renderSlide(); selectWidget(copy.id);
 }
@@ -794,162 +756,21 @@ function applyTransform() {
 }
 
 // ---- inline text edit (double-click on a text widget) ----
-// One session at a time. Body becomes contenteditable; a floating mini-toolbar
-// shows at the top of the canvas scroller (NOT on the stage, so it doesn't
-// zoom). State mutations happen in-place during typing but `commit()` only
-// fires on exit — so undo lands on one entry per session, not per keystroke.
-let inlineEdit = null;
-
+// The editing session itself lives in inline-text-edit.js (a self-contained
+// sub-feature). Here we just hand it the canvas hooks it needs: the viewport,
+// the zoom snapshot/restore + zoom-to-widget, and select/refresh.
 function enterInlineEdit(widget, frameEl) {
-  if (inlineEdit) exitInlineEdit();
-  const bodyEl = frameEl.querySelector('.bb-body');
-  if (!bodyEl) return;
-
-  selectWidget(widget.id);
-  frameEl.classList.add('avs-frame-editing');
-
-  // Auto-zoom on the widget so the user types at a comfortable size, then
-  // restore the prior viewport when they exit. Zoom snapshot is taken BEFORE
-  // we modify zoom/pan so we can hand back exactly what they had.
-  const zoomSnap = { zoom, panX, panY };
-  zoomToWidget(widget.rect);
-
-  bodyEl.contentEditable = 'true';
-  bodyEl.spellcheck = true;
-  bodyEl.focus();
-
-  // Auto-select all so the first keystroke replaces the placeholder text.
-  // Skip if the body is non-default (already-authored content) — there a
-  // caret-at-end is friendlier.
-  const sel = document.getSelection();
-  const range = document.createRange();
-  range.selectNodeContents(bodyEl);
-  if (!bodyEl.textContent?.trim() || bodyEl.textContent?.includes('Type your announcement')) {
-    sel.removeAllRanges(); sel.addRange(range);
-  } else {
-    range.collapse(false);
-    sel.removeAllRanges(); sel.addRange(range);
-  }
-
-  // During typing: mutate widget.content.body directly so the inspector field
-  // (re-)renders cleanly on exit. We DON'T call commit() here — that would
-  // flood undo with one entry per keystroke.
-  const writeBody = () => { widget.content.body = sanitizeHtml(bodyEl.innerHTML); };
-  bodyEl.addEventListener('input', writeBody);
-  // Paste as plain text — matches the inspector editor's behaviour.
-  const onPaste = e => {
-    e.preventDefault();
-    const text = e.clipboardData?.getData('text/plain') ?? '';
-    document.execCommand('insertText', false, text);
-  };
-  bodyEl.addEventListener('paste', onPaste);
-
-  // Floating toolbar — appended to the scroller, not the stage, so it sits
-  // at a constant size regardless of zoom.
-  const toolbar = buildInlineToolbar(bodyEl, writeBody, () => exitInlineEdit());
-  viewport.appendChild(toolbar);
-
-  // Context floaters: a link popover (when caret is inside an <a>) and a
-  // table mini-bar (when caret is inside a cell). Both live in the viewport
-  // and reposition themselves on selectionchange. Inline mode keeps them
-  // intentionally lighter than the inspector — just the essentials a user
-  // would expect when editing in place.
-  const linkPop = buildInlineLinkPopover(bodyEl, viewport, writeBody);
-  const tableBar = buildInlineTableBar(bodyEl, viewport, writeBody);
-  const refreshContext = () => { linkPop.refresh(); tableBar.refresh(); };
-  document.addEventListener('selectionchange', refreshContext);
-
-  // Outside click / Escape exits. The pointerdown listener uses capture so
-  // it fires before the canvas's own pointerdown (which would deselect).
-  // We also intercept the same extra shortcuts here (Ctrl+Shift+7/8/X/H/etc.)
-  // that the inspector editor supports — kept inline so the user has a
-  // consistent muscle memory across both editing modes.
-  const onKeydown = e => {
-    if (e.key === 'Escape') { e.preventDefault(); exitInlineEdit(); return; }
-    if (!bodyEl.contains(e.target) && document.activeElement !== bodyEl) return;
-    const mod = e.ctrlKey || e.metaKey;
-    const k = e.key.toLowerCase();
-    if (mod && e.shiftKey && k === 'x') { e.preventDefault(); document.execCommand('strikeThrough'); writeBody(); return; }
-    if (mod && e.shiftKey && k === '7') { e.preventDefault(); document.execCommand('insertOrderedList');   writeBody(); return; }
-    if (mod && e.shiftKey && k === '8') { e.preventDefault(); document.execCommand('insertUnorderedList'); writeBody(); return; }
-    if (mod && e.shiftKey && (k === ',' || k === '<')) { e.preventDefault(); try { document.execCommand('styleWithCSS', false, false); } catch {} document.execCommand('subscript');   writeBody(); return; }
-    if (mod && e.shiftKey && (k === '.' || k === '>')) { e.preventDefault(); try { document.execCommand('styleWithCSS', false, false); } catch {} document.execCommand('superscript'); writeBody(); return; }
-  };
-  const onPointerDown = e => {
-    if (frameEl.contains(e.target)) return;
-    if (toolbar.contains(e.target)) return;
-    if (linkPop.contains(e.target)) return;
-    if (tableBar.contains(e.target)) return;
-    exitInlineEdit();
-  };
-  document.addEventListener('keydown', onKeydown);
-  document.addEventListener('pointerdown', onPointerDown, true);
-
-  // Slide-switch mid-edit would teardown the frame under our feet — bail
-  // gracefully so the toolbar doesn't orphan.
-  const unsubSlide = subscribe('ui', p => { if (p === 'ui.activeSlideId') exitInlineEdit(); });
-
-  // Window resize: the editor was zoomed-to-widget based on the viewport size
-  // at enter time; if the user resizes the browser while inline editing, the
-  // widget can end up off-screen or weirdly cropped. Debounce + re-zoom keeps
-  // the widget centred without thrashing during the drag.
-  let resizeTimer = null;
-  const onResize = () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => zoomToWidget(widget.rect), 80);
-  };
-  window.addEventListener('resize', onResize);
-
-  inlineEdit = {
-    widgetId: widget.id,
-    dispose() {
-      bodyEl.removeEventListener('input', writeBody);
-      bodyEl.removeEventListener('paste', onPaste);
-      bodyEl.contentEditable = 'false';
-      bodyEl.removeAttribute('contenteditable');
-      bodyEl.removeAttribute('spellcheck');
-      toolbar.remove();
-      linkPop.dispose();
-      tableBar.dispose();
-      document.removeEventListener('selectionchange', refreshContext);
-      document.removeEventListener('keydown', onKeydown);
-      document.removeEventListener('pointerdown', onPointerDown, true);
-      window.removeEventListener('resize', onResize);
-      clearTimeout(resizeTimer);
-      try { unsubSlide?.(); } catch {}
-      frameEl.classList.remove('avs-frame-editing');
-      // Final sanitised commit + canonical re-render via the plugin so the
-      // saved file looks exactly like what would load from disk.
-      widget.content.body = sanitizeHtml(bodyEl.innerHTML);
-      commit('inline-edit-text');
-      refreshWidget(widget.id);
-      // refreshWidget rebuilds the canvas frame but doesn't notify the
-      // inspector — its `subscribe('ui.selectedWidgetId')` only fires on
-      // changes. Toggle through null in the same call stack so the inspector
-      // re-renders with the new content; both writes happen synchronously so
-      // there's no visible flicker.
-      const sel = state.ui.selectedWidgetId;
-      if (sel === widget.id) {
-        state.ui.selectedWidgetId = null;
-        state.ui.selectedWidgetId = widget.id;
-      } else {
-        selectWidget(widget.id);
-      }
-      // Restore the prior zoom/pan now that the user is done.
-      zoom = zoomSnap.zoom; panX = zoomSnap.panX; panY = zoomSnap.panY;
-      applyTransform();
-    },
-  };
-}
-
-function exitInlineEdit() {
-  if (!inlineEdit) return;
-  const e = inlineEdit;
-  inlineEdit = null;
-  try { e.dispose(); } catch (err) { console.warn('exitInlineEdit', err); }
+  enterInlineTextEdit(widget, frameEl, {
+    viewport,
+    zoomToWidget,
+    snapshotViewport: () => ({ zoom, panX, panY }),
+    restoreViewport: (s) => { zoom = s.zoom; panX = s.panX; panY = s.panY; applyTransform(); },
+    selectWidget,
+    refreshWidget,
+  });
 }
 
 function dispose() {
-  exitInlineEdit();
+  exitInlineTextEdit();
   teardownFrames();
 }

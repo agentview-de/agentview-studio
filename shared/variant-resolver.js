@@ -25,23 +25,40 @@ export function resolveSlideWidgets(slide, opts = {}) {
   }
 
   if (Array.isArray(slide.abVariants) && slide.abVariants.length) {
-    if (Number.isInteger(abIdx) && abIdx >= 0 && abIdx < slide.abVariants.length) {
-      const chosen = slide.abVariants[abIdx];
+    // A forced, in-range index (editor preview) wins; otherwise pick by weight.
+    const idx = (Number.isInteger(abIdx) && abIdx >= 0 && abIdx < slide.abVariants.length)
+      ? abIdx
+      : pickAbVariant(slide, rng);
+    if (idx != null) {
+      const chosen = slide.abVariants[idx];
       if (chosen && Array.isArray(chosen.widgets) && chosen.widgets.length) return chosen.widgets;
-    } else {
-      // Weighted random pick. Variants with no/invalid weight default to 1.
-      const total = slide.abVariants.reduce((s, v) => s + (Number.isFinite(+v.weight) ? +v.weight : 1), 0);
-      if (total > 0) {
-        let r = rng() * total;
-        for (const v of slide.abVariants) {
-          r -= Number.isFinite(+v.weight) ? +v.weight : 1;
-          if (r <= 0 && Array.isArray(v.widgets) && v.widgets.length) return v.widgets;
-        }
-      }
     }
   }
 
   return widgets;
+}
+
+// Choose an A/B variant index by weight. Returns the chosen index, or null when
+// the slide has no usable abVariants (missing/empty array, or all weights ≤ 0).
+// Variants with a missing/invalid weight count as 1.
+//
+// Split out from resolveSlideWidgets so the PLAYER can make the pick, memoize
+// the index per slide.id (so re-renders don't reroll and flicker), and then feed
+// that index back through resolveSlideWidgets as a forced choice — instead of
+// re-deriving the same weighted-random loop itself. `rng` is injected for
+// deterministic tests.
+export function pickAbVariant(slide, rng = Math.random) {
+  const variants = slide?.abVariants;
+  if (!Array.isArray(variants) || !variants.length) return null;
+  const weightOf = v => (Number.isFinite(+v?.weight) ? +v.weight : 1);
+  const total = variants.reduce((s, v) => s + weightOf(v), 0);
+  if (total <= 0) return null;
+  let r = rng() * total;
+  for (let i = 0; i < variants.length; i++) {
+    r -= weightOf(variants[i]);
+    if (r <= 0) return i;
+  }
+  return variants.length - 1; // float-rounding safety: last variant
 }
 
 // Helper: produce a stable label for an A/B variant. Used in the inspector.

@@ -16,17 +16,15 @@ const _state = {
   fleet: { displays: [], groups: [], categories: [], orgs: [], activeOrgId: null, running: {} },
   library: { assets: [], quota: null, group: null },
   playlist: null, // set by hydrate or via newPlaylist
-  // v3: Verwaltung-View state. Loaded lazily when the view is opened.
+  // v3: Verwaltung-View state. The tabs fetch fresh on activation (no data
+  // cache), so only genuinely cross-cutting UI-state lives here:
+  //   auditFilter — the user's audit filter (survives tab switches)
+  //   brandKitOrg — org-level brand-kit, read by the editor's cascade in main.js
+  // The former per-tab data caches (audit/webhooks/members/versions/…) were
+  // dropped when the tabs moved to fresh-fetch; they are not re-added here.
   admin: {
-    audit: [], auditFilter: { display: '', user: '', action: '', from: '', to: '' },
-    webhooks: [],
-    pendingApprovals: [], // [{ displayId, displayName, content, submittedAt }]
-    grants: {},           // displayId → [{ userId, level }]
-    members: [],          // members of activeOrg
-    licenseInfo: null,    // { pool, allocated, used }
-    storeTemplates: [], storeCategories: [], storeQuery: '',
-    versions: [],         // history snapshots for active playlist
-    brandKitOrg: null,    // org-level brand-kit (loaded from sidecar slot)
+    auditFilter: { display: '', user: '', action: '', from: '', to: '' },
+    brandKitOrg: null,
   },
   ui: {
     activeView: 'editor',     // 'editor' | 'displays' | 'admin'
@@ -222,34 +220,23 @@ export function persistConn() {
 
 export function persist() {
   try {
-    // v3 safety: if a variant edit is in flight, slide.widgets currently holds
-    // the VARIANT array (not the default). Serializing as-is would persist the
-    // variant where the default belongs, and on reload the actual default
-    // would be lost. Temporarily restore default → serialize → re-swap back so
-    // the editor keeps editing the variant in-memory.
-    const stash = _state.ui._variantStash;
-    const slide = stash ? _state.playlist?.slides?.find(s => s.id === stash.slideId) : null;
-    let variantArr = null;
-    if (stash && slide) {
-      // Capture edits back into the variant slot before un-swapping.
-      if (stash.kind === 'lang' && slide.langs?.[stash.key]) slide.langs[stash.key].widgets = slide.widgets;
-      else if (stash.kind === 'ab' && Array.isArray(slide.abVariants) && slide.abVariants[stash.key]) slide.abVariants[stash.key].widgets = slide.widgets;
-      variantArr = slide.widgets;
-      slide.widgets = stash.originalWidgets;
-    }
+    // If a variant edit is in flight, slide.widgets currently holds the VARIANT
+    // array (not the default), so serializing as-is would persist the variant
+    // where the default belongs. The variant layer owns that swap: it subscribes
+    // to 'before-persist' to flush its edits and restore the default array, and
+    // to 'after-persist' to resume editing the variant in memory. The store
+    // itself stays ignorant of variant internals (see admin/canvas/variant-ctx.js).
+    emit('before-persist');
     if (_state.playlist) localStorage.setItem(LS_PLAYLIST, JSON.stringify(_state.playlist));
-    // Re-swap so the editor continues against the variant array.
-    if (stash && slide && variantArr) slide.widgets = variantArr;
-
-    // Strip _variantStash + preview pointers from UI before persist — restored
-    // state on reload starts in "default" mode; the original swap would be a
-    // dead reference anyway after JSON round-trip.
+    // Strip transient edit pointers from the persisted UI — a reload always
+    // starts in "default" mode; the in-memory swap would be a dead ref anyway.
     const uiClean = { ..._state.ui };
     delete uiClean._variantStash;
     uiClean.editorPreviewLang = null;
     uiClean.editorPreviewAbIdx = null;
     localStorage.setItem(LS_UI, JSON.stringify(uiClean));
   } catch (e) { console.warn('persist failed', e); }
+  finally { emit('after-persist'); }
 }
 
 export function hydrate() {

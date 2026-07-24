@@ -18,6 +18,7 @@ import { sanitizeHtml } from '../../shared/sanitize-html.js';
 import { t, tx } from '../i18n.js';
 import { registerControl, getControl } from './field-controls/registry.js';
 import { filterFieldsByTier } from './tier-filter.js';
+import { loadCollapsed, saveCollapsed } from './fold-section.js';
 
 // Register the rich field controls (each its own module) into the control
 // registry — the seam renderField() dispatches through first, mirroring the
@@ -40,22 +41,9 @@ registerControl('place', renderPlace);
 registerControl('icon', renderIcon);
 registerControl('align', renderAlign);
 
-// Persist collapse state per (formKey, sectionKey). formKey is typically the
-// widget type — passed in by the caller via `buildForm({ formKey: '…' })`.
-// Without a formKey, persistence is skipped (state is reset on re-render).
-const SECTION_STORE_PREFIX = 'avs_section_';
-function loadCollapsed(formKey, sectionKey, defaultCollapsed) {
-  if (!formKey) return defaultCollapsed;
-  try {
-    const v = localStorage.getItem(`${SECTION_STORE_PREFIX}${formKey}_${sectionKey}`);
-    if (v === null) return defaultCollapsed;
-    return v === '1';
-  } catch { return defaultCollapsed; }
-}
-function saveCollapsed(formKey, sectionKey, collapsed) {
-  if (!formKey) return;
-  try { localStorage.setItem(`${SECTION_STORE_PREFIX}${formKey}_${sectionKey}`, collapsed ? '1' : '0'); } catch {}
-}
+// Collapse-state persistence (loadCollapsed / saveCollapsed) is shared with the
+// widget inspector's below-form blocks — see admin/ui/fold-section.js for the
+// storage-key convention both must agree on.
 
 // Stable section identifier — explicit `key` wins, else fall back to the label
 // (slugified). Avoids storage-key collisions between different schemas.

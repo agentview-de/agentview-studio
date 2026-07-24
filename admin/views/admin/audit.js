@@ -5,7 +5,7 @@
 // boundary. The accumulated rows live in a local (the former state.admin.audit
 // data-cache is dropped); state.admin.auditFilter is KEPT — it is UI-state (the
 // user's filter), not cached data.
-import { mountTab, table, emptyState, esc } from './shell.js';
+import { mountTab, table, emptyState, esc, unwrapList } from './shell.js';
 import { audit as auditApi } from '../../api.js';
 import { state } from '../../store.js';
 import { t } from '../../i18n.js';
@@ -47,7 +47,7 @@ export function mountAudit(body) {
         }
         // Verified live shape: { rows, nextCursor, hasMore, count, limit }.
         // The server ships `rows`/`timestamp`; tolerate documented aliases too.
-        const rows = resp?.rows ?? resp?.entries ?? resp?.items ?? (Array.isArray(resp) ? resp : []);
+        const rows = unwrapList(resp, 'rows', 'entries', 'items');
         cursor = resp?.nextCursor ?? null;
         all = append ? [...all, ...rows] : rows;
         if (!all.length) {

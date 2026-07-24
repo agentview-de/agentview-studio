@@ -10,7 +10,7 @@
 
 import { state } from './store.js';
 import { displays as displaysApi, slots, groups as groupsApi, assets } from './api.js';
-import { bundlePlayer } from './publish.js';
+import { bundlePlayer, VENDOR_TYPES } from './publish.js';
 import { openModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { t } from './i18n.js';
@@ -322,7 +322,7 @@ async function buildBundle() {
   // only inline what the playlist uses). Cheap structural check on the about-to-
   // ship playlist.
   const plBlob = JSON.stringify(plToShip ?? {});
-  const vendorTypes = ['pdf', 'stream-cam', 'map'].filter(t => plBlob.includes(`"type":"${t}"`));
+  const vendorTypes = VENDOR_TYPES.filter(t => plBlob.includes(`"type":"${t}"`));
   const html = await bundlePlayer({
     baseUrl, readUrl,
     windowGlobals: {

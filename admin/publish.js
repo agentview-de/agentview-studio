@@ -232,6 +232,12 @@ const VENDOR_MANIFEST = {
   ],
 };
 
+// The widget types that carry lazy-loaded vendor libs — the SINGLE source of
+// truth is VENDOR_MANIFEST above. publish-flow imports this to decide which libs
+// to inline for a given playlist, instead of re-hard-coding the same key list
+// (which silently went stale when a vendored widget was added here).
+export const VENDOR_TYPES = Object.freeze(Object.keys(VENDOR_MANIFEST));
+
 // Build the BB_VENDOR map for the given widget types (deduped). CSS has its local
 // image url()s rewritten to data: (reusing rewriteCssAssetUrls with a data:-URL
 // resolver) so an inline <style> is self-contained. A per-file failure is skipped

@@ -1,21 +1,17 @@
 // Verwaltung → Webhooks Tab. HMAC-signed event subscriptions pointing at the
 // owner's own URL; Studio creates/tests/pauses/deletes them, the platform
 // delivers. Sits behind the Tab-Shell: supplies load + render + its actions.
-import { mountTab, table, esc } from './shell.js';
+import { mountTab, table, esc, unwrapList, openFormModal, revealSecretModal } from './shell.js';
 import { webhooks as webhooksApi } from '../../api.js';
 import { t } from '../../i18n.js';
 import { toast } from '../../ui/toast.js';
-import { openModal } from '../../ui/modal.js';
 
 export function mountWebhooks(body) {
   return mountTab(body, {
     title: t('admin.webhooks'),
     headerActions: `<button class="bb-btn bb-btn-primary" data-act="add">${t('admin.add')}</button>`,
     onHeader: (ctx) => ctx.onClick('[data-act="add"]', () => addWebhook(ctx)),
-    load: async () => {
-      const r = await webhooksApi.list();
-      return Array.isArray(r) ? r : (r?.webhooks ?? r?.items ?? []);
-    },
+    load: async () => unwrapList(await webhooksApi.list(), 'webhooks', 'items'),
     isEmpty: (list) => !list.length,
     emptyText: t('wh.empty'),
     emptyOpts: { icon: '🪝', cta: `<button class="bb-btn bb-btn-primary" data-act="add-empty">${t('admin.add')} Webhook</button>` },
@@ -76,10 +72,11 @@ async function testWebhook(b) {
 }
 
 async function addWebhook(ctx) {
-  const box = document.createElement('div');
   // Server takes ONE eventPattern string, not an array. Pattern syntax: namespace
   // dotted-style with wildcards (e.g. `display.*`, `display.content.delivered`).
-  box.innerHTML = `
+  const box = await openFormModal({
+    title: t('wh.addTitle'),
+    body: `
     <div class="bb-form-group"><label>${t('wh.url')}</label><input id="wh-url" placeholder="https://example.com/hook"></div>
     <div class="bb-form-group"><label>${t('wh.eventsPattern')}</label>
       <select id="wh-pattern">
@@ -99,10 +96,9 @@ async function addWebhook(ctx) {
       </select>
       <p class="bb-form-help" style="font-size:11px;margin-top:4px;">${t('wh.dataScopeHint')}</p>
     </div>
-    <div class="bb-form-group"><label>${t('wh.description')}</label><input id="wh-desc" placeholder="${t('wh.descPlaceholder')}"></div>`;
-  const ok = await openModal({ title: t('wh.addTitle'), body: box,
-    actions: [{ label: t('common.cancel') }, { label: t('common.create'), kind: 'primary', value: 1 }] });
-  if (!ok) return;
+    <div class="bb-form-group"><label>${t('wh.description')}</label><input id="wh-desc" placeholder="${t('wh.descPlaceholder')}"></div>`,
+  });
+  if (!box) return;
   const url = box.querySelector('#wh-url').value.trim();
   const eventPattern = box.querySelector('#wh-pattern').value;
   const description = box.querySelector('#wh-desc').value.trim();
@@ -115,13 +111,14 @@ async function addWebhook(ctx) {
     const secret = created?.signingSecret ?? created?.secret;
     const warning = created?.warning ?? t('wh.defaultWarning');
     if (secret) {
-      const d = document.createElement('div');
-      d.innerHTML = `
-        <p>${t('wh.created', { pattern: `<code>${esc(sub?.eventPattern ?? eventPattern)}</code>` })}</p>
-        <p class="bb-form-help" style="color:#fca5a5;">⚠ ${esc(warning)}</p>
-        <label style="display:block;margin-top:12px;font-size:11px;opacity:.7;">${t('wh.secretLabel')}</label>
-        <pre class="avs-codeblock">${esc(secret)}</pre>`;
-      await openModal({ title: t('wh.secretTitle'), body: d, actions: [{ label: t('wh.secretAck'), kind: 'primary', value: 1 }] });
+      await revealSecretModal({
+        title: t('wh.secretTitle'),
+        intro: `<p>${t('wh.created', { pattern: `<code>${esc(sub?.eventPattern ?? eventPattern)}</code>` })}</p>`
+          + `<p class="bb-form-help" style="color:#fca5a5;">⚠ ${esc(warning)}</p>`,
+        label: t('wh.secretLabel'),
+        secret,
+        ackLabel: t('wh.secretAck'),
+      });
     }
     ctx.reload();
   } catch (e) { toast(e.message, { kind: 'error' }); }

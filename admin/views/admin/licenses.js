@@ -2,7 +2,7 @@
 // allocation table, and a slot-pool extension for the active org. The add-slots
 // button validates before calling the API, so it uses onClick (not onAction) —
 // onAction would reload even when validation short-circuits without a call.
-import { mountTab, table, esc } from './shell.js';
+import { mountTab, table, esc, unwrapList } from './shell.js';
 import { auth as authApi, licensing as licensingApi, pricing as pricingApi } from '../../api.js';
 import { state } from '../../store.js';
 import { t } from '../../i18n.js';
@@ -85,7 +85,7 @@ async function openPricingComparison() {
   };
   try {
     const data = await pricingApi.get();
-    const plans = data?.plans ?? data?.tiers ?? (Array.isArray(data) ? data : []);
+    const plans = unwrapList(data, 'plans', 'tiers');
     if (!plans.length) { box.innerHTML = `<p class="avs-muted">${t('lic.dataEmpty', { link: '<a href="https://agentview.de/pricing" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">agentview.de/pricing ↗</a>' })}</p>`; }
     else {
       box.innerHTML = `<div class="avs-license-grid" style="grid-template-columns: repeat(${Math.min(plans.length, 4)}, 1fr);">${

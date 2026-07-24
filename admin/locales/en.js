@@ -465,6 +465,7 @@ export const en = {
 
   // --- On-error fallback ---
   'err.title': 'On error (live data)',
+  'err.mode': 'On error, show',
   'err.help': 'What the display shows at runtime if this widget can’t load its live data.',
   'err.none': 'Show the widget’s own message',
   'err.hide': 'Hide this widget',

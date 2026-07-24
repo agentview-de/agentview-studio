@@ -93,6 +93,24 @@ export function applySlideBackground(el, bg) {
   else { el.style.opacity = ''; el.style.background = 'var(--bb-st-bg, #09090b)'; }
 }
 
+// Widget bg layer: a themed widget falls back to its theme's --bb-st-bg (so the
+// "Theme background" option paints), a themeless one stays truly transparent.
+// The theme class on the LAYER is what resolves --bb-st-bg. Shared by the canvas
+// frame builder, the canvas live-background updater, and the player slot so the
+// three stay identical — this exact theme/paint branch used to be copy-pasted in
+// all three. Adding an already-present theme class is a no-op, so the updater
+// path (which reuses an existing layer) can call this safely too.
+export function applyWidgetBg(layer, widget) {
+  if (!layer) return;
+  const theme = widget?.content?.theme;
+  if (theme) {
+    layer.classList.add(`bb-theme-${theme}`);
+    applySlideBackground(layer, widget?.background);
+  } else {
+    applyBackground(layer, widget?.background);
+  }
+}
+
 // ---- auto-contrast text colour ---------------------------------------------
 // A custom slide background overrides the theme's --bb-st-bg but NOT its text
 // colour, which can make text unreadable (e.g. a dark image under a light

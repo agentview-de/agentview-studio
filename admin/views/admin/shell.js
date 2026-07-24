@@ -19,6 +19,7 @@
 
 import { t } from '../../i18n.js';
 import { toast } from '../../ui/toast.js';
+import { openModal } from '../../ui/modal.js';
 import { runTabLifecycle, runAction } from './lifecycle.js';
 
 export function esc(s) {
@@ -50,6 +51,42 @@ export function table(headers, rows) {
     <thead><tr>${headers.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>
     <tbody>${rows.join('')}</tbody>
   </table>`;
+}
+
+// Coerce a list endpoint's response to an array. The platform returns either a
+// bare array or an envelope under one of a few documented keys ({ webhooks },
+// { keys }, { rows }, { organizations }, …). Try each alias in order, else [].
+// One place owns this so the per-Tab alias lists — which had drifted across five
+// Tabs — stay in step; add a newly-observed key here and every Tab benefits.
+export function unwrapList(resp, ...aliases) {
+  if (Array.isArray(resp)) return resp;
+  for (const key of aliases) if (Array.isArray(resp?.[key])) return resp[key];
+  return [];
+}
+
+// The create-form modal shell every mutating Tab opens: a box carrying the given
+// body HTML, a Cancel + a primary submit. Resolves to the mounted box element
+// (read your field values off it) on submit, or null if the user cancelled — so
+// the caller keeps owning its fields, validation and the API call.
+export async function openFormModal({ title, body, submitLabel }) {
+  const box = document.createElement('div');
+  box.innerHTML = body;
+  const ok = await openModal({
+    title, body: box,
+    actions: [{ label: t('common.cancel') }, { label: submitLabel ?? t('common.create'), kind: 'primary', value: 1 }],
+  });
+  return ok ? box : null;
+}
+
+// The "shown exactly once" secret reveal — a webhook signing secret, an API-key
+// plaintext, a member invite link. Same copyable codeblock + acknowledge modal
+// each time. `intro` is trusted i18n HTML (one or more <p>); `secret` is escaped.
+export async function revealSecretModal({ title, intro = '', label = '', secret, ackLabel }) {
+  const d = document.createElement('div');
+  d.innerHTML = intro
+    + (label ? `<label style="display:block;margin-top:12px;font-size:11px;opacity:.7;">${esc(label)}</label>` : '')
+    + `<pre class="avs-codeblock">${esc(secret)}</pre>`;
+  await openModal({ title, body: d, actions: [{ label: ackLabel ?? t('common.close'), kind: 'primary', value: 1 }] });
 }
 
 // Run one Verwaltung Tab's lifecycle into `body`. Returns the lifecycle promise

@@ -4,7 +4,7 @@
 // live <select> change events (not click actions), and the title carries the org
 // name (set after the fetch via ctx.setTitle). Reads org context from
 // state.fleet; uses no state.admin cache.
-import { mountTab, table, emptyState, esc } from './shell.js';
+import { mountTab, table, emptyState, esc, unwrapList, openFormModal, revealSecretModal } from './shell.js';
 import { orgs as orgsApi } from '../../api.js';
 import { state } from '../../store.js';
 import { t } from '../../i18n.js';
@@ -153,8 +153,10 @@ async function addMember(ctx) {
   const type = orgTypeOf(activeOrg());
   const invitable = invitableRolesForType(type);
   const def = defaultInviteRole(type);
-  const box = document.createElement('div');
-  box.innerHTML = `
+  const box = await openFormModal({
+    title: t('mem.addTitle'),
+    submitLabel: t('mem.createInvite'),
+    body: `
     <p class="bb-form-help">${t('mem.inviteHelp')}</p>
     <div class="bb-form-group"><label>${t('mem.role')}</label>
       <select id="mb-role">
@@ -164,31 +166,32 @@ async function addMember(ctx) {
     <div class="bb-form-group"><label>${t('mem.emailOptional')} <span class="avs-muted">(${t('insp.optional')})</span></label>
       <input id="mb-email" placeholder="user@example.com">
       <p class="bb-form-help" style="font-size:11px;margin-top:4px;">${t('mem.emailHint')}</p>
-    </div>`;
-  const ok = await openModal({ title: t('mem.addTitle'), body: box,
-    actions: [{ label: t('common.cancel') }, { label: t('mem.createInvite'), kind: 'primary', value: 1 }] });
-  if (!ok) return;
+    </div>`,
+  });
+  if (!box) return;
   const role = box.querySelector('#mb-role').value;
   const email = box.querySelector('#mb-email').value.trim();
   try {
     const res = await orgsApi.invite(orgId, { role, ...(email && { email }) });
     const url = res?.inviteUrl ?? res?.url ?? res?.inviteToken ?? res?.token ?? '—';
     const expires = (res?.expiresAt ?? '').slice(0, 10);
-    const d = document.createElement('div');
-    d.innerHTML = `
-      <p>${t('mem.inviteCreated', { role: `<code>${esc(res?.role ?? role)}</code>`, boundTo: res?.inviteeEmail ? t('mem.inviteBoundTo', { email: `<b>${esc(res.inviteeEmail)}</b>` }) : '' })}</p>
-      <p class="bb-form-help">${t('mem.inviteShare', { expires: expires ? t('mem.inviteExpires', { date: esc(expires) }) : '' })}</p>
-      <label style="display:block;margin-top:12px;font-size:11px;opacity:.7;">${t('mem.inviteLinkLabel')}</label>
-      <pre class="avs-codeblock">${esc(url)}</pre>`;
-    await openModal({ title: t('mem.inviteLinkTitle'), body: d, actions: [{ label: t('mem.understood'), kind: 'primary', value: 1 }] });
+    await revealSecretModal({
+      title: t('mem.inviteLinkTitle'),
+      intro: `<p>${t('mem.inviteCreated', { role: `<code>${esc(res?.role ?? role)}</code>`, boundTo: res?.inviteeEmail ? t('mem.inviteBoundTo', { email: `<b>${esc(res.inviteeEmail)}</b>` }) : '' })}</p>`
+        + `<p class="bb-form-help">${t('mem.inviteShare', { expires: expires ? t('mem.inviteExpires', { date: esc(expires) }) : '' })}</p>`,
+      label: t('mem.inviteLinkLabel'),
+      secret: url,
+      ackLabel: t('mem.understood'),
+    });
     ctx.reload();
   } catch (e) { toast(e.message, { kind: 'error' }); }
 }
 
 // Create an organization (server entity: Group). You become owner.
 async function createOrg(ctx) {
-  const box = document.createElement('div');
-  box.innerHTML = `
+  const box = await openFormModal({
+    title: t('mem.createOrgTitle'),
+    body: `
     <p class="bb-form-help">${t('mem.createOrgHelp')}</p>
     <div class="bb-form-group"><label>${t('mem.name')}</label><input id="org-name" placeholder="Acme GmbH"></div>
     <div class="bb-form-group"><label>${t('mem.type')}</label>
@@ -196,10 +199,9 @@ async function createOrg(ctx) {
         <option value="organization">${t('mem.optOrg')}</option>
         <option value="family">${t('mem.optFamily')}</option>
       </select>
-    </div>`;
-  const ok = await openModal({ title: t('mem.createOrgTitle'), body: box,
-    actions: [{ label: t('common.cancel') }, { label: t('common.create'), kind: 'primary', value: 1 }] });
-  if (!ok) return;
+    </div>`,
+  });
+  if (!box) return;
   const name = box.querySelector('#org-name').value.trim();
   const orgKind = box.querySelector('#org-type').value;
   if (!name) { toast(t('mem.nameRequired'), { kind: 'warn' }); return; }
@@ -210,7 +212,7 @@ async function createOrg(ctx) {
     // it active and notify main.js to redraw the top-bar org chip.
     try {
       const o = await orgsApi.list();
-      state.fleet.orgs = Array.isArray(o) ? o : (o?.organizations ?? o?.items ?? []);
+      state.fleet.orgs = unwrapList(o, 'organizations', 'items');
     } catch {}
     if (newId) state.fleet.activeOrgId = newId;
     document.dispatchEvent(new CustomEvent('avs:orgs-changed'));

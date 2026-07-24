@@ -10,14 +10,14 @@
 import { get as getPlugin } from '../shared/plugins/registry.js';
 import '../shared/plugins/all.js';
 import { migratePlaylist, applyWidgetMigrations, resolveBrandKit, resolveCanvas } from '../shared/slide-schema.js';
-import { mountWidget } from '../shared/widget-host.js';
-import { applyBackground, applySlideBackground, applySlideContrast } from '../shared/background.js';
+import { mountWidget, widgetSlotZ } from '../shared/widget-host.js';
+import { applySlideBackground, applySlideContrast, applyWidgetBg } from '../shared/background.js';
 import { applyErrorFallback } from '../shared/error-fallback.js';
 import { filterVisible } from '../shared/scheduler-core.js';
 import { applyTransition } from './transitions.js';
 import { primeBuild, revealBuild, normalizeBuild, isLoop, applyLoop } from '../shared/animations.js';
 import { enable as enableHud } from './debug-hud.js';
-import { resolveSlideWidgets } from '../shared/variant-resolver.js';
+import { resolveSlideWidgets, pickAbVariant } from '../shared/variant-resolver.js';
 import { collectUniqueSlots, applyBindingsToWidgets } from '../shared/binding-resolver.js';
 import { computeSyncedIndex } from '../shared/sync-clock.js';
 import { applyBrandKit } from '../shared/brand-kit-apply.js';
@@ -284,18 +284,13 @@ async function renderSlide(slide) {
 
   const disposers = [];
   const builds = []; // entrance builds to play after the slide transition settles
-  // v3: variant resolution (lang first, then A/B) → bindings → render.
+  // v3: variant resolution (lang first, then A/B) → bindings → render. Make the
+  // weighted A/B pick ONCE via the shared resolver helper and memoize the index
+  // per slide.id, so re-renders keep the same variant (no flicker);
+  // resolveSlideWidgets then honours that index as a forced choice.
   let abIdx = state.abPick[slide.id];
   if (abIdx === undefined && Array.isArray(slide.abVariants) && slide.abVariants.length) {
-    // Use the resolver's own picker for the first draw and memoize the index
-    // so subsequent re-renders show the same variant.
-    const total = slide.abVariants.reduce((s, v) => s + (Number.isFinite(+v.weight) ? +v.weight : 1), 0);
-    let r = Math.random() * total;
-    for (let i = 0; i < slide.abVariants.length; i++) {
-      r -= Number.isFinite(+slide.abVariants[i].weight) ? +slide.abVariants[i].weight : 1;
-      if (r <= 0) { abIdx = i; break; }
-    }
-    if (abIdx === undefined) abIdx = 0;
+    abIdx = pickAbVariant(slide);
     state.abPick[slide.id] = abIdx;
   }
   const variantWidgets = resolveSlideWidgets(slide, { lang: DISPLAY_LANG, abIdx });
@@ -307,7 +302,7 @@ async function renderSlide(slide) {
     const r = w.rect ?? { x: 0, y: 0, w: 100, h: 100 };
     slot.style.cssText =
       `position:absolute;left:${r.x}%;top:${r.y}%;width:${r.w}%;height:${r.h}%;` +
-      `overflow:hidden;z-index:${(w.z ?? 0) + 1};` +
+      `overflow:hidden;z-index:${widgetSlotZ(w)};` +
       // Container rotation via the standalone `rotate` property so it composes
       // with the build/loop `transform` on this slot instead of clobbering it.
       `${w.rotation ? `rotate:${w.rotation}deg;` : ''}`;
@@ -317,13 +312,8 @@ async function renderSlide(slide) {
     // truly transparent.
     const bgLayer = document.createElement('div');
     bgLayer.style.cssText = 'position:absolute;inset:0;z-index:0;';
-    const widgetTheme = w.content?.theme;
-    if (widgetTheme) {
-      bgLayer.classList.add(`bb-theme-${widgetTheme}`);
-      applySlideBackground(bgLayer, w.background);
-    } else {
-      applyBackground(bgLayer, w.background);
-    }
+    // Theme-aware widget background — shared with the editor's frame builder.
+    applyWidgetBg(bgLayer, w);
     const content = document.createElement('div');
     content.style.cssText = 'position:absolute;inset:0;z-index:1;';
     // Ambient loop animates an inner wrapper so e.g. Ken Burns scales the widget

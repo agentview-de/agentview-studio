@@ -16,7 +16,11 @@ const suites = [
   './live-source.test.js',
   './field-control-registry.test.js',
   './widget-host.test.js',
+  // Theme-aware widget-bg fallback shared by canvas + player (fake-element DOM).
+  './background.test.js',
   './admin-tab-shell.test.js',
+  // Admin Tab-Shell pure response helper (list-envelope unwrapping).
+  './shell.test.js',
   './canvas-geo.test.js',
   './migrate.test.js',
   // animations.test.js is pure logic (animation catalogs + schema round-trip);
@@ -26,6 +30,8 @@ const suites = [
   // Pure shared resolvers — no DOM, no network, no real timers/randomness.
   './scheduler.test.js',
   './variant-resolver.test.js',
+  // Variant-edit persist seam (before/after-persist bus hooks own the swap).
+  './variant-ctx.test.js',
   './binding-resolver.test.js',
   './ics-parse.test.js',
   // Pure string transforms — store-template editor preview + slot-ref discovery.
@@ -63,6 +69,10 @@ const suites = [
   './custom-widgets.test.js',
   // Inspector/Designer field-tier filter (pure) — basic vs all.
   './tier-filter.test.js',
+  // Shared collapsible-section storage convention (both inspector builders).
+  './fold-section.test.js',
+  // Shared brand-kit colour grid (slide / playlist / org editors).
+  './brand-kit-form.test.js',
   // Widget Designer "Looks" galleries — shape + every patch key is a real field.
   './looks.test.js',
 ];

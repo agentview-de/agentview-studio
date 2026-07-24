@@ -3,7 +3,7 @@
 // (deterministic), then the weighted A/B pick. The rng is injected so the
 // weighted branch is fully deterministic (no real randomness in the suite).
 import { describe, test, expect } from './runner.js';
-import { resolveSlideWidgets, abVariantLabel } from '../shared/variant-resolver.js';
+import { resolveSlideWidgets, pickAbVariant, abVariantLabel } from '../shared/variant-resolver.js';
 
 // A widget is just an opaque object here; identity (===) is what we assert on.
 const base = [{ id: 'base' }];
@@ -137,6 +137,30 @@ describe('resolveSlideWidgets · A/B weighted pick (injected rng)', () => {
   test('empty abVariants array leaves the language/base result untouched', () => {
     const s = { widgets: base, abVariants: [] };
     expect(resolveSlideWidgets(s)).toBe(base);
+  });
+});
+
+describe('pickAbVariant · shared A/B index picker', () => {
+  const s = (variants) => ({ widgets: base, abVariants: variants });
+
+  test('returns null when there are no usable variants', () => {
+    expect(pickAbVariant({ widgets: base })).toBe(null);          // no abVariants
+    expect(pickAbVariant(s([]))).toBe(null);                       // empty array
+    expect(pickAbVariant(s([{ widgets: [{}], weight: 0 }]))).toBe(null); // total weight 0
+  });
+
+  test('picks an index by weight with an injected rng (crossover at 0.25)', () => {
+    const v = s([{ widgets: [{}], weight: 1 }, { widgets: [{}], weight: 3 }]);
+    expect(pickAbVariant(v, () => 0.24)).toBe(0);
+    expect(pickAbVariant(v, () => 0.26)).toBe(1);
+    expect(pickAbVariant(v, () => 0)).toBe(0);
+    expect(pickAbVariant(v, () => 0.999999)).toBe(1);
+  });
+
+  test('missing/invalid weights count as 1', () => {
+    const v = s([{ widgets: [{}] }, { widgets: [{}], weight: 'x' }]);
+    expect(pickAbVariant(v, () => 0.4)).toBe(0);
+    expect(pickAbVariant(v, () => 0.6)).toBe(1);
   });
 });
 

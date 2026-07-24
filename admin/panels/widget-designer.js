@@ -72,27 +72,7 @@ export function openWidgetDesigner(widget, { onApply } = {}) {
   body.className = 'avs-wd';
   body.innerHTML = `
     <div class="avs-wd-grid">
-      <div class="avs-wd-left">
-        <div class="avs-wd-tabs">
-          <button type="button" class="avs-wd-tab avs-on" data-tab="template">${escapeHtml(tx('Template'))}</button>
-          <button type="button" class="avs-wd-tab" data-tab="css">${escapeHtml(tx('Style (CSS)'))}</button>
-          <button type="button" class="avs-wd-tab" data-tab="fields">${escapeHtml(tx('Fields'))}</button>
-        </div>
-        <div class="avs-wd-pane" data-pane="template">
-          <p class="bb-form-help">${escapeHtml(tx('Write HTML. Insert a field value with {{key}}. Optional filter: {{value | number}}.'))}</p>
-          <textarea class="bb-mono avs-wd-code" id="wd-template" spellcheck="false"></textarea>
-          <div class="avs-wd-tokens" id="wd-tokens"></div>
-        </div>
-        <div class="avs-wd-pane" data-pane="css" hidden>
-          <p class="bb-form-help">${escapeHtml(tx('CSS is scoped to this widget automatically — selectors only affect what you build here.'))}</p>
-          <textarea class="bb-mono avs-wd-code" id="wd-css" spellcheck="false"></textarea>
-        </div>
-        <div class="avs-wd-pane" data-pane="fields" hidden>
-          <p class="bb-form-help">${escapeHtml(tx('Each field becomes an inspector control the user fills in. The field key is the {{token}} you reference in the template.'))}</p>
-          <div id="wd-fields"></div>
-          <button type="button" class="bb-btn bb-btn-secondary bb-btn-sm" id="wd-add-field">+ ${escapeHtml(tx('Add field'))}</button>
-        </div>
-      </div>
+      <div class="avs-wd-left" id="wd-code"></div>
       <div class="avs-wd-right">
         <div class="avs-wd-preview-label">${escapeHtml(tx('Live preview'))}</div>
         <div class="avs-wd-preview" id="wd-preview"></div>
@@ -104,20 +84,8 @@ export function openWidgetDesigner(widget, { onApply } = {}) {
 
   injectStylesOnce();
 
-  const templateTa = body.querySelector('#wd-template');
-  const cssTa = body.querySelector('#wd-css');
   const previewHost = body.querySelector('#wd-preview');
   const dataHost = body.querySelector('#wd-data');
-  const fieldsHost = body.querySelector('#wd-fields');
-  const tokensHost = body.querySelector('#wd-tokens');
-  templateTa.value = working.template;
-  cssTa.value = working.css;
-
-  // ---- tabs ----
-  body.querySelectorAll('.avs-wd-tab').forEach(btn => btn.addEventListener('click', () => {
-    body.querySelectorAll('.avs-wd-tab').forEach(b => b.classList.toggle('avs-on', b === btn));
-    body.querySelectorAll('.avs-wd-pane').forEach(p => { p.hidden = p.dataset.pane !== btn.dataset.tab; });
-  }));
 
   // ---- live preview (debounced) ----
   let previewDispose = null;
@@ -131,103 +99,6 @@ export function openWidgetDesigner(widget, { onApply } = {}) {
     previewDispose = mountWidget(temp, { duration: 10 }, previewHost, { mode: 'preview', t: k => k });
   };
   const schedulePreview = () => { clearTimeout(previewTimer); previewTimer = setTimeout(renderPreview, 150); };
-
-  // ---- token chips (reflect template references) ----
-  const renderTokens = () => {
-    const toks = tokensInTemplate(working.template);
-    const known = new Set(validFields().map(f => f.key));
-    if (!toks.length) { tokensHost.innerHTML = ''; return; }
-    tokensHost.innerHTML = `<span class="avs-wd-tokens-h">${escapeHtml(tx('Tokens used:'))}</span> ` + toks.map(tk =>
-      `<code class="avs-wd-token${known.has(tk) ? '' : ' avs-wd-token-unknown'}" title="${known.has(tk) ? '' : escapeHtml(tx('No field with this key'))}">{{${escapeHtml(tk)}}}</code>`
-    ).join(' ');
-  };
-
-  // ---- template / css editors ----
-  const insertAtCursor = (ta, text) => {
-    const s = ta.selectionStart ?? ta.value.length;
-    const e = ta.selectionEnd ?? ta.value.length;
-    ta.value = ta.value.slice(0, s) + text + ta.value.slice(e);
-    ta.selectionStart = ta.selectionEnd = s + text.length;
-    ta.focus();
-  };
-  templateTa.addEventListener('input', () => { working.template = templateTa.value; renderTokens(); schedulePreview(); });
-  cssTa.addEventListener('input', () => { working.css = cssTa.value; schedulePreview(); });
-
-  // ---- fields builder ----
-  const renderFields = () => {
-    fieldsHost.replaceChildren();
-    working.fields.forEach((f, idx) => fieldsHost.appendChild(renderFieldRow(f, idx)));
-    refreshDataForm();
-    renderTokens();
-    schedulePreview();
-  };
-
-  function renderFieldRow(f, idx) {
-    const row = document.createElement('div');
-    row.className = 'avs-wd-fieldrow';
-    row.innerHTML = `
-      <div class="avs-wd-fieldmain">
-        <input class="avs-wd-fkey" placeholder="${escapeHtml(tx('key'))}" value="${escapeHtml(f.key ?? '')}">
-        <input class="avs-wd-flabel" placeholder="${escapeHtml(tx('Label'))}" value="${escapeHtml(f.label ?? '')}">
-        <select class="avs-wd-ftype">
-          ${FIELD_TYPES.map(o => `<option value="${o.value}" ${f.type === o.value ? 'selected' : ''}>${escapeHtml(tx(o.label))}</option>`).join('')}
-        </select>
-      </div>
-      <div class="avs-wd-fieldopts" ${f.type === 'select' ? '' : 'hidden'}>
-        <input class="avs-wd-foptions" placeholder="${escapeHtml(tx('Options: a, b, c  (or  val=Label)'))}" value="${escapeHtml(optionsToText(f.options))}">
-      </div>
-      <div class="avs-wd-fieldbtns">
-        <button type="button" class="avs-iconbtn" data-act="up" title="${escapeHtml(tx('Move up'))}" ${idx === 0 ? 'disabled' : ''}>↑</button>
-        <button type="button" class="avs-iconbtn" data-act="down" title="${escapeHtml(tx('Move down'))}" ${idx === working.fields.length - 1 ? 'disabled' : ''}>↓</button>
-        <button type="button" class="avs-iconbtn" data-act="copytoken" title="${escapeHtml(tx('Insert token into template'))}">{ }</button>
-        <button type="button" class="avs-iconbtn bb-btn-danger" data-act="del" title="${escapeHtml(tx('Delete'))}">✕</button>
-      </div>`;
-    const keyI = row.querySelector('.avs-wd-fkey');
-    const labelI = row.querySelector('.avs-wd-flabel');
-    const typeI = row.querySelector('.avs-wd-ftype');
-    const optsWrap = row.querySelector('.avs-wd-fieldopts');
-    const optsI = row.querySelector('.avs-wd-foptions');
-
-    keyI.addEventListener('input', () => { f.key = sanitizeKey(keyI.value); if (keyI.value !== f.key) keyI.value = f.key; refreshDataForm(); renderTokens(); schedulePreview(); });
-    labelI.addEventListener('input', () => { f.label = labelI.value; refreshDataForm(); });
-    typeI.addEventListener('change', () => {
-      f.type = typeI.value;
-      optsWrap.hidden = f.type !== 'select';
-      if (f.type === 'select' && !Array.isArray(f.options)) f.options = textToOptions(optsI.value);
-      refreshDataForm(); schedulePreview();
-    });
-    optsI.addEventListener('input', () => { f.options = textToOptions(optsI.value); refreshDataForm(); schedulePreview(); });
-
-    row.querySelector('[data-act="up"]').addEventListener('click', () => move(idx, -1));
-    row.querySelector('[data-act="down"]').addEventListener('click', () => move(idx, 1));
-    row.querySelector('[data-act="del"]').addEventListener('click', () => { working.fields.splice(idx, 1); renderFields(); });
-    row.querySelector('[data-act="copytoken"]').addEventListener('click', () => {
-      if (!f.key) return;
-      // Jump to the template tab and drop the token at the cursor.
-      body.querySelector('.avs-wd-tab[data-tab="template"]').click();
-      insertAtCursor(templateTa, `{{${f.key}}}`);
-      working.template = templateTa.value; renderTokens(); schedulePreview();
-    });
-    return row;
-  }
-
-  const move = (idx, dir) => {
-    const j = idx + dir;
-    if (j < 0 || j >= working.fields.length) return;
-    const [m] = working.fields.splice(idx, 1);
-    working.fields.splice(j, 0, m);
-    renderFields();
-  };
-
-  body.querySelector('#wd-add-field').addEventListener('click', () => {
-    let i = working.fields.length + 1;
-    let key = `field${i}`;
-    const used = new Set(working.fields.map(f => f.key));
-    while (used.has(key)) { i++; key = `field${i}`; }
-    working.fields.push({ key, type: 'text', label: `Field ${i}` });
-    if (!(key in working.values)) working.values[key] = '';
-    renderFields();
-  });
 
   // ---- "Preview data" form (the real inspector controls) ----
   let dataForm = null;
@@ -251,11 +122,18 @@ export function openWidgetDesigner(widget, { onApply } = {}) {
     dataHost.appendChild(dataForm.root);
   };
 
+  // ---- structural editor (template / CSS / fields) ----
+  // The SAME mountable the full-screen Designer's Code tab uses (mountCustomCode),
+  // so the two never drift. It owns the tabs, token chips and field-row builder;
+  // this designer only reacts by rebuilding the value form + repainting the preview.
+  const codeEditor = mountCustomCode(working, { onChange: () => { refreshDataForm(); schedulePreview(); } });
+  body.querySelector('#wd-code').appendChild(codeEditor.root);
+
   // ---- save to My widgets (does not close the designer) ----
   body.querySelector('#wd-save-mine').addEventListener('click', () => saveDesignContent(workingContent()));
 
-  // initial paint
-  renderFields();
+  // initial paint — mountCustomCode already rendered the fields and fired onChange
+  // (which built the value form); paint the live preview immediately.
   renderPreview();
 
   return openModal({
@@ -269,6 +147,7 @@ export function openWidgetDesigner(widget, { onApply } = {}) {
   }).then(result => {
     clearTimeout(previewTimer);
     try { previewDispose?.(); } catch {}
+    try { codeEditor.dispose?.(); } catch {}
     dataForm?.dispose?.();
     if (result === 'apply') {
       const next = { ...(widget.content ?? {}) };

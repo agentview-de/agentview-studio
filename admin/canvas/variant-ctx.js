@@ -10,9 +10,20 @@
 // reference). It is intentionally not persisted to disk (the publish-flow
 // calls exitVariantEdit() before serializing).
 
-import { state, commit } from '../store.js';
+import { state, commit, on } from '../store.js';
 
 function deepClone(x) { return JSON.parse(JSON.stringify(x)); }
+
+// Write the currently-swapped-in variant array back into its slide.langs /
+// abVariants slot. Shared by exitVariantEdit (permanent) and the persist hook
+// below (temporary) so "capture edits into the variant slot" lives in one place.
+function captureVariantIntoSlot(slide, stash) {
+  if (stash.kind === 'lang' && slide.langs?.[stash.key]) {
+    slide.langs[stash.key].widgets = slide.widgets;
+  } else if (stash.kind === 'ab' && Array.isArray(slide.abVariants) && slide.abVariants[stash.key]) {
+    slide.abVariants[stash.key].widgets = slide.widgets;
+  }
+}
 
 export function isEditingVariant() {
   return !!state.ui._variantStash;
@@ -65,11 +76,7 @@ export function exitVariantEdit() {
   if (slide) {
     // Write the (possibly edited) variant array back into its slot, then
     // restore the original widgets array.
-    if (stash.kind === 'lang' && slide.langs?.[stash.key]) {
-      slide.langs[stash.key].widgets = slide.widgets;
-    } else if (stash.kind === 'ab' && Array.isArray(slide.abVariants) && slide.abVariants[stash.key]) {
-      slide.abVariants[stash.key].widgets = slide.widgets;
-    }
+    captureVariantIntoSlot(slide, stash);
     slide.widgets = stash.originalWidgets;
   }
   state.ui._variantStash = null;
@@ -77,3 +84,25 @@ export function exitVariantEdit() {
   state.ui.editorPreviewAbIdx = null;
   commit('variant-exit');
 }
+
+// The store's persist() serializes state.playlist directly, but while a variant
+// is being edited slide.widgets holds the VARIANT array. Rather than teach the
+// store about the swap, we hook its persist lifecycle via the store event bus:
+// on 'before-persist' flush the edits + restore the default array so the JSON has
+// the default where it belongs; on 'after-persist' swap the variant back so
+// in-memory editing continues. This keeps ALL variant-swap logic in this module
+// (previously persist() in store.js hand-rolled this same dance).
+let _resumeAfterPersist = null;
+on('before-persist', () => {
+  const stash = state.ui._variantStash;
+  if (!stash) return;
+  const slide = state.playlist?.slides?.find(s => s.id === stash.slideId);
+  if (!slide) return;
+  captureVariantIntoSlot(slide, stash);
+  const variantArr = slide.widgets;
+  slide.widgets = stash.originalWidgets;
+  _resumeAfterPersist = () => { slide.widgets = variantArr; };
+});
+on('after-persist', () => {
+  if (_resumeAfterPersist) { _resumeAfterPersist(); _resumeAfterPersist = null; }
+});

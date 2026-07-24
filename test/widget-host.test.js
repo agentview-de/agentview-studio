@@ -2,7 +2,7 @@
 // canvas and the live player now share. The plugin lookup is injected so the
 // lifecycle is exercised without a DOM or the global registry.
 import { describe, test, expect } from './runner.js';
-import { mountWidget } from '../shared/widget-host.js';
+import { mountWidget, widgetSlotZ } from '../shared/widget-host.js';
 
 describe('widget-host · mountWidget', () => {
   test('renders the plugin once with an injected (un-aborted) signal and ctx', () => {
@@ -62,5 +62,18 @@ describe('widget-host · mountWidget', () => {
     const plugin = { type: 'fake', render: (s, c, ctx) => { ctx.onError?.(); return () => {}; } };
     mountWidget({ id: 'w', type: 'fake', content: {} }, {}, {}, { onError: () => { hookCalled++; } }, () => plugin);
     expect(hookCalled).toBe(1);
+  });
+});
+
+describe('widget-host · widgetSlotZ', () => {
+  test('lifts every widget one level above the slide-bg floor (z ?? 0) + 1', () => {
+    expect(widgetSlotZ({ z: 0 })).toBe(1);
+    expect(widgetSlotZ({ z: 4 })).toBe(5);
+    expect(widgetSlotZ({ z: -1 })).toBe(0); // a negative-z widget still clears the bg
+  });
+
+  test('a missing z counts as 0 → level 1 (guards the editor↔player off-by-one)', () => {
+    expect(widgetSlotZ({})).toBe(1);
+    expect(widgetSlotZ(undefined)).toBe(1);
   });
 });

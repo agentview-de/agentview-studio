@@ -17,6 +17,20 @@
 import { get as getPlugin } from './plugins/registry.js';
 import { widgetAsSlide } from './slide-schema.js';
 
+// The stacking level for a widget's slot/frame. ONE formula for EVERY render and
+// update path in both the editor and the player. The slide-bg layer is pinned
+// far behind, so widgets start one level above z=0.
+//
+// Past bug this guards against: the editor's frame builder used `widget.z + 1`
+// while the inspector's geometry path used `widget.z`, so an edit silently
+// dropped a widget one level — creating z-index ties that made it unselectable
+// (a lower-z frame caught the click) or hid it behind an opaque neighbour. The
+// editor frame and the player slot must resolve the SAME level for identical
+// stacking; sharing this function is what keeps them literally identical.
+export function widgetSlotZ(widget) {
+  return (widget?.z ?? 0) + 1;
+}
+
 // Mount one widget into `container`. ctx carries the caller-controlled fields the
 // plugin contract defines — { mode, t?, onError? } — and mountWidget injects a
 // fresh `signal`. onError is BOTH passed to the plugin (so a plugin can trigger

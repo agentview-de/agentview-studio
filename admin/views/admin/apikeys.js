@@ -4,12 +4,11 @@
 // load + render + its actions, plus a "Widerrufene zeigen" toggle whose state
 // lives in state.admin._showRevokedKeys — that flag is UI-STATE (which rows to
 // show), NOT a Verwaltung data cache, so it stays.
-import { mountTab, table, esc, emptyState } from './shell.js';
+import { mountTab, table, esc, emptyState, unwrapList, openFormModal, revealSecretModal } from './shell.js';
 import { auth as authApi } from '../../api.js';
 import { state } from '../../store.js';
 import { t } from '../../i18n.js';
 import { toast } from '../../ui/toast.js';
-import { openModal } from '../../ui/modal.js';
 
 export function mountApiKeys(body) {
   return mountTab(body, {
@@ -29,12 +28,9 @@ export function mountApiKeys(body) {
       });
       ctx.onClick('[data-act="add"]', () => addApiKey(ctx));
     },
-    load: async () => {
-      const r = await authApi.apiKeyList();
-      // Verified server returns { keys, total, limit, offset }. Older specs
-      // documented apiKeys / items — kept as fallbacks.
-      return Array.isArray(r) ? r : (r?.keys ?? r?.apiKeys ?? r?.items ?? []);
-    },
+    // Verified server returns { keys, total, limit, offset }. Older specs
+    // documented apiKeys / items — kept as fallbacks.
+    load: async () => unwrapList(await authApi.apiKeyList(), 'keys', 'apiKeys', 'items'),
     // "Empty" here depends on the show-revoked filter, not the raw list, so it is
     // computed inside render (no spec.isEmpty).
     render: (list, ctx) => {
@@ -75,18 +71,18 @@ export function mountApiKeys(body) {
 }
 
 async function addApiKey(ctx) {
-  const box = document.createElement('div');
-  box.innerHTML = `
+  const box = await openFormModal({
+    title: t('ak.addTitle'),
+    body: `
     <div class="bb-form-group"><label>${t('ak.name')}</label><input id="ak-name" placeholder="Studio CI"></div>
     <div class="bb-form-group"><label>${t('ak.scope')}</label>
       <select id="ak-scope">
         <option value="admin">${t('ak.scopeAdmin')}</option>
         <option value="content_only">${t('ak.scopeContent')}</option>
       </select>
-    </div>`;
-  const ok = await openModal({ title: t('ak.addTitle'), body: box,
-    actions: [{ label: t('common.cancel') }, { label: t('common.create'), kind: 'primary', value: 1 }] });
-  if (!ok) return;
+    </div>`,
+  });
+  if (!box) return;
   try {
     const created = await authApi.apiKeyCreate({
       name: box.querySelector('#ak-name').value.trim() || 'Studio Key',
@@ -94,9 +90,7 @@ async function addApiKey(ctx) {
     });
     const key = created?.apiKey ?? created?.key ?? created?.plaintext;
     if (key) {
-      const d = document.createElement('div');
-      d.innerHTML = `<p>${t('wh.secretShown')}</p><pre class="avs-codeblock">${esc(key)}</pre>`;
-      await openModal({ title: t('ak.title'), body: d, actions: [{ label: t('common.close'), kind: 'primary' }] });
+      await revealSecretModal({ title: t('ak.title'), intro: `<p>${t('wh.secretShown')}</p>`, secret: key });
     }
     ctx.reload();
   } catch (e) { toast(e.message, { kind: 'error' }); }

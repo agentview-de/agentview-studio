@@ -5,6 +5,8 @@
 import { state, commit, subscribe, on } from '../store.js';
 import { get as getPlugin } from '../../shared/plugins/registry.js';
 import { buildForm } from '../ui/inspector.js';
+import { loadCollapsed, saveCollapsed } from '../ui/fold-section.js';
+import { brandKitGrid, readBrandKitGrid } from '../ui/brand-kit-form.js';
 import { isStored } from '../../shared/offline-data.js';
 import { getControl } from '../ui/field-controls/registry.js';
 import { widgetIcon } from '../../shared/data/widget-icons.js';
@@ -48,26 +50,8 @@ async function getSlotSlugs() {
 // pulls fresh values from the server.
 on('slots.changed', () => { _slotSlugCache = null; });
 
-// Inline brand-kit form helpers used by per-slide and per-playlist editors.
-function renderBrandKitForm(kit = {}) {
-  const c = kit.colors ?? {};
-  return `<div class="avs-brandkit-grid">
-    <label>${t('brandkit.bg')}     <input type="color" data-bk="bg"     value="${c.bg ?? '#0f1218'}"></label>
-    <label>${t('brandkit.fg')}     <input type="color" data-bk="fg"     value="${c.fg ?? '#f1f1f4'}"></label>
-    <label>${t('brandkit.accent')} <input type="color" data-bk="accent" value="${c.accent ?? '#8b5cf6'}"></label>
-    <label>${t('brandkit.font')}   <input type="text"  data-bk="font"   value="${kit.font ?? ''}" placeholder="Inter, sans-serif" style="grid-column:span 2;"></label>
-  </div>`;
-}
-function readBrandKitForm(box) {
-  return {
-    colors: {
-      bg: box.querySelector('[data-bk="bg"]').value,
-      fg: box.querySelector('[data-bk="fg"]').value,
-      accent: box.querySelector('[data-bk="accent"]').value,
-    },
-    font: box.querySelector('[data-bk="font"]').value.trim(),
-  };
-}
+// The brand-kit colour grid (slide / playlist / org) lives in one shared module
+// now — see admin/ui/brand-kit-form.js (brandKitGrid / readBrandKitGrid).
 
 export const THEMES = [
   'minimal-dark', 'dark-minimal', 'gradient-purple', 'gradient-blue', 'gradient-orange',
@@ -250,7 +234,7 @@ function buildSlideSettingsBody(slide) {
   // v3: per-slide brand-kit override
   box.querySelector('#sm-brandkit').addEventListener('click', async () => {
     const inner = document.createElement('div');
-    inner.innerHTML = renderBrandKitForm(slide.brandKit ?? {});
+    inner.innerHTML = brandKitGrid(slide.brandKit ?? {});
     const ok = await openModal({
       title: t('brandkit.slideTitle'), body: inner,
       actions: [
@@ -261,7 +245,7 @@ function buildSlideSettingsBody(slide) {
     });
     if (ok === 'clear') { delete slide.brandKit; commit('slide-brandkit'); }
     else if (ok === 'save') {
-      slide.brandKit = readBrandKitForm(inner);
+      slide.brandKit = readBrandKitGrid(inner);
       commit('slide-brandkit');
     }
   });
@@ -401,12 +385,7 @@ let prevForm = null;
 // blocks default to open; keys are prefixed with `_` so they can never collide
 // with a schema section key.
 function foldSection(widgetType, key, title, defaultCollapsed = false) {
-  const storeKey = `avs_section_${widgetType}_${key}`;
-  let collapsed = defaultCollapsed;
-  try {
-    const v = localStorage.getItem(storeKey);
-    if (v !== null) collapsed = v === '1';
-  } catch {}
+  const collapsed = loadCollapsed(widgetType, key, defaultCollapsed);
   const section = document.createElement('section');
   section.className = 'avs-inspector-section bb-form-section';
   if (collapsed) section.classList.add('bb-form-section-closed');
@@ -418,7 +397,7 @@ function foldSection(widgetType, key, title, defaultCollapsed = false) {
   body.className = 'bb-form-section-body';
   head.addEventListener('click', () => {
     const nowClosed = section.classList.toggle('bb-form-section-closed');
-    try { localStorage.setItem(storeKey, nowClosed ? '1' : '0'); } catch {}
+    saveCollapsed(widgetType, key, nowClosed);
   });
   section.append(head, body);
   return { section, body };
@@ -754,51 +733,34 @@ export function renderWidgetInspector(host) {
 
   // On-error fallback (live/network widgets only) — what the display shows at
   // runtime if this widget can't load its data. Player-side only by design.
-  // Foldable like the form sections above; the fold head replaces the old
-  // .avs-section-title line.
+  // Declarative now: the fallback mode is a select and the mode-specific field
+  // (image / message) is a `showIf` conditional — routed through the SAME tested
+  // buildForm engine the widget's own content uses, instead of hand-wired
+  // controls. The `section` field makes buildForm own the fold (same storage-key
+  // convention as the other sections via fold-section.js).
   if (plugin?.network) {
-    const { section: errWrap, body: errBody } = foldSection(widget.type, '_onerror', t('err.title'));
-    errBody.innerHTML = `<p class="bb-form-help">${t('err.help')}</p>`;
-    const modeGroup = document.createElement('div');
-    modeGroup.className = 'bb-form-group';
-    const modeSel = document.createElement('select');
-    [['none', 'err.none'], ['hide', 'err.hide'], ['image', 'err.image'], ['text', 'err.text']].forEach(([v, k]) => {
-      const o = document.createElement('option');
-      o.value = v; o.textContent = t(k);
-      if ((widget.onError?.mode ?? 'none') === v) o.selected = true;
-      modeSel.appendChild(o);
+    const oe = widget.onError ?? {};
+    const errForm = buildForm({
+      formKey: widget.type,
+      schema: { fields: [
+        { type: 'section', key: '_onerror', label: t('err.title'), help: t('err.help') },
+        { key: 'mode', type: 'select', label: t('err.mode'), options: [
+          { value: 'none', label: t('err.none') }, { value: 'hide', label: t('err.hide') },
+          { value: 'image', label: t('err.image') }, { value: 'text', label: t('err.text') },
+        ] },
+        { key: 'image', type: 'asset', accept: 'image/*', label: t('err.imagePick'), showIf: c => c.mode === 'image' },
+        { key: 'text', type: 'text', label: t('err.textLabel'), showIf: c => c.mode === 'text' },
+      ] },
+      value: { mode: oe.mode ?? 'none', image: oe.image ?? '', text: oe.text ?? '' },
+      onChange: v => {
+        widget.onError = v.mode === 'none'
+          ? { mode: 'none' }
+          : { mode: v.mode, ...(v.image && { image: v.image }), ...(v.text && { text: v.text }) };
+        commit('widget-onerror');
+      },
+      assetPicker: async accept => await pickAsset(accept),
     });
-    modeGroup.appendChild(modeSel);
-    const extra = document.createElement('div');
-    extra.className = 'bb-form-group';
-    const renderExtra = () => {
-      extra.replaceChildren();
-      const m = widget.onError?.mode ?? 'none';
-      if (m === 'image') {
-        const lbl = document.createElement('label'); lbl.textContent = t('err.imagePick');
-        const field = document.createElement('div'); field.className = 'bb-asset-field';
-        const inp = document.createElement('input'); inp.type = 'text'; inp.value = widget.onError?.image ?? '';
-        inp.placeholder = t('err.imagePick');
-        inp.addEventListener('input', () => { widget.onError = { ...widget.onError, image: inp.value }; commit('widget-onerror'); });
-        const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'bb-btn bb-btn-secondary'; btn.textContent = '📁';
-        btn.addEventListener('click', async () => { const url = await pickAsset('image'); if (url) { inp.value = url; widget.onError = { ...widget.onError, image: url }; commit('widget-onerror'); } });
-        field.append(inp, btn);
-        extra.append(lbl, field);
-      } else if (m === 'text') {
-        const lbl = document.createElement('label'); lbl.textContent = t('err.textLabel');
-        const inp = document.createElement('input'); inp.type = 'text'; inp.value = widget.onError?.text ?? '';
-        inp.addEventListener('input', () => { widget.onError = { ...widget.onError, text: inp.value }; commit('widget-onerror'); });
-        extra.append(lbl, inp);
-      }
-    };
-    modeSel.addEventListener('change', () => {
-      widget.onError = { ...(widget.onError || {}), mode: modeSel.value };
-      if (modeSel.value === 'none') widget.onError = { mode: 'none' };
-      renderExtra(); commit('widget-onerror');
-    });
-    renderExtra();
-    errBody.append(modeGroup, extra);
-    host.querySelector('.avs-inspector-body').appendChild(errWrap);
+    host.querySelector('.avs-inspector-body').appendChild(errForm.root);
   }
 
   // Background section (the general background tool) — repaints the bg layer
@@ -821,6 +783,15 @@ export function renderWidgetInspector(host) {
   // (continuous). Both are stored on the widget and rendered identically by the
   // live player; here the build replays on the canvas for instant feedback and
   // the loop is applied to the preview so it's WYSIWYG.
+  //
+  // Deliberately NOT routed through buildForm (unlike onError above): this editor
+  // needs an action button (▶ preview) bound to the build field, a disable — not
+  // just hide — of the timing inputs while build='none', and side-effects that
+  // depend on WHICH field changed (previewWidgetBuild on build, applyWidgetLoop
+  // on loop, a debounced commit on timing). buildForm's onChange reports the whole
+  // value with no "changed field", so forcing this in would add change-diffing +
+  // a bespoke button anyway. It stays imperative by design — same boundary as the
+  // background editor (a rich picker) and the slot-binding rows (dynamic datalists).
   const anim = widget.anim ?? {};
   const buildType = anim.type ?? 'none';
   const delayS = Math.round(((anim.delay ?? 0) / 1000) * 100) / 100;

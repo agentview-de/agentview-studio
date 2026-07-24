@@ -473,6 +473,7 @@ export const de = {
 
   // --- Fehler-Fallback ---
   'err.title': 'Bei Fehler (Live-Daten)',
+  'err.mode': 'Bei Fehler zeigen',
   'err.help': 'Was das Display zur Laufzeit zeigt, wenn dieses Widget seine Live-Daten nicht laden kann.',
   'err.none': 'Eigene Meldung des Widgets zeigen',
   'err.hide': 'Widget ausblenden',

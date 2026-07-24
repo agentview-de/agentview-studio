@@ -13,6 +13,7 @@ import * as sse from './sse.js';
 import { open as openPalette, registerCommand } from './ui/command-palette.js';
 import { bind as bindShortcut, install as installShortcuts, kbd } from './shortcuts.js';
 import { openModal } from './ui/modal.js';
+import { brandKitGrid, readBrandKitGrid } from './ui/brand-kit-form.js';
 import * as slotInspector from './ui/data-slot-inspector.js';
 import * as publicApiBrowser from './ui/public-api-browser.js';
 import * as cloudLoad from './cloud-load.js';
@@ -567,31 +568,18 @@ function doResetLivePreviews() {
 async function openPlaylistBrandKit() {
   if (!state.playlist) return;
   const kit = state.playlist.brandKit ?? {};
-  const c = kit.colors ?? {};
   // Snapshot current values so we can revert if user cancels — otherwise the
   // live preview leaves the canvas in a different state than localStorage.
   const original = JSON.parse(JSON.stringify(kit));
   const box = document.createElement('div');
   box.innerHTML = `
     <p class="bb-form-help">${t('brandkit.playlistHelp')}</p>
-    <div class="avs-brandkit-grid">
-      <label>${t('brandkit.bg')}     <span class="avs-bk-row"><input type="color" id="pbk-bg"     value="${c.bg ?? '#0f1218'}"><code id="pbk-bg-hex">${esc(c.bg ?? '#0f1218')}</code></span></label>
-      <label>${t('brandkit.fg')}     <span class="avs-bk-row"><input type="color" id="pbk-fg"     value="${c.fg ?? '#f1f1f4'}"><code id="pbk-fg-hex">${esc(c.fg ?? '#f1f1f4')}</code></span></label>
-      <label>${t('brandkit.accent')} <span class="avs-bk-row"><input type="color" id="pbk-accent" value="${c.accent ?? '#8b5cf6'}"><code id="pbk-accent-hex">${esc(c.accent ?? '#8b5cf6')}</code></span></label>
-      <label>${t('brandkit.font')}   <input type="text"  id="pbk-font"   value="${esc(kit.font ?? '')}" placeholder="Inter, sans-serif" style="grid-column:span 2;"></label>
-    </div>
+    ${brandKitGrid(kit, { prefix: 'pbk', hexLabels: true })}
     <p class="avs-muted" style="font-size:11px;margin-top:8px;">${t('brandkit.livePreview')}</p>`;
   // Live-preview wiring: every change writes through to state.playlist.brandKit
   // and re-applies the cascade. Hex labels next to color inputs reflect value.
   const apply = () => {
-    state.playlist.brandKit = {
-      colors: {
-        bg:     box.querySelector('#pbk-bg').value,
-        fg:     box.querySelector('#pbk-fg').value,
-        accent: box.querySelector('#pbk-accent').value,
-      },
-      font: box.querySelector('#pbk-font').value.trim(),
-    };
+    state.playlist.brandKit = readBrandKitGrid(box, 'pbk');
     box.querySelector('#pbk-bg-hex').textContent = state.playlist.brandKit.colors.bg;
     box.querySelector('#pbk-fg-hex').textContent = state.playlist.brandKit.colors.fg;
     box.querySelector('#pbk-accent-hex').textContent = state.playlist.brandKit.colors.accent;
