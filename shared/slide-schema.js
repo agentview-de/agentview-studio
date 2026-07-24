@@ -162,6 +162,27 @@ export function createSlide(partial = {}) {
   };
 }
 
+// Convenience factory: a Slide holding ONE full-bleed Widget of `type`. This is
+// the shape file importers and smart-split produce — a single piece of content
+// filling the slide. It lives here beside createSlide/createWidget because it is
+// pure Slide construction, and callers use it INSTEAD of the v1-era
+// `createSlide(type, { content })` form: createSlide is single-arg, so a
+// type-first call silently dropped the props and yielded an empty { widgets: [] }
+// slide. `opts.title` becomes the Slide's rail name (not a widget heading, so it
+// never paints an <h1> over media). `opts.duration` falls back to createSlide's
+// default when omitted.
+export function createSlideWithWidget(type, content = {}, opts = {}) {
+  const { title = '', duration, rect } = opts;
+  return createSlide({
+    ...(title && { name: title }),
+    duration,
+    widgets: [createWidget(type, {
+      rect: rect ?? { x: 0, y: 0, w: 100, h: 100 },
+      content: content ?? {},
+    })],
+  });
+}
+
 export function createPlaylist(name = 'My Playlist') {
   const now = new Date().toISOString();
   return {

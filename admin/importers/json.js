@@ -1,4 +1,5 @@
-import { createSlide } from '../../shared/slide-schema.js';
+import { createSlideWithWidget } from '../../shared/slide-schema.js';
+import { barChartContent, stripExt } from './_helpers.js';
 
 export const id = 'json';
 export const label = 'JSON';
@@ -27,17 +28,14 @@ export async function convert(file) {
   // Otherwise, make a live-json viewer pointing at the file URL (caller uploads).
   const data = chartDataFromJson(parsed);
   if (data) {
-    const slide = createSlide('chart', {
-      title: file.name?.replace(/\.json$/i, '') ?? 'JSON Chart',
-      duration: 12,
-      content: { kind: 'bar', source: 'inline', data, theme: 'corporate-blue' },
-    });
-    return { slides: [slide] };
+    return {
+      slides: [createSlideWithWidget('chart', barChartContent(data),
+        { title: stripExt(file.name, 'JSON Chart'), duration: 12 })],
+    };
   }
-  const slide = createSlide('live-json', {
-    title: file.name?.replace(/\.json$/i, '') ?? 'JSON',
-    duration: 12,
-    content: { url: '', refreshSec: 60, theme: 'dark-minimal' },
-  });
-  return { slides: [slide] };
+  return {
+    slides: [createSlideWithWidget('live-json',
+      { url: '', refreshSec: 60, theme: 'dark-minimal' },
+      { title: stripExt(file.name, 'JSON'), duration: 12 })],
+  };
 }

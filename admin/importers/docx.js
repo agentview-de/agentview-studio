@@ -1,4 +1,5 @@
-import { createSlide } from '../../shared/slide-schema.js';
+import { createSlideWithWidget } from '../../shared/slide-schema.js';
+import { stripExt } from './_helpers.js';
 
 export const id = 'docx';
 export const label = 'Word Document';
@@ -33,12 +34,10 @@ export async function convert(file) {
   const sections = body.split(/^(?=# )/m).filter(Boolean);
   const slides = (sections.length > 1 ? sections : [body]).map((sec, i) => {
     const m1 = sec.match(/^#\s+(.+)/);
-    const title = m1?.[1] ?? `${file.name?.replace(/\.docx$/i, '')} ${i + 1}`;
-    return createSlide('markdown', {
-      title,
-      duration: 14,
-      content: { body: sec.replace(/^#\s+.+\n*/, ''), theme: 'editorial-mono' },
-    });
+    const title = m1?.[1] ?? `${stripExt(file.name)} ${i + 1}`;
+    return createSlideWithWidget('markdown',
+      { body: sec.replace(/^#\s+.+\n*/, ''), theme: 'editorial-mono' },
+      { title, duration: 14 });
   });
   return { slides };
 }

@@ -1,4 +1,5 @@
-import { createSlide } from '../../shared/slide-schema.js';
+import { createSlideWithWidget } from '../../shared/slide-schema.js';
+import { barChartContent, labelValuePairs, stripExt } from './_helpers.js';
 
 export const id = 'csv';
 export const label = 'CSV';
@@ -29,10 +30,9 @@ export function parseCsv(text) {
 export async function convert(file) {
   const text = await file.text();
   const data = parseCsv(text);
-  const slide = createSlide('chart', {
-    title: file.name?.replace(/\.csv$/i, '') ?? 'Chart',
-    duration: 12,
-    content: { kind: 'bar', source: 'inline', data: data.labels.map((l, i) => ({ label: l, value: data.values[i] ?? 0 })), theme: 'corporate-blue' },
-  });
-  return { slides: [slide] };
+  return {
+    slides: [createSlideWithWidget('chart',
+      barChartContent(labelValuePairs(data.labels, data.values)),
+      { title: stripExt(file.name, 'Chart'), duration: 12 })],
+  };
 }

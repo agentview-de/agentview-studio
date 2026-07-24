@@ -1,39 +1,26 @@
-import { createSlide } from '../../shared/slide-schema.js';
+import { createSlideWithWidget } from '../../shared/slide-schema.js';
 
 export const id = 'url-paste';
 export const label = 'URL';
 
+// Every branch produces the same shape — one full-bleed widget slide — so the
+// per-type construction is a single local helper. `title` becomes the slide's
+// rail name (media renders clean, no heading overlay).
+const one = (type, content, title, duration) =>
+  ({ slides: [createSlideWithWidget(type, content, { title, duration })] });
+
 export async function convert(url, _ctx) {
   const u = (url ?? '').trim();
   if (!u) return null;
-  // YouTube
-  if (/youtu\.?be/.test(u)) {
-    return { slides: [createSlide('youtube', { title: 'Video', duration: 30, content: { url: u, provider: 'youtube', muted: true, loop: true } })] };
-  }
-  if (/vimeo\.com/.test(u)) {
-    return { slides: [createSlide('youtube', { title: 'Video', duration: 30, content: { url: u, provider: 'vimeo', muted: true, loop: true } })] };
-  }
-  if (/\.pdf(\?|$)/i.test(u)) {
-    return { slides: [createSlide('pdf', { title: 'PDF', duration: 18, content: { url: u, startPage: 1, endPage: 0, pageSec: 6 } })] };
-  }
-  if (/\.(png|jpe?g|webp|avif|gif)(\?|$)/i.test(u)) {
-    return { slides: [createSlide('image', { title: 'Image', duration: 8, content: { url: u, fit: 'cover' } })] };
-  }
-  if (/\.(mp4|webm|m4v|mov)(\?|$)/i.test(u)) {
-    return { slides: [createSlide('video', { title: 'Video', duration: 30, content: { url: u, loop: true, autoDuration: true, muted: true } })] };
-  }
-  if (/\.(m3u8)(\?|$)/i.test(u)) {
-    return { slides: [createSlide('stream-cam', { title: 'Stream', duration: 60, content: { url: u, kind: 'hls', muted: true } })] };
-  }
-  if (/\.(rss|atom|xml)(\?|$)/i.test(u) || /\brss\b|\bfeed\b/.test(u)) {
-    return { slides: [createSlide('rss', { title: 'RSS', duration: 14, content: { url: u, maxItems: 5, theme: 'gradient-blue' } })] };
-  }
-  if (/\.ics(\?|$)/i.test(u)) {
-    return { slides: [createSlide('iframe', { title: 'Calendar', duration: 14, content: { url: u, sandbox: true } })] };
-  }
-  if (/\.(json)(\?|$)/i.test(u)) {
-    return { slides: [createSlide('live-json', { title: 'Live JSON', duration: 12, content: { url: u, refreshSec: 30, theme: 'dark-minimal' } })] };
-  }
-  // Fallback: iframe
-  return { slides: [createSlide('iframe', { title: u.replace(/^https?:\/\//, ''), duration: 20, content: { url: u, sandbox: true } })] };
+  if (/youtu\.?be/.test(u))  return one('youtube', { url: u, provider: 'youtube', muted: true, loop: true }, 'Video', 30);
+  if (/vimeo\.com/.test(u))  return one('youtube', { url: u, provider: 'vimeo', muted: true, loop: true }, 'Video', 30);
+  if (/\.pdf(\?|$)/i.test(u)) return one('pdf', { url: u, startPage: 1, endPage: 0, pageSec: 6 }, 'PDF', 18);
+  if (/\.(png|jpe?g|webp|avif|gif)(\?|$)/i.test(u)) return one('image', { url: u, fit: 'cover' }, 'Image', 8);
+  if (/\.(mp4|webm|m4v|mov)(\?|$)/i.test(u)) return one('video', { url: u, loop: true, autoDuration: true, muted: true }, 'Video', 30);
+  if (/\.(m3u8)(\?|$)/i.test(u)) return one('stream-cam', { url: u, kind: 'hls', muted: true }, 'Stream', 60);
+  if (/\.(rss|atom|xml)(\?|$)/i.test(u) || /\brss\b|\bfeed\b/.test(u)) return one('rss', { url: u, maxItems: 5, theme: 'gradient-blue' }, 'RSS', 14);
+  if (/\.ics(\?|$)/i.test(u)) return one('iframe', { url: u, sandbox: true }, 'Calendar', 14);
+  if (/\.(json)(\?|$)/i.test(u)) return one('live-json', { url: u, refreshSec: 30, theme: 'dark-minimal' }, 'Live JSON', 12);
+  // Fallback: sandboxed iframe of whatever was pasted.
+  return one('iframe', { url: u, sandbox: true }, u.replace(/^https?:\/\//, ''), 20);
 }

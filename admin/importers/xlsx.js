@@ -1,4 +1,5 @@
-import { createSlide } from '../../shared/slide-schema.js';
+import { createSlideWithWidget } from '../../shared/slide-schema.js';
+import { barChartContent, labelValuePairs } from './_helpers.js';
 
 export const id = 'xlsx';
 export const label = 'Excel Spreadsheet';
@@ -45,17 +46,15 @@ export async function convert(file) {
       if (Number.isFinite(v)) values.push(v);
     }
     if (values.length === labels.length && values.length > 0) {
-      slides.push(createSlide('chart', {
-        title: name, duration: 12,
-        content: { kind: 'bar', source: 'inline', data: labels.map((l, i) => ({ label: l, value: values[i] ?? 0 })), theme: 'corporate-blue' },
-      }));
+      slides.push(createSlideWithWidget('chart',
+        barChartContent(labelValuePairs(labels, values)),
+        { title: name, duration: 12 }));
     } else {
       // Fall back to a markdown rendering of the table
       const md = data.map(r => '| ' + (r ?? []).map(String).join(' | ') + ' |').join('\n');
-      slides.push(createSlide('markdown', {
-        title: name, duration: 14,
-        content: { body: md, theme: 'editorial-mono' },
-      }));
+      slides.push(createSlideWithWidget('markdown',
+        { body: md, theme: 'editorial-mono' },
+        { title: name, duration: 14 }));
     }
   }
   return { slides };
