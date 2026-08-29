@@ -146,6 +146,20 @@ for (const [key, sites] of used) {
   else if (!inDe) errors.push(`missing from de: ${key}   ${[...sites][0]}`);
 }
 
+// A key defined TWICE. The imported object cannot show this — the parser keeps
+// the last one and the earlier definition is simply gone, so a duplicate
+// silently REPLACES a string that something else is still relying on. It has to
+// be read off the source text, and it is worth reading: the mistake looks like
+// nothing at all in a diff.
+for (const [lang, file] of [['en', 'admin/locales/en.js'], ['de', 'admin/locales/de.js']]) {
+  const src = readFileSync(join(ROOT, file), 'utf8');
+  const seen = new Set();
+  for (const m of src.matchAll(/'([a-zA-Z0-9_.]+)'\s*:/g)) {
+    if (seen.has(m[1])) errors.push(`defined twice in ${lang}: ${m[1]}`);
+    seen.add(m[1]);
+  }
+}
+
 for (const key of Object.keys(en)) {
   if (!(key in de)) { errors.push(`in en but not de: ${key}`); continue; }
   const a = holes(en[key]), b = holes(de[key]);

@@ -165,12 +165,18 @@ try {
 
       const url = `http://localhost:${PORT}${page.path}`;
       await tab.goto(url, { waitUntil: 'load' });
+      const startedAt = Date.now();
 
       let results;
       try {
         results = await tab.waitForFunction(
           () => window.__TEST_RESULTS__ || null,
-          { timeout: 20000 },
+          // 20s was chosen when this page ran a few hundred tests; it now runs
+          // fifteen hundred and has been the limiting factor three rounds
+          // running — and it fails by reporting NOTHING, so the cost of being
+          // close to it is invisible. The duration is printed below so growth
+          // stays visible instead of surprising the next person.
+          { timeout: 60000 },
         ).then(h => h.jsonValue());
       } catch {
         hadError = true;
@@ -189,8 +195,9 @@ try {
       totalFail += results.fail;
       const failures = results.results.filter(r => !r.ok);
       const mark = results.fail === 0 ? '✓' : '✗';
+      const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
       console.log(`${mark} ${page.name}: ${results.pass}/${results.total} passed` +
-        (results.fail ? `, ${results.fail} FAILED` : ''));
+        (results.fail ? `, ${results.fail} FAILED` : '') + `  (${secs}s)`);
       for (const f of failures) {
         console.error(`    ✗ ${f.suite} › ${f.name}`);
         // …and WHY. The runner records the assertion message and this dropped

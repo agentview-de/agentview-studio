@@ -33,7 +33,11 @@ function makeSlides(n) {
 }
 
 /** Mount a rail over a throwaway playlist and put the store back afterwards. */
-function withRail(n, fn) {
+// async, and it AWAITS. A synchronous try/finally around an async callback
+// tears the rail down before the body has run, so the assertions look at a
+// removed host and restored state — they pass, and they mean nothing. Sync
+// callbacks are unaffected.
+async function withRail(n, fn) {
   const savedPlaylist = state.playlist;
   const savedSlide = state.ui.activeSlideId;
   const host = document.createElement('div');
@@ -43,7 +47,7 @@ function withRail(n, fn) {
     state.playlist = { schemaVersion: 3, id: 'rail-test', name: 'Rail', slides: makeSlides(n), defaults: { theme: 'minimal-dark' } };
     state.ui.activeSlideId = state.playlist.slides[0].id;
     mountSlideRail(host);
-    fn({
+    await fn({
       host,
       cards: () => [...host.querySelectorAll('.avs-slide-card')],
       names: () => [...host.querySelectorAll('.avs-slide-name')].map(e => e.textContent),
@@ -56,39 +60,39 @@ function withRail(n, fn) {
 }
 
 describe('slide rail · shows the playlist', () => {
-  test('one card per slide, numbered and named', () => {
-    withRail(4, ({ cards, names }) => {
+  test('one card per slide, numbered and named', async () => {
+    await withRail(4, ({ cards, names }) => {
       expect(cards()).toHaveLength(4);
       expect(names()).toEqual(['Slide 0', 'Slide 1', 'Slide 2', 'Slide 3']);
       expect([...cards()[2].querySelectorAll('.avs-slide-index')][0].textContent).toBe('3');
     });
   });
 
-  test('renaming a slide updates its card', () => {
-    withRail(4, ({ names }) => {
+  test('renaming a slide updates its card', async () => {
+    await withRail(4, ({ names }) => {
       state.playlist.slides[1].name = 'Angebot der Woche';
       expect(names()[1]).toBe('Angebot der Woche');
     });
   });
 
-  test('the thumbnail follows the widgets', () => {
-    withRail(3, ({ cards }) => {
+  test('the thumbnail follows the widgets', async () => {
+    await withRail(3, ({ cards }) => {
       expect(cards()[1].querySelectorAll('.avs-thumb-block')).toHaveLength(2);
       state.playlist.slides[1].widgets = state.playlist.slides[1].widgets.slice(0, 1);
       expect(cards()[1].querySelectorAll('.avs-thumb-block')).toHaveLength(1);
     });
   });
 
-  test('reordering the array reorders and renumbers the cards', () => {
-    withRail(3, ({ names, cards }) => {
+  test('reordering the array reorders and renumbers the cards', async () => {
+    await withRail(3, ({ names, cards }) => {
       state.playlist.slides = [...state.playlist.slides].reverse();
       expect(names()).toEqual(['Slide 2', 'Slide 1', 'Slide 0']);
       expect([...cards()].map(c => c.querySelector('.avs-slide-index').textContent)).toEqual(['1', '2', '3']);
     });
   });
 
-  test('adding and removing slides is reflected', () => {
-    withRail(3, ({ cards }) => {
+  test('adding and removing slides is reflected', async () => {
+    await withRail(3, ({ cards }) => {
       state.playlist.slides.push({ id: 'rail-extra', name: 'Neu', duration: 8, widgets: [] });
       expect(cards()).toHaveLength(4);
       state.playlist.slides = state.playlist.slides.filter(s => s.id !== 'rail-s0');
@@ -96,8 +100,8 @@ describe('slide rail · shows the playlist', () => {
     });
   });
 
-  test('selection marks exactly one card, for the eye and for a screen reader', () => {
-    withRail(4, ({ cards }) => {
+  test('selection marks exactly one card, for the eye and for a screen reader', async () => {
+    await withRail(4, ({ cards }) => {
       state.ui.activeSlideId = 'rail-s2';
       const cs = cards();
       expect(cs.filter(c => c.classList.contains('avs-on'))).toHaveLength(1);
@@ -112,12 +116,12 @@ describe('slide rail · shows the playlist', () => {
 describe('slide rail · the arrows walk it', () => {
   const key = (el, k, opts = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, ...opts }));
 
-  test('REGRESSION: arrow keys keep moving, they do not stick on the first card', () => {
+  test('REGRESSION: arrow keys keep moving, they do not stick on the first card', async () => {
     // The targeted-update rewrite nearly broke this: the full rebuild used to
     // move focus as a side effect, so once refresh() stopped running, the
     // second arrow keypress was still computed from the card the user had
     // visually left. One step, then stuck.
-    withRail(5, ({ cards }) => {
+    await withRail(5, ({ cards }) => {
       cards()[0].focus();
       const walked = [];
       for (let i = 0; i < 4; i++) {
@@ -130,8 +134,8 @@ describe('slide rail · the arrows walk it', () => {
     });
   });
 
-  test('Home and End jump to the ends', () => {
-    withRail(5, ({ cards }) => {
+  test('Home and End jump to the ends', async () => {
+    await withRail(5, ({ cards }) => {
       cards()[2].focus();
       key(document.activeElement, 'End');
       expect(document.activeElement.dataset.id).toBe('rail-s4');
@@ -140,8 +144,8 @@ describe('slide rail · the arrows walk it', () => {
     });
   });
 
-  test('the roving tabindex follows the focus, so the rail stays ONE tab stop', () => {
-    withRail(4, ({ cards }) => {
+  test('the roving tabindex follows the focus, so the rail stays ONE tab stop', async () => {
+    await withRail(4, ({ cards }) => {
       cards()[0].focus();
       key(document.activeElement, 'ArrowDown');
       key(document.activeElement, 'ArrowDown');
@@ -149,8 +153,8 @@ describe('slide rail · the arrows walk it', () => {
     });
   });
 
-  test('alt+arrow moves the SLIDE, and the focus rides along with it', () => {
-    withRail(4, ({ cards, names }) => {
+  test('alt+arrow moves the SLIDE, and the focus rides along with it', async () => {
+    await withRail(4, ({ cards, names }) => {
       cards()[1].focus();
       key(document.activeElement, 'ArrowDown', { altKey: true });
       expect(names()).toEqual(['Slide 0', 'Slide 2', 'Slide 1', 'Slide 3']);
@@ -158,8 +162,8 @@ describe('slide rail · the arrows walk it', () => {
     });
   });
 
-  test('a selection change from ELSEWHERE does not steal the focus', () => {
-    withRail(4, ({ host }) => {
+  test('a selection change from ELSEWHERE does not steal the focus', async () => {
+    await withRail(4, ({ host }) => {
       const outside = document.createElement('button');
       document.body.appendChild(outside);
       outside.focus();
@@ -181,17 +185,17 @@ describe('slide rail · finding a slide in a long playlist', () => {
   const shown = host => [...host.querySelectorAll('.avs-slide-card')].filter(c => !c.hidden)
     .map(c => c.querySelector('.avs-slide-name').textContent);
 
-  test('the box appears only once the list is long enough to get lost in', () => {
-    withRail(5, ({ host }) => {
+  test('the box appears only once the list is long enough to get lost in', async () => {
+    await withRail(5, ({ host }) => {
       expect(host.querySelector('#avs-rail-filterbar').hidden).toBeTruthy();
     });
-    withRail(14, ({ host }) => {
+    await withRail(14, ({ host }) => {
       expect(host.querySelector('#avs-rail-filterbar').hidden).toBeFalsy();
     });
   });
 
-  test('filters by name and keeps the real slide numbers', () => {
-    withRail(14, ({ host }) => {
+  test('filters by name and keeps the real slide numbers', async () => {
+    await withRail(14, ({ host }) => {
       state.playlist.slides[3].name = 'Angebot der Woche';
       state.playlist.slides[9].name = 'Angebot Montag';
       type(host, 'angebot');
@@ -204,16 +208,16 @@ describe('slide rail · finding a slide in a long playlist', () => {
     });
   });
 
-  test('a slide is findable by the widgets on it, not just its name', () => {
-    withRail(14, ({ host }) => {
+  test('a slide is findable by the widgets on it, not just its name', async () => {
+    await withRail(14, ({ host }) => {
       state.playlist.slides[2].widgets = [{ id: 'w-qr', type: 'qr-code', z: 1, rect: { x: 0, y: 0, w: 10, h: 10 }, content: {} }];
       type(host, 'qr');
       expect(shown(host)).toEqual(['Slide 2']);
     });
   });
 
-  test('the count reports the hit rate, and says so when there is none', () => {
-    withRail(14, ({ host }) => {
+  test('the count reports the hit rate, and says so when there is none', async () => {
+    await withRail(14, ({ host }) => {
       type(host, 'Slide 1');
       // Locale-independent: the runner may be in either language.
       const text = host.querySelector('#avs-rail-count').textContent;
@@ -225,8 +229,8 @@ describe('slide rail · finding a slide in a long playlist', () => {
     });
   });
 
-  test('reordering is off while filtering — a drop between visible cards has no meaning', () => {
-    withRail(14, ({ host, cards }) => {
+  test('reordering is off while filtering — a drop between visible cards has no meaning', async () => {
+    await withRail(14, ({ host, cards }) => {
       type(host, 'Slide 1');
       expect(cards().every(c => c.draggable === false)).toBeTruthy();
       // …and alt+arrow, which would move a slide past ones you cannot see.
@@ -240,8 +244,8 @@ describe('slide rail · finding a slide in a long playlist', () => {
     });
   });
 
-  test('the arrows walk only what is visible', () => {
-    withRail(14, ({ host, cards }) => {
+  test('the arrows walk only what is visible', async () => {
+    await withRail(14, ({ host, cards }) => {
       state.playlist.slides[2].name = 'Treffer A';
       state.playlist.slides[8].name = 'Treffer B';
       type(host, 'treffer');
@@ -252,8 +256,8 @@ describe('slide rail · finding a slide in a long playlist', () => {
     });
   });
 
-  test('Escape clears the field instead of leaving a filter behind', () => {
-    withRail(14, ({ host, cards }) => {
+  test('Escape clears the field instead of leaving a filter behind', async () => {
+    await withRail(14, ({ host, cards }) => {
       const input = type(host, 'Slide 1');
       expect(cards().filter(c => !c.hidden).length < 14).toBeTruthy();
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -264,8 +268,8 @@ describe('slide rail · finding a slide in a long playlist', () => {
 });
 
 describe('slide rail · redraws only what changed', () => {
-  test('REGRESSION: editing one slide leaves the other cards untouched', () => {
-    withRail(6, ({ cards }) => {
+  test('REGRESSION: editing one slide leaves the other cards untouched', async () => {
+    await withRail(6, ({ cards }) => {
       const before = cards();
       state.playlist.slides[3].name = 'Nur diese';
       const after = cards();
@@ -276,8 +280,8 @@ describe('slide rail · redraws only what changed', () => {
     });
   });
 
-  test('REGRESSION: a widget edit deep inside a slide redraws one card', () => {
-    withRail(6, ({ cards }) => {
+  test('REGRESSION: a widget edit deep inside a slide redraws one card', async () => {
+    await withRail(6, ({ cards }) => {
       const before = cards();
       state.playlist.slides[4].widgets[0].rect.x = 42;
       const after = cards();
@@ -287,8 +291,8 @@ describe('slide rail · redraws only what changed', () => {
     });
   });
 
-  test('REGRESSION: selecting another slide redraws no card at all', () => {
-    withRail(6, ({ cards }) => {
+  test('REGRESSION: selecting another slide redraws no card at all', async () => {
+    await withRail(6, ({ cards }) => {
       const before = cards();
       state.ui.activeSlideId = 'rail-s4';
       const after = cards();
@@ -297,15 +301,87 @@ describe('slide rail · redraws only what changed', () => {
     });
   });
 
-  test('a change to a playlist-wide default still redraws everything', () => {
+  test('a change to a playlist-wide default still redraws everything', async () => {
     // Every thumbnail reads the default theme, so this one has to be broad.
-    withRail(4, ({ cards }) => {
+    await withRail(4, ({ cards }) => {
       const before = cards();
       state.playlist.defaults.theme = 'gradient-purple';
       const after = cards();
       expect(after[0] === before[0]).toBeFalsy();
       expect(after[3] === before[3]).toBeFalsy();
       expect(after[0].querySelector('.avs-rail-thumb').className).toContain('bb-theme-gradient-purple');
+    });
+  });
+});
+
+// Moving a slide with the keyboard said nothing at all.
+//
+// alt+arrow reorders, and the card keeps its name AND its focus — so from a
+// screen reader's side of the glass, absolutely nothing happened. The
+// thumbnails swapping places is the whole feedback, and it is the one signal a
+// reader does not get. Refusing is the same problem: with a filter active the
+// key does nothing, and nothing said why.
+describe('slide rail · moving a slide says where it went', () => {
+  // The live regions live in the shared toast host; read them there.
+  const spoken = () => [...document.querySelectorAll('.bb-toast-host [aria-live]')]
+    .map(r => r.textContent.trim()).filter(Boolean).join(' | ');
+  const settle = () => new Promise(r => setTimeout(r, 60));
+  const altKey = (card, key) => card.dispatchEvent(
+    new KeyboardEvent('keydown', { key, altKey: true, bubbles: true }));
+
+  test('REGRESSION: the move is announced, with the new position', async () => {
+    await withRail(4, async ({ cards, names }) => {
+      const before = names();
+      altKey(cards()[0], 'ArrowDown');
+      await settle();
+      // It really moved…
+      expect(names()[1]).toBe(before[0]);
+      // …and it said so, naming where it landed.
+      const said = spoken();
+      expect(said.length > 0).toBeTruthy();
+      expect(said).toContain('2');
+    });
+  });
+
+  test('REGRESSION: refusing at the end of the list is not silence', async () => {
+    await withRail(3, async ({ cards, names }) => {
+      const before = names();
+      altKey(cards()[0], 'ArrowUp');       // already first
+      await settle();
+      expect(names()).toEqual(before);      // nothing moved
+      expect(spoken().length > 0).toBeTruthy();
+    });
+  });
+
+  test('REGRESSION: refusing because a filter is on is not silence either', async () => {
+    await withRail(12, async ({ host, cards, names }) => {
+      const box = host.querySelector('.avs-rail-filter input, input.avs-rail-filter, input');
+      box.value = 'Slide 1';
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+      await settle();
+      const before = names();
+      const visible = cards().find(c => !c.hidden);
+      altKey(visible, 'ArrowDown');
+      await settle();
+      expect(names()).toEqual(before);      // reordering stays off under a filter
+      expect(spoken().length > 0).toBeTruthy();
+      // The filter is MODULE state, not fixture state: leaving it set made the
+      // next test's arrows walk a filtered list and go nowhere.
+      box.value = '';
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+      await settle();
+    });
+  });
+
+  test('plain arrows still just move the selection, quietly', async () => {
+    await withRail(4, async ({ cards, names }) => {
+      const before = names();
+      cards()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      await settle();
+      expect(names()).toEqual(before);
+      // The card itself takes focus, which is what a reader announces — an
+      // extra live-region message on every arrow press would be chatter.
+      expect(state.ui.activeSlideId).toBe(state.playlist.slides[1].id);
     });
   });
 });

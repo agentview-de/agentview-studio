@@ -43,10 +43,27 @@ export function mount() {
   document.body.appendChild(_host);
 }
 
-// Announce `text` in the region that matches how urgent it is. Cleared first:
-// two identical messages in a row are two events, and a region whose text did
-// not change announces nothing.
-function announce(text, kind) {
+/**
+ * Announce `text` in the region that matches how urgent it is. Cleared first:
+ * two identical messages in a row are two events, and a region whose text did
+ * not change announces nothing.
+ *
+ * Exported because not every announcement wants a toast behind it. The slide
+ * rail moves a slide on alt+arrow and said NOTHING — the card keeps its name
+ * and its focus, so a screen reader had no way to tell that anything had
+ * happened, let alone where the slide had gone. A visible toast per keypress
+ * would be noise for everyone else; this is the half that belongs to the
+ * reader who cannot see the thumbnails move.
+ *
+ * @param {string} text
+ * @param {'info'|'success'|'warn'|'error'} [kind] 'warn'/'error' interrupt.
+ */
+export function announce(text, kind) {
+  // mount() first, exactly as toast() does. The regions are created lazily, so
+  // an announcement made before the first toast of the session used to return
+  // here and say nothing — which is the one failure mode this function exists
+  // to prevent.
+  mount();
   const region = (kind === 'error' || kind === 'warn') ? _assertive : _polite;
   if (!region) return;
   region.textContent = '';

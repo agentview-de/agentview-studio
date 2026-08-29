@@ -13,6 +13,7 @@ import { uiIconSvg } from '../../shared/data/ui-icons.js';
 import { widgetIcon } from '../../shared/data/widget-icons.js';
 import { escapeHtml } from '../../shared/utils/escape.js';
 import { walkAllWidgets } from '../../shared/slide-schema.js';
+import { announce } from '../ui/toast.js';
 
 // Below this many slides a search box is clutter; above it, scrolling a flat
 // list is the only way to find anything. The rail grows the affordance when it
@@ -242,15 +243,23 @@ function onCardKey(e, id) {
 
   if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
     // Reordering a filtered list has no defined meaning: "one down" from a
-    // visible card lands on a slide that is not on screen.
-    if (_filter) return;
+    // visible card lands on a slide that is not on screen. Refusing silently
+    // is its own bug — the key does nothing and nothing says why.
+    if (_filter) { e.preventDefault(); announce(t('rail.moveFiltered'), 'warn'); return; }
     const to = ix + (e.key === 'ArrowDown' ? 1 : -1);
-    if (to < 0 || to >= slides.length) return;
     e.preventDefault();
+    if (to < 0 || to >= slides.length) { announce(t('rail.moveEdge'), 'warn'); return; }
     const next = [...all];
     next.splice(to, 0, next.splice(ix, 1)[0]);
     state.playlist.slides = next;
     commit('reorder-slides');
+    // The card keeps its name and its focus, so nothing about the move reaches
+    // a screen reader on its own. Say where it landed.
+    announce(t('rail.moved', {
+      name: slides[ix].name || t('rail.untitled'),
+      pos: to + 1,
+      total: slides.length,
+    }));
     return;
   }
 
