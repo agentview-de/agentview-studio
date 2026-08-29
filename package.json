@@ -1,6 +1,6 @@
 {
   "name": "agentview-studio",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Visual editor + player for agentView digital signage. Zero-runtime-dependency vanilla ES modules — this manifest exists ONLY for dev tooling (lint + tests), never for shipping code.",
   "type": "module",
   "private": true,
