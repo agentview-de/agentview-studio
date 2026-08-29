@@ -59,6 +59,10 @@ const _state = {
     // reads this — see persist().
     saveError: null,
     publishingTo: null,
+    // { mode, displayIds, groupId, at } — set by publish-flow, read by the
+    // Republish button. It was written and subscribed to without ever being
+    // declared here, which made the shape above a half-truth.
+    lastPublish: null,
     eventsSeen: 0,
   },
 };
@@ -67,9 +71,24 @@ const _subs = new Map(); // path-prefix string → Set<fn>
 const _history = createUndoStack({ limit: 50 });
 let _suspended = false;
 
+// Does path `a` cover path `b`? Same path, or `b` sitting inside `a`. The
+// `+ '.'` matters: without it `ui.display` would match `ui.displayFilter`,
+// two unrelated fields that merely share a spelling.
+const covers = (a, b) => b === a || b.startsWith(a + '.');
+
+// A subscriber hears a change at its own path, BELOW it (a nested field moved)
+// and ABOVE it (a whole subtree was replaced).
+//
+// The last one was missing, and it is the one that matters most: `notify` only
+// ever walked downward, so a subscriber on `playlist.brandKit` heard every
+// colour edit and MISSED the moment the entire playlist was swapped out. That
+// is what opening a playlist from the cloud, importing a file, restoring a
+// version and every undo/redo all do — they assign the slice wholesale and
+// notify the coarse path. The brand-kit cascade never re-ran: the canvas kept
+// the PREVIOUS playlist's colours, and an undone colour stayed on screen.
 function notify(path) {
   for (const [prefix, fns] of _subs.entries()) {
-    if (prefix === '*' || path.startsWith(prefix)) {
+    if (prefix === '*' || covers(prefix, path) || covers(path, prefix)) {
       for (const fn of fns) {
         try { fn(path); } catch (e) { console.warn('subscriber error', e); }
       }

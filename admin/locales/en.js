@@ -662,6 +662,8 @@ export const en = {
   // main.js — top-bar tooltips + variant banner
   'pub.republish': 'Re-publish (same target)',
   'pub.noLastTarget': 'Nothing published yet — pick a target first.',
+  'variant.editingLang': 'Language variant: {name}',
+  'variant.editingAb': 'A/B variant: {label}',
   'variant.backToDefault': 'Back to default variant',
   // SSE slot toasts
   'slot.toastChanged': '🗄️ Slot {slug} {verb}',

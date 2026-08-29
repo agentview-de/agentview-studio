@@ -8,6 +8,30 @@
 // a DOM element.
 
 import { resolveBrandKit } from './slide-schema.js';
+import { canvasColor } from './css-color.js';
+
+// A brand-kit value is not trusted input.
+//
+// It arrives from an imported playlist file or from the organisation, and it
+// goes straight into a CSS custom property that the themes substitute into
+// `background`, `color` and `font`. A custom property accepts almost any token
+// sequence, so a "colour" of `url(https://example.org/x.png)` was stored,
+// substituted into `background: var(--bb-st-bg)` — and FETCHED. Every display
+// showing that playlist would call that URL, on every slide, for as long as it
+// ran: a beacon with the screen's IP and user agent, entirely outside the
+// editor's privacy gate, which knows about widgets and not about brand kits.
+//
+// canvasColor() asks the browser's own parser what a colour is; its own doc
+// comment already names "brand kit" as a source it is meant for. A value it
+// rejects is simply not set, so the theme's own colour stands — which is what
+// an unreadable brand colour should look like.
+const safeColor = (v) => canvasColor(v, '');
+
+// A font stack is names, commas and quotes. Anything with a bracket in it is
+// not a font stack: url(), var() and every other functional notation are how a
+// value stops being a value and starts being a request.
+const FONT_STACK = /^[\w\s.,'"-]{1,200}$/;
+const safeFont = (v) => (typeof v === 'string' && FONT_STACK.test(v.trim()) ? v.trim() : '');
 
 const VAR_MAP = {
   'colors.bg':     '--bb-st-bg',
@@ -25,13 +49,15 @@ export function applyBrandKit(el, kit) {
   if (!kit) return;
 
   if (kit.colors) {
-    if (kit.colors.bg)     el.style.setProperty('--bb-st-bg', kit.colors.bg);
-    if (kit.colors.fg)     el.style.setProperty('--bb-st-fg', kit.colors.fg);
-    if (kit.colors.accent) el.style.setProperty('--bb-st-accent', kit.colors.accent);
+    const bg = safeColor(kit.colors.bg);
+    const fg = safeColor(kit.colors.fg);
+    const accent = safeColor(kit.colors.accent);
+    if (bg)     el.style.setProperty('--bb-st-bg', bg);
+    if (fg)     el.style.setProperty('--bb-st-fg', fg);
+    if (accent) el.style.setProperty('--bb-st-accent', accent);
   }
-  if (kit.font) {
-    el.style.setProperty('--bb-st-font', kit.font);
-  }
+  const font = safeFont(kit.font);
+  if (font) el.style.setProperty('--bb-st-font', font);
 }
 
 // Resolve cascade and apply in one shot. Convenience for the editor preview
