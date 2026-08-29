@@ -147,7 +147,15 @@ describe('publish · a playlist made in the editor plays on a display', () => {
         id: `j-s${i}`, name: t, duration: 2,
         widgets: [{
           id: `j-w${i}`, type: t, z: 1, rect: { x: 6, y: 10, w: 88, h: 76 },
-          content: { ...getPlugin(t).defaults(), ...(t === 'text' ? { body: 'JOURNEY-MARKER' } : {}) },
+          content: {
+            ...getPlugin(t).defaults(),
+            ...(t === 'text' ? { body: 'JOURNEY-MARKER' } : {}),
+            // An explicit audience language, because that is the thing under
+            // test. Left empty, the widget follows the DEVICE — so "6,50" only
+            // appeared on a German machine, and the assertion below proved the
+            // developer's OS rather than the locale chain. See the runner.
+            ...(t === 'menu' ? { locale: 'de' } : {}),
+          },
         }],
       })),
     };
@@ -179,9 +187,11 @@ describe('publish · a playlist made in the editor plays on a display', () => {
     expect(seen.length >= 2).toBeTruthy();
     // The text widget's own words, straight from the editor's content.
     expect(seen.join(' | ')).toContain('JOURNEY-MARKER');
-    // …and the menu widget's price, written the way the audience reads it —
-    // the whole locale chain surviving a trip through the bundler.
+    // …and the menu widget's price, written the way the AUDIENCE reads it: the
+    // widget's `locale: 'de'` survived the editor, the bundler and the player,
+    // and beat the device's own en-US. A comma here is the whole chain.
     expect(seen.join(' | ')).toContain('6,50');
+    expect(seen.join(' | ')).notToContain('6.50');
   });
 });
 

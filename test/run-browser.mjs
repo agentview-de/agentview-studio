@@ -151,13 +151,26 @@ try {
   const guards = await checkServerGuards(`http://localhost:${PORT}`);
   totalPass += guards.pass;
   totalFail += guards.fail;
+  // Pin the machine OUT of the run.
+  //
+  // `newContext()` with no locale follows the developer's OS. A publish
+  // end-to-end test asserted a price of "6,50" from a fixture that never set a
+  // language — green on a German laptop, red on the English CI runner, and red
+  // there since v1.5.0 while the local run reported every suite passing. A test
+  // that only holds on one machine tests the machine.
+  //
+  // en-US and UTC because that is what CI already runs: a green run here now
+  // means a green run there. A test that needs another language or another zone
+  // says so in its own fixture, which is the only place it can be read.
+  const CONTEXT = { locale: 'en-US', timezoneId: 'UTC' };
+
   // --expose-gc gives the page a real window.gc(), so a retention test can prove
   // that a torn-down slide is actually COLLECTED rather than merely dereferenced
   // (test/current-slide.test.js). Nothing else in the suite depends on it.
   const browser = await chromium.launch({ args: ['--js-flags=--expose-gc'] });
   try {
     for (const page of PAGES) {
-      const ctx = await browser.newContext();
+      const ctx = await browser.newContext(CONTEXT);
       const tab = await ctx.newPage();
       const consoleErrors = [];
       tab.on('pageerror', e => consoleErrors.push(String(e?.stack || e?.message || e)));
