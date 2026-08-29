@@ -9,14 +9,23 @@ import { clampRect } from './widget-frame.js';
 export const SNAP = 1.5;                 // snap threshold, percent of slide
 export const ZOOM_MIN = 0.1, ZOOM_MAX = 4;
 
+// A zoom that is not a number is not a zoom. NaN used to pass through
+// Math.min/Math.max untouched, and the canvas keeps `zoom` in module state —
+// so ONE bad value poisoned every later pan and zoom and left the stage dead
+// until the page was reloaded.
 export function clampZoom(z) {
+  if (!Number.isFinite(z)) return 1;
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
 }
 
 // Fit the whole stage (sw×sh px) into the viewport (vw×vh px) at a 0.92 margin
 // and centre it. Returns { zoom, panX, panY }.
 export function fitTransform(vw, vh, sw, sh) {
-  const zoom = Math.min(vw / sw, vh / sh) * 0.92;
+  // Clamped like every other zoom in this module. It was not, so "Fit" on a
+  // narrow window produced 7% — below the 10% the zoom buttons can reach, so
+  // pressing "−" jumped the canvas UP — and a playlist with a small canvas
+  // size produced 3680%.
+  const zoom = clampZoom(Math.min(vw / sw, vh / sh) * 0.92);
   return { zoom, panX: (vw - sw * zoom) / 2, panY: (vh - sh * zoom) / 2 };
 }
 
@@ -28,21 +37,32 @@ export function centerTransform(vw, vh, cw, ch, zoom) {
 // Multiply the zoom by `factor` while keeping the stage point under (px, py) —
 // viewport pixels — visually stationary. Returns the new { zoom, panX, panY }.
 export function zoomAroundPoint(px, py, factor, { zoom, panX, panY }) {
-  const nz = clampZoom(zoom * factor);
+  // Sanitised on the way IN as well as out. This divides by the previous zoom,
+  // so a state that had already gone bad stayed bad no matter what the user
+  // did next — the whole point of the clamp is that one bad value cannot
+  // outlive the gesture that produced it.
+  const prev = clampZoom(zoom);
+  const ox = Number.isFinite(panX) ? panX : 0;
+  const oy = Number.isFinite(panY) ? panY : 0;
+  const nz = clampZoom(prev * factor);
   return {
     zoom: nz,
-    panX: px - ((px - panX) * nz) / zoom,
-    panY: py - ((py - panY) * nz) / zoom,
+    panX: px - ((px - ox) * nz) / prev,
+    panY: py - ((py - oy) * nz) / prev,
   };
 }
 
 // Zoom + pan so a widget rect (percent of slide) fills ~80% of the viewport,
 // centred, capped at 2.5× so contenteditable stays crisp. sw/sh are stage px.
 export function widgetTransform(vw, vh, sw, sh, rect) {
-  const ww = sw * (rect.w / 100), wh = sh * (rect.h / 100);
-  const wx = sw * (rect.x / 100), wy = sh * (rect.y / 100);
+  // Through clampRect first: this is reached from inline-edit with whatever
+  // rect the widget carries, and a malformed one (an import, a hand-edited
+  // file) turned the zoom AND the pan into NaN — which the canvas then kept.
+  const r = clampRect(rect);
+  const ww = sw * (r.w / 100), wh = sh * (r.h / 100);
+  const wx = sw * (r.x / 100), wy = sh * (r.y / 100);
   const fit = Math.min(vw / ww, vh / wh) * 0.8;
-  const zoom = Math.min(fit, 2.5);
+  const zoom = clampZoom(Math.min(fit, 2.5));
   const wxc = wx + ww / 2, wyc = wy + wh / 2;
   return { zoom, panX: vw / 2 - wxc * zoom, panY: vh / 2 - wyc * zoom };
 }

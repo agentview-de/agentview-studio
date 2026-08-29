@@ -20,7 +20,10 @@ export function mountConnectivity(body) {
       ctx.content.innerHTML = `
         <p class="bb-form-help">${t('conn.cExplainer')}</p>
         <div class="bb-form-group">
-          <label>${t('conn.cDefaultMode')}</label>
+          <!-- for= binds the label the eye already sees to the field, so it
+               is the accessible name too. (No backticks in here: this whole
+               block is a template literal.) -->
+          <label for="conn-mode">${t('conn.cDefaultMode')}</label>
           <select id="conn-mode">
             <option value="full-access">${t('conn.cModeFull')}</option>
             <option value="whitelist-only">${t('conn.cModeWhitelist')}</option>
@@ -28,7 +31,7 @@ export function mountConnectivity(body) {
           </select>
         </div>
         <div class="bb-form-group">
-          <label>${t('conn.cWhitelist')}</label>
+          <label for="conn-wl">${t('conn.cWhitelist')}</label>
           <textarea id="conn-wl" rows="6" placeholder="weather.example.com\ncdn.example.com"></textarea>
         </div>
         <button class="bb-btn bb-btn-primary" id="conn-save">${t('common.save')}</button>

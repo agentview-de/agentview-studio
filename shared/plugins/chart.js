@@ -5,6 +5,11 @@ import { liveSource } from '../live-source.js';
 import { offlineLiveOpts } from '../offline-data.js';
 import { remoteJsonFields } from '../remote-json-fields.js';
 import { escapeHtml } from '../utils/escape.js';
+import { canvasColor } from '../css-color.js';
+import { localeField } from '../locale-field.js';
+import { refreshIntervalMs } from '../refresh-field.js';
+import { formatNumber, formatCompact, formatPercent } from '../format-number.js';
+import { remoteJsonNetwork } from '../plugin-network.js';
 
 // Tiny pure-canvas charts (line, bar, pie). No external lib, keeps dispose simple.
 // For richer charts: swap to Chart.js by registering a `chart-pro` plugin variant.
@@ -186,8 +191,10 @@ function drawBar(ctx, series, w, h, opts) {
   const bw = (plotW - gap * (series.length - 1)) / series.length;
   // Gradient picks first two palette colours when set; defaults preserve the
   // brand purple→cyan gradient users have grown used to.
-  const grad0 = opts.palette?.[0] || '#8b5cf6';
-  const grad1 = opts.palette?.[1] || opts.palette?.[0] || '#06b6d4';
+  // A palette entry goes straight into a gradient stop, which throws on
+  // anything the browser cannot parse — and takes the whole chart with it.
+  const grad0 = canvasColor(opts.palette?.[0], '#8b5cf6');
+  const grad1 = canvasColor(opts.palette?.[1], canvasColor(opts.palette?.[0], '#06b6d4'));
   // Axes first so bars overlay them.
   ctx.strokeStyle = withAlpha(opts.ink, 0.18); ctx.lineWidth = Math.max(1, s);
   ctx.beginPath(); ctx.moveTo(p.left, p.top); ctx.lineTo(p.left, p.top + plotH); ctx.lineTo(p.left + plotW, p.top + plotH); ctx.stroke();
@@ -277,13 +284,11 @@ function withAlpha(color, alpha) {
   return `rgba(241,241,244,${alpha})`;
 }
 
-// Compact tick formatter: 1234 → "1.2k", 1234567 → "1.2M".
-function compactNum(v) {
-  const a = Math.abs(v);
-  if (a >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
-  if (a >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'k';
-  if (Number.isInteger(v)) return String(v);
-  return v.toFixed(1);
+// Compact tick formatter: 1234 → "1.2k" / "1,2k". The decimal mark follows
+// the reader — this wrote toFixed, i.e. always a dot, on the DEFAULT path,
+// which is the one the comment below already explains is dangerous.
+function compactNum(v, locale) {
+  return formatCompact(v, locale);
 }
 
 // Tick/value-label formatter, parameterised by the valueFormat/valueUnit
@@ -292,10 +297,14 @@ function compactNum(v) {
 // A unit ('€', 'pcs', …) lets euro/percentage/count charts label honestly.
 function formatValue(v, opts = {}) {
   const fmt = opts.valueFormat || 'compact';
-  if (fmt === 'percent') return (Number.isInteger(v) ? String(v) : v.toFixed(1)) + '%';
+  if (fmt === 'percent') return formatPercent(v, opts.locale);
+  // Both branches carry the locale. `full` always did — its comment says why:
+  // a chart reading 1,234.5 in a German foyer is off by three orders of
+  // magnitude to anyone who reads it as 1234,5. `compact` is the DEFAULT and
+  // did not.
   const txt = fmt === 'full'
-    ? Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })
-    : compactNum(v);
+    ? formatNumber(v, opts.locale, { maximumFractionDigits: 1 })
+    : compactNum(v, opts.locale);
   const unit = String(opts.valueUnit || '').trim();
   return unit ? `${txt} ${unit}` : txt;
 }
@@ -307,7 +316,10 @@ export default register({
   label: 'Chart',
   group: 'data',
   icon: '📊',
-  network: true,
+  // Inline data never leaves this machine, and gating it meant you could not
+  // see your own numbers while editing without granting a "live preview"
+  // that was never live — see shared/plugin-network.js.
+  network: remoteJsonNetwork,
   schemaVersion: 2,
   defaults: () => ({ ...colorOverrideDefaults(),
     kind: 'bar',
@@ -329,6 +341,7 @@ export default register({
     showValues: false,
     seriesLabel: '',
     valueFormat: 'compact',
+    locale: '',
     valueUnit: '',
     palette: [],
   }),
@@ -392,6 +405,8 @@ export default register({
       { key: 'palette', type: 'list', label: 'Color palette', tier: 'advanced',
         itemShape: [{ key: 'color', type: 'color', label: 'Colour' }],
         help: 'Optional, override the default palette with brand colours. Bar/line use the first two for the gradient, pie cycles through all entries.' },
+      { ...localeField(), tier: 'advanced',
+        help: 'Decides how a value is written: 1.234,5 in German, 1,234.5 in English. Only the “Full” value format shows grouping.' },
       ...themeColorSection(),
     ],
   }),
@@ -488,6 +503,11 @@ export default register({
         seriesLabel: c.seriesLabel || '',
         valueFormat: c.valueFormat || 'compact',
         valueUnit: c.valueUnit || '',
+        // The widget HAS a language field and the drawing options never
+        // carried it, so every number the canvas painted was formatted for the
+        // device instead of for the audience — including the 'full' path,
+        // whose comment has always explained exactly why that is dangerous.
+        locale: c.locale || '',
         palette,
       };
       if (kind === 'line') drawLine(dctx, series, cssW, cssH, opts);
@@ -539,7 +559,7 @@ export default register({
       const stop = liveSource({
         url: c.dataUrl,
         signal: ctx?.signal,
-        intervalMs: refreshSec > 0 ? Math.max(5000, refreshSec * 1000) : 0,
+        intervalMs: refreshIntervalMs(refreshSec),
         fetchInit: { cache: 'no-store' },
         maxErrors: 0,
         backoff: false,

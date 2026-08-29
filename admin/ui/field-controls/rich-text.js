@@ -18,6 +18,7 @@ import { toast } from '../toast.js';
 import { sanitizeHtml, plainToHtml, looksLikeHtml } from '../../../shared/sanitize-html.js';
 import { h, esc, escAttr, escText } from './_shared.js';
 import { buildTableHtml } from './rich-text-table.js';
+import { uiIconSvg } from '../../../shared/data/ui-icons.js';
 
 // Unique-id counter so each editor's size <datalist> has its own id (the expand
 // modal mounts a second editor instance in the same document).
@@ -183,25 +184,25 @@ export function renderRichText(f, v, set, opts = {}) {
   // Alignment
   sep(bar);
   bar.append(
-    btn('⇤', t('rt.alignLeft'),   () => exec('justifyLeft'),   { cmd: 'justifyLeft' }),
-    btn('↔', t('rt.alignCenter'), () => exec('justifyCenter'), { cmd: 'justifyCenter' }),
-    btn('⇥', t('rt.alignRight'),  () => exec('justifyRight'),  { cmd: 'justifyRight' }),
+    btn(uiIconSvg('align-left'), t('rt.alignLeft'),   () => exec('justifyLeft'),   { cmd: 'justifyLeft' }),
+    btn(uiIconSvg('align-center'), t('rt.alignCenter'), () => exec('justifyCenter'), { cmd: 'justifyCenter' }),
+    btn(uiIconSvg('align-right'), t('rt.alignRight'),  () => exec('justifyRight'),  { cmd: 'justifyRight' }),
   );
 
   // Link + image (most-asked extras live in the primary row too)
   sep(bar);
-  bar.append(btn('🔗', t('rt.link'),  insertLinkDialog, { activeCheck: () => isInsideTag('A') }));
-  bar.append(btn('🖼', t('rt.image'), insertImageDialog));
+  bar.append(btn(uiIconSvg('link'), t('rt.link'),  insertLinkDialog, { activeCheck: () => isInsideTag('A') }));
+  bar.append(btn(uiIconSvg('image'), t('rt.image'), insertImageDialog));
 
   // Undo + clear (redo lives in More — undo is the more common one)
   sep(bar);
-  bar.append(btn('↶', t('rt.undo'),        () => exec('undo')));
-  bar.append(btn('⊘', t('rt.clearFormat'), () => exec('removeFormat')));
+  bar.append(btn(uiIconSvg('undo'), t('rt.undo'),        () => exec('undo')));
+  bar.append(btn(uiIconSvg('clear-format'), t('rt.clearFormat'), () => exec('removeFormat')));
 
   // Expand + More toggle
   sep(bar);
-  if (!opts.compact) bar.append(btn('⛶', t('rt.expand'), openExpanded));
-  const moreToggle = btn('▾', t('rt.more'), () => {
+  if (!opts.compact) bar.append(btn(uiIconSvg('expand'), t('rt.expand'), openExpanded));
+  const moreToggle = btn(uiIconSvg('chevron-down'), t('rt.more'), () => {
     more.hidden = !more.hidden;
     moreToggle.classList.toggle('bb-active', !more.hidden);
     moreToggle.title = more.hidden ? t('rt.more') : t('rt.less');
@@ -228,7 +229,7 @@ export function renderRichText(f, v, set, opts = {}) {
   hilBtn.addEventListener('change', () => exec('hiliteColor', hilBtn.value));
   hilWrap.append(hilBtn);
   more.append(hilWrap);
-  more.append(btn('⌫', t('rt.clearHighlight'), () => exec('hiliteColor', 'transparent')));
+  more.append(btn(uiIconSvg('clear-highlight'), t('rt.clearHighlight'), () => exec('hiliteColor', 'transparent')));
 
   // Paragraph style / font / line height
   sep(more);
@@ -280,37 +281,37 @@ export function renderRichText(f, v, set, opts = {}) {
 
   // Justify (less common than the three primary alignments)
   sep(more);
-  more.append(btn('☰', t('rt.justify'), () => exec('justifyFull'), { cmd: 'justifyFull' }));
+  more.append(btn(uiIconSvg('align-justify'), t('rt.justify'), () => exec('justifyFull'), { cmd: 'justifyFull' }));
 
   // HR + table + emoji + special char
   sep(more);
-  more.append(btn('─', t('rt.hr'),    () => exec('insertHorizontalRule')));
-  more.append(btn('⊞', t('rt.table'), insertTableDialog, { extraClass: 'bb-richtext-size-btn' }));
-  more.append(btn('😀', t('rt.emoji'),       e => togglePopover(e, emojiPopover())));
+  more.append(btn(uiIconSvg('hr'), t('rt.hr'),    () => exec('insertHorizontalRule')));
+  more.append(btn(uiIconSvg('table'), t('rt.table'), insertTableDialog));
+  more.append(btn(uiIconSvg('emoji'), t('rt.emoji'),       e => togglePopover(e, emojiPopover())));
   more.append(btn('Ω',  t('rt.specialChar'), e => togglePopover(e, charPopover())));
 
   // Redo
   sep(more);
-  more.append(btn('↷', t('rt.redo'), () => exec('redo')));
+  more.append(btn(uiIconSvg('redo'), t('rt.redo'), () => exec('redo')));
 
   // ----- Table contextual toolbar -----
   tableBar.append(
-    btn('+⤴', t('rt.table.rowAbove'), () => modifyTable('rowAbove'), { extraClass: 'bb-richtext-size-btn' }),
-    btn('+⤵', t('rt.table.rowBelow'), () => modifyTable('rowBelow'), { extraClass: 'bb-richtext-size-btn' }),
-    btn('+⇤', t('rt.table.colLeft'),  () => modifyTable('colLeft'),  { extraClass: 'bb-richtext-size-btn' }),
-    btn('+⇥', t('rt.table.colRight'), () => modifyTable('colRight'), { extraClass: 'bb-richtext-size-btn' }),
+    btn(uiIconSvg('table-row-above'), t('rt.table.rowAbove'), () => modifyTable('rowAbove')),
+    btn(uiIconSvg('table-row-below'), t('rt.table.rowBelow'), () => modifyTable('rowBelow')),
+    btn(uiIconSvg('table-col-left'),  t('rt.table.colLeft'),  () => modifyTable('colLeft')),
+    btn(uiIconSvg('table-col-right'), t('rt.table.colRight'), () => modifyTable('colRight')),
   );
   sep(tableBar);
   tableBar.append(
-    btn('⇥⇤', t('rt.table.mergeRight'), () => modifyTable('mergeRight'), { extraClass: 'bb-richtext-size-btn' }),
-    btn('⤓⤒', t('rt.table.mergeDown'),  () => modifyTable('mergeDown'),  { extraClass: 'bb-richtext-size-btn' }),
-    btn('⇹',   t('rt.table.splitCell'),  () => modifyTable('splitCell'),  { extraClass: 'bb-richtext-size-btn' }),
+    btn(uiIconSvg('table-merge-right'), t('rt.table.mergeRight'), () => modifyTable('mergeRight')),
+    btn(uiIconSvg('table-merge-down'),  t('rt.table.mergeDown'),  () => modifyTable('mergeDown')),
+    btn(uiIconSvg('table-split'),       t('rt.table.splitCell'),  () => modifyTable('splitCell')),
   );
   sep(tableBar);
   tableBar.append(
-    btn('−⇕', t('rt.table.delRow'),   () => modifyTable('delRow'),   { extraClass: 'bb-richtext-size-btn' }),
-    btn('−⇔', t('rt.table.delCol'),   () => modifyTable('delCol'),   { extraClass: 'bb-richtext-size-btn' }),
-    btn('🗑',  t('rt.table.delTable'), () => modifyTable('delTable')),
+    btn(uiIconSvg('table-row-delete'), t('rt.table.delRow'), () => modifyTable('delRow')),
+    btn(uiIconSvg('table-col-delete'), t('rt.table.delCol'), () => modifyTable('delCol')),
+    btn(uiIconSvg('trash'), t('rt.table.delTable'), () => modifyTable('delTable')),
   );
 
   // ----- Init editor content -----
@@ -607,7 +608,7 @@ export function renderRichText(f, v, set, opts = {}) {
     urlInp.value = a.getAttribute('href') || '';
     urlInp.className = 'bb-richtext-linkpop-url';
     urlInp.addEventListener('mousedown', e => e.stopPropagation());
-    const openBtn = h('button', 'bb-richtext-btn', '↗');
+    const openBtn = h('button', 'bb-richtext-btn', uiIconSvg('external-link'));
     openBtn.type = 'button';
     openBtn.title = t('rt.link.open');
     openBtn.setAttribute('aria-label', t('rt.link.open'));
@@ -616,7 +617,7 @@ export function renderRichText(f, v, set, opts = {}) {
       const u = urlInp.value.trim();
       if (u) window.open(u, '_blank', 'noopener,noreferrer');
     });
-    const rmBtn = h('button', 'bb-richtext-btn', '✕');
+    const rmBtn = h('button', 'bb-richtext-btn', uiIconSvg('close'));
     rmBtn.type = 'button';
     rmBtn.title = t('rt.link.remove');
     rmBtn.setAttribute('aria-label', t('rt.link.remove'));
@@ -690,7 +691,7 @@ export function renderRichText(f, v, set, opts = {}) {
       sizeBtn('M', t('rt.img.sizeMedium'), '600px'),
       sizeBtn('L', t('rt.img.sizeFull'),   '100%'),
     );
-    const rmBtn = h('button', 'bb-richtext-btn', '✕');
+    const rmBtn = h('button', 'bb-richtext-btn', uiIconSvg('close'));
     rmBtn.type = 'button';
     rmBtn.title = t('rt.img.remove');
     rmBtn.setAttribute('aria-label', t('rt.img.remove'));

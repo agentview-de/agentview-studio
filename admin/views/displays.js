@@ -2,30 +2,53 @@
 // categories), live online/offline + "läuft: <slideshow>", and a prominent
 // Veröffentlichen flow per card and per group.
 
+
 import { state, subscribe } from '../store.js';
-import { displays as api, groups as groupsApi } from '../api.js';
+import { displays as api, groups as groupsApi, PREVIEW_LINK_TTL_S, categoryIdOf } from '../api.js';
 import { openModal } from '../ui/modal.js';
 import { toast } from '../ui/toast.js';
 import { openPublishPicker, publishToGroup, refreshRunning } from '../publish-flow.js';
 import { t, tx } from '../i18n.js';
 import * as drawer from '../ui/display-drawer.js';
 import { renderConnectGate } from '../ui/connect-gate.js';
+import { uiIconSvg } from '../../shared/data/ui-icons.js';
+import { escapeHtml as esc } from '../../shared/utils/escape.js';
+import { coalesce } from '../../shared/async-refresh.js';
 
 function normList(raw, key) {
   if (Array.isArray(raw)) return raw;
   return raw?.[key] ?? raw?.items ?? raw?.displays ?? raw?.categories ?? [];
 }
 
-export async function refreshFleet() {
+// Ten callers, one of them the SSE handler: a wall of displays coming back
+// after a network blip fired one full refresh per `display_online` event, each
+// of them 2 + N requests. Overlapping runs also split the dashboard in half —
+// state.fleet.displays is written before the member lookups, state.fleet.groups
+// after them, so the two could come from different runs. Coalesced, a burst of
+// any size costs the run in flight plus one catch-up.
+export const refreshFleet = coalesce(refreshFleetOnce);
+
+async function refreshFleetOnce() {
   if (state.connection.status !== 'connected') return; // no API noise while disconnected
   const [dl, gl] = await Promise.allSettled([api.list(), groupsApi.list()]);
-  if (dl.status === 'fulfilled') state.fleet.displays = normList(dl.value, 'displays');
-  else toast(t('disp.refreshFail', { msg: dl.reason?.message ?? '' }), { kind: 'warn' });
+  if (dl.status === 'fulfilled') {
+    state.fleet.displays = normList(dl.value, 'displays');
+    // Every other list endpoint in this API pages and reports `total`. This one
+    // is called bare, so if it ever answers with a page instead of a fleet, the
+    // dashboard would show a prefix and say nothing — the quietest kind of
+    // wrong for the screen an operator uses to check that everything is up.
+    // We do not invent limit/offset parameters we cannot verify; we read what
+    // the server reports and let the header say so.
+    const reported = dl.value?.total;
+    state.fleet.displaysTotal = Number.isFinite(reported) ? reported : null;
+  } else {
+    toast(t('disp.refreshFail', { msg: dl.reason?.message ?? '' }), { kind: 'warn' });
+  }
   const cats = gl.status === 'fulfilled' ? normList(gl.value, 'categories') : [];
   // Category membership isn't on the display object — resolve each group's members.
   await Promise.all(cats.map(async c => {
     try {
-      const m = await groupsApi.membersOf(c.categoryId ?? c.id);
+      const m = await groupsApi.membersOf(categoryIdOf(c));
       c.displayIds = (m?.displays ?? (Array.isArray(m) ? m : [])).map(d => d.id ?? d.profileId).filter(Boolean);
     } catch { c.displayIds = []; }
   }));
@@ -34,7 +57,10 @@ export async function refreshFleet() {
 }
 
 // Map groupId -> [display]. Tolerates membership being on the group OR display.
-function membership(displays, groups) {
+// Exported for the browser suite: this is pure (displays, groups) → buckets,
+// and it is where a mismatched group identity shows up as a display quietly
+// dropping out of its group.
+export function membership(displays, groups) {
   const byGroup = new Map(groups.map(g => [groupId(g), []]));
   const placed = new Set();
   for (const g of groups) {
@@ -54,7 +80,7 @@ function membership(displays, groups) {
     const cats = d.categoryIds ?? d.categories ?? [];
     let any = false;
     for (const c of cats) {
-      const cid = typeof c === 'string' ? c : (c.id ?? c.categoryId);
+      const cid = categoryIdOf(c);
       if (byGroup.has(cid)) { byGroup.get(cid).push(d); any = true; }
     }
     if (any) placed.add(did);
@@ -63,7 +89,9 @@ function membership(displays, groups) {
   return { byGroup, ungrouped };
 }
 
-const groupId = g => g.id ?? g.categoryId;
+// One resolution for the whole app — see categoryIdOf in api.js for why the
+// endpoint's own name wins over a row id.
+const groupId = categoryIdOf;
 const groupName = g => g.name ?? g.label ?? groupId(g);
 
 export function mountDisplays(host) {
@@ -80,9 +108,12 @@ export function mountDisplays(host) {
     const flt = state.ui.displayFilter ?? {};
     const filteredDisplays = applyFilter(displays, flt);
     const onlineCount = displays.filter(d => d.isOnline || d.online || d.status === 'online').length;
+    // Only when the server says there are more than we hold.
+    const serverTotal = state.fleet.displaysTotal;
+    const truncated = Number.isFinite(serverTotal) && serverTotal > displays.length;
     host.innerHTML = `
       <div class="avs-disp-toolbar">
-        <h2 class="avs-disp-title">${t('disp.title')} <span class="avs-disp-count">${esc(filteredDisplays.length)}/${esc(displays.length)} · 🟢 ${esc(onlineCount)}</span></h2>
+        <h2 class="avs-disp-title">${t('disp.title')} <span class="avs-disp-count">${esc(filteredDisplays.length)}/${esc(displays.length)} · <span class="avs-dot avs-on" title="${t('disp.online')}"></span> ${esc(onlineCount)}</span>${truncated ? `<span class="avs-disp-partial" title="${esc(t('disp.partialHelp'))}">${esc(t('disp.partial', { shown: displays.length, total: serverTotal }))}</span>` : ''}</h2>
         <div class="avs-disp-tools">
           <button class="bb-btn bb-btn-secondary" data-act="refresh">↻ ${t('disp.refresh')}</button>
           <button class="bb-btn bb-btn-secondary" data-act="new-group">+ ${t('disp.newGroup')}</button>
@@ -94,13 +125,18 @@ export function mountDisplays(host) {
           <input type="checkbox" id="dlf-all" title="${tx('Select all filtered')}" ${filteredDisplays.length && filteredDisplays.every(d => sel.includes(d.id ?? d.profileId)) ? 'checked' : ''}>
           ${tx('All')}
         </label>
-        <input id="dlf-q" placeholder="${tx('Search…')}" value="${esc(flt.q ?? '')}">
-        <select id="dlf-status">
+        <!-- Named, not just placeheld: a placeholder disappears the moment you
+             type, and the first <option> of a select is its VALUE, not its
+             name — a screen reader announced an unnamed text field and two
+             unnamed comboboxes. -->
+        <input id="dlf-q" type="search" aria-label="${tx('Search displays')}"
+               placeholder="${tx('Search…')}" value="${esc(flt.q ?? '')}">
+        <select id="dlf-status" aria-label="${tx('Filter by status')}">
           <option value="">${tx('Status: all')}</option>
           <option value="online" ${flt.status==='online'?'selected':''}>${tx('online')}</option>
           <option value="offline" ${flt.status==='offline'?'selected':''}>${tx('offline')}</option>
         </select>
-        <select id="dlf-lock">
+        <select id="dlf-lock" aria-label="${tx('Filter by lock state')}">
           <option value="">${tx('Lock: any')}</option>
           <option value="locked" ${flt.lock==='locked'?'selected':''}>${tx('locked')}</option>
           <option value="unlocked" ${flt.lock==='unlocked'?'selected':''}>${tx('unlocked')}</option>
@@ -118,7 +154,7 @@ export function mountDisplays(host) {
         </div>
       </div>` : ''}
       ${displays.length === 0
-        ? `<div class="bb-empty-state"><div class="bb-empty-illus">📺</div><div class="bb-empty-title">${t('disp.empty')}</div><div class="bb-empty-desc">${t('disp.emptyDesc')}</div><button class="bb-btn bb-btn-primary" data-act="pair-empty" style="margin-top:14px;">+ ${t('disp.pair')}</button></div>`
+        ? `<div class="bb-empty-state"><div class="bb-empty-illus">${uiIconSvg('tv', 44)}</div><div class="bb-empty-title">${t('disp.empty')}</div><div class="bb-empty-desc">${t('disp.emptyDesc')}</div><button class="bb-btn bb-btn-primary" data-act="pair-empty" style="margin-top:14px;">+ ${t('disp.pair')}</button></div>`
         : ''}
       <div class="avs-disp-groups" id="avs-disp-groups"></div>`;
     host.querySelector('#dlf-q')?.addEventListener('input', e => { state.ui.displayFilter.q = e.target.value; render(); });
@@ -234,7 +270,7 @@ function groupSection(group, members, level = 0) {
       <div class="avs-group-actions">
         ${group ? `<button class="bb-btn bb-btn-primary" data-act="pub-group">${t('disp.publishGroup')}</button>` : ''}
         ${group ? `<button class="avs-iconbtn" data-act="rename-group" title="${t('disp.rename')}">✎</button>` : ''}
-        ${group ? `<button class="avs-iconbtn" data-act="del-group" title="${t('disp.delete')}">🗑</button>` : ''}
+        ${group ? `<button class="avs-iconbtn" data-act="del-group" title="${t('disp.delete')}">${uiIconSvg('trash')}</button>` : ''}
       </div>
     </div>
     <div class="avs-card-grid"></div>`;
@@ -259,9 +295,9 @@ function displayCard(d) {
   el.className = 'avs-display-card';
   // Device-class glyph from the capabilities response (cached on display object
   // from GET /agent/displays). Falls back to a generic display icon.
-  const deviceIcon = {
-    'desktop': '💻', 'mobile': '📱', 'tablet': '📱', 'tv': '📺', 'kiosk': '🖥️',
-  }[d.deviceClass] ?? '🖥️';
+  const deviceIcon = uiIconSvg({
+    desktop: 'monitor', mobile: 'smartphone', tablet: 'tablet', tv: 'tv', kiosk: 'monitor',
+  }[d.deviceClass] ?? 'monitor', 16);
   el.innerHTML = `
     <div class="avs-dc-top">
       <input type="checkbox" class="avs-dc-check" data-bulk-id="${esc(id)}" ${selected ? 'checked' : ''} title="${tx('Select')}">
@@ -270,13 +306,13 @@ function displayCard(d) {
       <div class="avs-dc-id">
         <div class="avs-dc-name">${esc(d.name ?? id)}</div>
         <div class="avs-dc-sub">
-          ${esc(id)} · ${online ? t('disp.online') : t('disp.offline')}${d.locked ? ' · 🔒' : ''}
+          ${esc(id)} · ${online ? t('disp.online') : t('disp.offline')}${d.locked ? ` · <span class="avs-dc-flag" title="${tx('Locked')}">${uiIconSvg('lock', 11)}</span>` : ''}
           ${d.resolution ? ` · ${esc(d.resolution)}` : ''}
-          ${d.hasTouch ? ' · 👆' : ''}
+          ${d.hasTouch ? ` · <span class="avs-dc-flag" title="${tx('Touch input')}">${uiIconSvg('touch', 11)}</span>` : ''}
         </div>
       </div>
     </div>
-    <div class="avs-dc-running">${running ? `▶ ${t('disp.running')}: <b>${esc(running)}</b>` : `<span class="avs-dc-idle">${t('disp.idle')}</span>`}</div>
+    <div class="avs-dc-running">${running ? `${uiIconSvg('play', 11)} ${t('disp.running')}: <b>${esc(running)}</b>` : `<span class="avs-dc-idle">${t('disp.idle')}</span>`}</div>
     <div class="avs-dc-group">
       <select data-act="assign" title="${t('disp.assignHint')}">
         <option value="">${t('disp.noGroup')}</option>
@@ -285,9 +321,9 @@ function displayCard(d) {
     </div>
     <div class="avs-dc-actions">
       <button class="bb-btn bb-btn-primary" data-act="pub">${t('disp.publish')}</button>
-      <button class="avs-iconbtn" data-act="preview" title="${t('disp.preview')}">👁</button>
-      <button class="avs-iconbtn" data-act="lock" title="${d.locked ? t('disp.unlock') : t('disp.lock')}">${d.locked ? '🔓' : '🔒'}</button>
-      <button class="avs-iconbtn" data-act="details" title="${t('drawer.overview')}">⋯</button>
+      <button class="avs-iconbtn" data-act="preview" title="${t('disp.preview')}">${uiIconSvg('eye')}</button>
+      <button class="avs-iconbtn" data-act="lock" title="${d.locked ? t('disp.unlock') : t('disp.lock')}">${uiIconSvg(d.locked ? 'unlock' : 'lock')}</button>
+      <button class="avs-iconbtn" data-act="details" title="${t('drawer.overview')}">${uiIconSvg('more')}</button>
     </div>`;
 
   el.querySelector('[data-bulk-id]').addEventListener('change', e => {
@@ -306,24 +342,45 @@ function displayCard(d) {
 
 // ---------- actions ----------
 export async function pairModal() {
+  // Pairing has two shapes: a fresh display (name required), or a REBIND that
+  // moves an existing profile onto the new hardware — content, group membership
+  // and licence follow the profile, so a replaced screen keeps its identity.
+  // The server ignores profileName on a rebind, hence the name field hides.
+  const existing = state.fleet.displays ?? [];
   const box = document.createElement('div');
   box.innerHTML = `
     <p class="bb-form-help">${t('disp.pairHelp')}</p>
     <div class="bb-form-group"><label>${t('disp.pairCode')}</label>
       <input id="pc" maxlength="6" class="bb-pair-code" placeholder="ABCDEF" autocapitalize="characters" autocomplete="off"></div>
-    <div class="bb-form-group"><label>${t('disp.name')}</label><input id="pn" placeholder="${tx('Lobby TV')}"></div>`;
+    <div class="bb-form-group"><label>${t('disp.pairTarget')}</label>
+      <select id="pt">
+        <option value="">${t('disp.pairTargetNew')}</option>
+        ${existing.map(d => `<option value="${esc(d.id ?? '')}">${t('disp.pairTargetRebind', { name: esc(d.name ?? d.id ?? '') })}</option>`).join('')}
+      </select>
+      <p class="bb-form-help">${t('disp.pairTargetHelp')}</p>
+    </div>
+    <div class="bb-form-group" id="pn-group"><label>${t('disp.name')}</label><input id="pn" placeholder="${tx('Lobby TV')}"></div>`;
+  box.querySelector('#pt').addEventListener('change', e => {
+    box.querySelector('#pn-group').style.display = e.target.value ? 'none' : '';
+  });
   const ok = await openModal({ title: t('disp.pair'), body: box, actions: [{ label: t('common.cancel') }, { label: t('disp.pair'), kind: 'primary', value: 1 }] });
   if (!ok) return false;
   const code = box.querySelector('#pc').value.trim().toUpperCase();
   const name = box.querySelector('#pn').value.trim();
+  const targetDisplayId = box.querySelector('#pt').value;
   if (!code) return false;
-  try { await api.pairByCode({ code, profileName: name }); toast(t('disp.paired'), { kind: 'success' }); refreshFleet(); return true; }
+  try {
+    await api.pairByCode(targetDisplayId ? { code, targetDisplayId } : { code, profileName: name });
+    toast(t(targetDisplayId ? 'disp.rebound' : 'disp.paired'), { kind: 'success' });
+    refreshFleet();
+    return true;
+  }
   catch (e) { toast(e.message, { kind: 'error' }); return false; }
 }
 
 async function previewLink(id) {
   try {
-    const r = await api.previewLink(id);
+    const r = await api.previewLink(id, PREVIEW_LINK_TTL_S);
     // Verified server canonical key is `previewUrl`. Other variants surface
     // via different historical paths — try them all before giving up.
     const url = r?.previewUrl ?? r?.url ?? r?.previewLink ?? r?.shareUrl ?? r?.link;
@@ -422,6 +479,3 @@ async function delGroup(g) {
   catch (e) { toast(e.message, { kind: 'error' }); }
 }
 
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}

@@ -3,11 +3,13 @@ import { themeColorSection, colorOverrideDefaults, applyColorOverrides } from '.
 import { composeDispose } from '../plugin-contract.js';
 import { liveSource } from '../live-source.js';
 import { isStored, offlineLiveOpts, dataModeField } from '../offline-data.js';
-import { refreshSecField } from '../refresh-field.js';
+import { refreshSecField, refreshIntervalMs } from '../refresh-field.js';
 import { textScaleField } from '../text-scale.js';
 import { STATUS_COLORS } from '../status-colors.js';
 import { escapeHtml } from '../utils/escape.js';
 import { currencySymbol, currencyByCode } from '../data/currencies.js';
+import { localeField, safeLocale } from '../locale-field.js';
+import { dataModeNetwork } from '../plugin-network.js';
 
 // Uses open.er-api.com (no key, CORS-enabled).
 
@@ -20,12 +22,13 @@ const fxUrl = (base) => `https://open.er-api.com/v6/latest/${encodeURIComponent(
 // scales the precision to the magnitude — small rates keep 4 dp, large rates
 // round to 2. A numeric `decimals` ('2'|'3'|'4') pins the precision instead so
 // columns line up on dense multi-currency boards.
-function formatRate(r, decimals) {
+function formatRate(r, decimals, locale) {
   const fixed = Number(decimals);
-  if (Number.isFinite(fixed)) return r.toFixed(fixed);
   const a = Math.abs(r);
-  const d = a >= 100 ? 2 : a >= 10 ? 3 : 4;
-  return r.toFixed(d);
+  const d = Number.isFinite(fixed) ? fixed : (a >= 100 ? 2 : a >= 10 ? 3 : 4);
+  // toFixed() always writes a DOT — "1.0842" in a room that reads "1,0842".
+  // Same locale-field contract as every other formatting widget.
+  return r.toLocaleString(safeLocale(locale), { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 
 // symbols tolerates both plain-string entries and { code } objects (the legacy
@@ -88,7 +91,8 @@ export default register({
   label: 'Currency Ticker',
   group: 'live',
   icon: '💱',
-  network: true,
+  // 'stored' reads data the Studio fetched earlier; only 'live' calls out.
+  network: dataModeNetwork,
   usage: {
     tier: 'business-ok',
     attribution: 'Rates By Exchange Rate API',
@@ -106,6 +110,7 @@ export default register({
     // stored widgets without the key keep the old fetch-once behaviour (0).
     refreshSec: 3600,
     decimals: 'auto',
+    locale: '',
     showName: false,
     trend: false,
     textScale: 100,
@@ -153,6 +158,8 @@ export default register({
         { key: 'trend', type: 'toggle', label: 'Trend arrows', tier: 'advanced',
           help: 'Marks each rate ▲ up / ▼ down / – flat against the previous daily fix, green = up, red = down.' },
       ] },
+      { ...localeField(), tier: 'advanced',
+        help: 'Decides how a rate is written: 1,0842 in German, 1.0842 in English.' },
       { ...textScaleField(), tier: 'advanced' },
 
       ...themeColorSection(),
@@ -219,7 +226,7 @@ export default register({
     const stop = liveSource({
       url: fxUrl(c.base),
       signal: ctx?.signal,
-      intervalMs: refreshSec > 0 ? Math.max(5000, refreshSec * 1000) : 0,
+      intervalMs: refreshIntervalMs(refreshSec),
       maxErrors: 0,
       stopOnCorsError: false,
       ...offlineLiveOpts(c),
@@ -234,7 +241,7 @@ export default register({
           const r = rates[sym];
           let rateHtml = '—';
           if (r != null) {
-            rateHtml = escapeHtml(currencySymbol(sym) + ' ' + formatRate(r, c.decimals));
+            rateHtml = escapeHtml(currencySymbol(sym) + ' ' + formatRate(r, c.decimals, c.locale));
             if (showTrend) rateHtml += trendHtml(baseline?.[sym], r);
           }
           return `<div class="bb-fx-cell">

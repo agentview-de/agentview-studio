@@ -126,6 +126,11 @@ export async function runAll(hostSel = '#test-results') {
     for (const t of suite.tests) {
       const li = document.createElement('li');
       list.appendChild(li);
+      // A breadcrumb the harness can read when the page never finishes. A test
+      // that hangs used to report as "never produced results" for the WHOLE
+      // page — fifteen hundred healthy tests as nothing, with no hint which one
+      // stopped. Written before the test runs, so the last value IS the culprit.
+      window.__TEST_PROGRESS__ = { suite: suite.name, test: t.name, done: pass + fail };
       let ok = true; let err = null;
       try { await t.fn(); } catch (e) { ok = false; err = e; }
       if (ok) {

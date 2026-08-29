@@ -15,8 +15,10 @@ import * as json from '../admin/importers/json.js';
 import * as pptx from '../admin/importers/pptx.js';
 import * as urlPaste from '../admin/importers/url-paste.js';
 import { parseCsv } from '../admin/importers/csv.js';
+import { looksLikeHeader, sniffCsvSep, parseNumberColumn } from '../admin/importers/_helpers.js';
 import { chartDataFromJson } from '../admin/importers/json.js';
-import { stripExt, labelValuePairs, barChartContent } from '../admin/importers/_helpers.js';
+import { setLocale, getLocale } from '../admin/i18n.js';
+import { stripExt, labelValuePairs, barChartContent, splitCsvLine } from '../admin/importers/_helpers.js';
 
 // A minimal File stand-in for the pure text importers (csv/json/ics only read
 // .text()/.name/.type — no DOM, no vendored lib).
@@ -83,10 +85,35 @@ describe('importers · parseCsv', () => {
     expect(parseCsv('A\tB\nx\t7').values).toEqual([7]);
   });
 
-  test('skips non-numeric value cells but keeps their labels', () => {
+  test('REGRESSION: a non-numeric cell keeps its row in step', () => {
+    // This case used to assert values [10, 30] against labels [a, b, c] — the
+    // mechanics, not the meaning. Zipped for the chart that produced
+    // a=10, b=30, c=0: from the first bad cell on, every label carried the NEXT
+    // row's number. Right names, wrong figures, nothing to notice.
     const out = parseCsv('L,V\na,10\nb,notanumber\nc,30');
     expect(out.labels).toEqual(['a', 'b', 'c']);
-    expect(out.values).toEqual([10, 30]); // 'notanumber' dropped
+    expect(out.values).toEqual([10, 0, 30]);
+    expect(labelValuePairs(out.labels, out.values)).toEqual([
+      { label: 'a', value: 10 },
+      { label: 'b', value: 0 },
+      { label: 'c', value: 30 },
+    ]);
+  });
+
+  test('REGRESSION: a quoted label may contain the separator', () => {
+    // Every spreadsheet quotes such a field on export, so this is the normal
+    // case, not the exotic one. Split naively it became three fields: the label
+    // cut in half and the number one column too far right — parsed as NaN,
+    // dropped, and from there the whole series slid out of step.
+    const out = parseCsv('Ort,Umsatz\n"Berlin, Mitte",120\n"Köln",80');
+    expect(out.labels).toEqual(['Berlin, Mitte', 'Köln']);
+    expect(out.values).toEqual([120, 80]);
+  });
+
+  test('a semicolon file with quoted labels survives too', () => {
+    const out = parseCsv('Ort;Umsatz\n"Berlin; Mitte";7');
+    expect(out.labels).toEqual(['Berlin; Mitte']);
+    expect(out.values).toEqual([7]);
   });
 
   test('handles CRLF line endings and ignores blank lines', () => {
@@ -205,5 +232,213 @@ describe('importers · convert() builds a populated slide', () => {
     expect(w.content.heading).toBe('Upcoming Events');
     expect(w.content.items.length).toBeTruthy();
     expect(w.content.items[0].desc).toBe('Standup');
+  });
+});
+
+describe('importers · splitCsvLine', () => {
+  test('plain fields split and trim', () => {
+    expect(splitCsvLine('a, b ,c', ',')).toEqual(['a', 'b', 'c']);
+  });
+
+  test('a quoted field keeps its separators', () => {
+    expect(splitCsvLine('"Berlin, Mitte",120', ',')).toEqual(['Berlin, Mitte', '120']);
+    expect(splitCsvLine('"a;b";c', ';')).toEqual(['a;b', 'c']);
+  });
+
+  test('doubled quotes collapse to one literal quote', () => {
+    expect(splitCsvLine('"Say ""hi""",x', ',')).toEqual(['Say "hi"', 'x']);
+  });
+
+  test('a quote in the MIDDLE of an unquoted field stays a character', () => {
+    // 5" is a measurement, not the start of a quoted field.
+    expect(splitCsvLine('5" Display,9', ',')).toEqual(['5" Display', '9']);
+  });
+
+  test('empty fields survive as empty strings, so the columns keep their index', () => {
+    expect(splitCsvLine('a,,c', ',')).toEqual(['a', '', 'c']);
+    expect(splitCsvLine('', ',')).toEqual(['']);
+  });
+});
+
+// A pasted URL picks its widget. The provider branches used to test the whole
+// string — /youtu\.?be/ and /vimeo\.com/ match anywhere, including inside a
+// path — so a PDF whose filename contains "youtube" became an empty video
+// embed. Marketing files really are named like that.
+describe('importers · url-paste routing', () => {
+  const typeOf = async (u) => (await urlPaste.convert(u)).slides[0].widgets[0].type;
+
+  test('real provider URLs still route to the video widget', async () => {
+    expect(await typeOf('https://www.youtube.com/watch?v=abc')).toBe('youtube');
+    expect(await typeOf('https://m.youtube.com/watch?v=abc')).toBe('youtube');
+    expect(await typeOf('https://youtu.be/abc')).toBe('youtube');
+    expect(await typeOf('https://vimeo.com/12345')).toBe('youtube');
+    expect(await typeOf('https://player.vimeo.com/video/12345')).toBe('youtube');
+  });
+
+  test('a pasted address without a scheme still resolves', async () => {
+    expect(await typeOf('youtube.com/watch?v=abc')).toBe('youtube');
+  });
+
+  test('REGRESSION: a provider name inside the PATH does not hijack the file', async () => {
+    expect(await typeOf('https://firma.de/prospekt-youtube-tipps.pdf')).toBe('pdf');
+    expect(await typeOf('https://cdn.example.com/vimeo.com-tutorial.mp4')).toBe('video');
+    expect(await typeOf('https://firma.de/bild-youtube.png')).toBe('image');
+  });
+
+  test('the extension branches keep working', async () => {
+    expect(await typeOf('https://firma.de/preise.pdf')).toBe('pdf');
+    expect(await typeOf('https://firma.de/kamera.m3u8')).toBe('stream-cam');
+    expect(await typeOf('https://firma.de/news.rss')).toBe('rss');
+    expect(await typeOf('https://firma.de/daten.json')).toBe('live-json');
+    expect(await typeOf('https://firma.de/termine.ics')).toBe('iframe');
+  });
+
+  test('anything else becomes a sandboxed iframe, and empty input nothing at all', async () => {
+    expect(await typeOf('https://firma.de/aktion')).toBe('iframe');
+    expect(await urlPaste.convert('')).toBe(null);
+    expect(await urlPaste.convert(null)).toBe(null);
+  });
+});
+
+// What an importer writes into the playlist is the operator's document — and
+// one of these strings goes further than the slide rail: the calendar heading
+// is rendered on the display. They were all English regardless of the language
+// the Studio was running in.
+describe('importers · they speak the Studio’s language', () => {
+  const ICS = 'BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:Teambesprechung\nDTSTART:20991103T090000Z\nEND:VEVENT\nEND:VCALENDAR';
+
+  test('REGRESSION: the calendar heading follows the locale', async () => {
+    const before = getLocale();
+    try {
+      setLocale('de');
+      const de = await ics.convert(textFile('termine.ics', 'text/calendar', ICS));
+      expect(de.slides[0].widgets[0].content.heading).toBe('Nächste Termine');
+      setLocale('en');
+      const en = await ics.convert(textFile('termine.ics', 'text/calendar', ICS));
+      expect(en.slides[0].widgets[0].content.heading).toBe('Upcoming Events');
+    } finally { setLocale(before); }
+  });
+
+  test('a pasted video is titled in the current language', async () => {
+    const before = getLocale();
+    try {
+      setLocale('de');
+      const r = await urlPaste.convert('https://youtu.be/abc');
+      // 'Video' happens to be the same word in both — what matters is that it
+      // goes through the overlay at all, so a future translation lands.
+      expect(typeof (r.slides[0].name ?? r.slides[0].title)).toBe('string');
+      expect((r.slides[0].name ?? r.slides[0].title).length > 0).toBeTruthy();
+    } finally { setLocale(before); }
+  });
+});
+
+describe('importers · is the first row a header, or is it data?', () => {
+  test('REGRESSION: a file without a header keeps its first row', () => {
+    // Both CSV and XLSX started at row 1, always. A file exported without a
+    // header — cut/awk output, a database dump, "header row" unticked, a list
+    // someone typed — lost its first line silently: three numbers went in and
+    // a two-bar chart came out.
+    const out = parseCsv('North,120\nSouth,80\nEast,50');
+    expect(out.labels).toEqual(['North', 'South', 'East']);
+    expect(out.values).toEqual([120, 80, 50]);
+    expect(out.headers).toBe(null);
+  });
+
+  test('REGRESSION: a single headerless line is not an empty chart', () => {
+    const out = parseCsv('North,120');
+    expect(out.labels).toEqual(['North']);
+    expect(out.values).toEqual([120]);
+  });
+
+  test('a real header is still recognised and still skipped', () => {
+    const out = parseCsv('Region,Sales\nNorth,120\nSouth,80');
+    expect(out.headers).toEqual(['Region', 'Sales']);
+    expect(out.labels).toEqual(['North', 'South']);
+  });
+
+  test('a header whose value column is blank is still a header', () => {
+    expect(parseCsv('Region,\nNorth,120').labels).toEqual(['North']);
+  });
+
+  test('looksLikeHeader answers the question directly', () => {
+    expect(looksLikeHeader([['Region', 'Sales'], ['a', '1']])).toBe(true);
+    expect(looksLikeHeader([['a', '1'], ['b', '2']])).toBe(false);
+    expect(looksLikeHeader([['a', '1']])).toBe(false);       // one row is data
+    expect(looksLikeHeader([])).toBe(false);
+    expect(looksLikeHeader(null)).toBe(false);
+  });
+});
+
+describe('importers · which character separates the columns', () => {
+  test('REGRESSION: a separator inside quotes is not the separator', () => {
+    // `line0.includes(';')` was blind to quoting, so an ordinary comma file
+    // whose first label read "Berlin; Mitte" was read as semicolon-separated:
+    // one column, the number swallowed into the label, a chart of zeroes.
+    const out = parseCsv('"Berlin; Mitte",120\n"Köln",80');
+    expect(out.labels).toEqual(['Berlin; Mitte', 'Köln']);
+    expect(out.values).toEqual([120, 80]);
+  });
+
+  test('…including a tab inside quotes', () => {
+    const out = parseCsv('"Berlin\tMitte",120\n"Köln",80');
+    expect(out.values).toEqual([120, 80]);
+  });
+
+  test('and the mirror case: a comma inside a semicolon file', () => {
+    const out = parseCsv('"Berlin, Mitte";120\n"Köln";80');
+    expect(out.labels).toEqual(['Berlin, Mitte', 'Köln']);
+    expect(out.values).toEqual([120, 80]);
+  });
+
+  test('the old precedence survives: tab beats semicolon beats comma', () => {
+    expect(sniffCsvSep(['A\tB;C,D', 'x\t1;2,3'])).toBe('\t');
+    expect(sniffCsvSep(['A;B,C', 'x;1,2'])).toBe(';');
+    expect(sniffCsvSep(['A,B', 'x,1'])).toBe(',');
+    expect(sniffCsvSep(['nothing splits here'])).toBe(',');
+    expect(sniffCsvSep([])).toBe(',');
+  });
+});
+
+describe('importers · German numbers are numbers', () => {
+  test('REGRESSION: 1.234,56 is not 1.234', () => {
+    // The standard German Excel export. parseFloat read this as 1.234 and
+    // "12.000" as 12 — a revenue chart on a wall, off by a factor of a
+    // thousand, with nothing to show for it.
+    const out = parseCsv('Region;Umsatz\nNord;1.234,56\nSüd;987,40\nOst;12.000');
+    expect(out.values).toEqual([1234.56, 987.4, 12000]);
+  });
+
+  test('English files are unchanged', () => {
+    expect(parseCsv('Region,Sales\nNorth,1234.56\nSouth,987.40').values).toEqual([1234.56, 987.4]);
+    expect(parseCsv('Region,Sales\nNorth,"1,234"\nSouth,"12,000"').values).toEqual([1234, 12000]);
+  });
+
+  test('currency, percent and grouping spaces are not part of the number', () => {
+    expect(parseCsv('A;B\nx;€ 1.234,56\ny;6,2%').values).toEqual([1234.56, 6.2]);
+    expect(parseCsv('A;B\nx;1 234,56').values).toEqual([1234.56]);
+  });
+
+  test('a cell carrying both marks settles the column on its own', () => {
+    expect(parseNumberColumn(['1.234,56', '99'])).toEqual([1234.56, 99]);
+    expect(parseNumberColumn(['1,234.56', '99'])).toEqual([1234.56, 99]);
+  });
+
+  test('a column that cannot decide falls back to the caller hint', () => {
+    // Every mark has exactly three digits behind it — grouping and decimal are
+    // indistinguishable, so the file's own separator decides.
+    expect(parseNumberColumn(['1.234', '12.000'], { commaDecimal: true })).toEqual([1234, 12000]);
+    expect(parseNumberColumn(['1.234', '12.000'], { commaDecimal: false })).toEqual([1.234, 12]);
+  });
+
+  test('one unambiguous cell speaks for the whole column', () => {
+    // "9,5" can only be a fraction, so "1.234" beside it is grouping.
+    expect(parseNumberColumn(['1.234', '9,5'])).toEqual([1234, 9.5]);
+    expect(parseNumberColumn(['1,234', '9.5'])).toEqual([1234, 9.5]);
+  });
+
+  test('a cell with no number in it stays out of the count', () => {
+    const out = parseNumberColumn(['n/a', '', null, '12,5']);
+    expect(Number.isNaN(out[0])).toBe(true);
+    expect(out[3]).toBe(12.5);
   });
 });

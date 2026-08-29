@@ -3,10 +3,11 @@ import { colorOverrideDefaults, applyColorOverrides, themeColorSection } from '.
 import { composeDispose } from '../plugin-contract.js';
 import { renderCalendarView, CALENDAR_VIEW_OPTIONS } from '../calendar-views.js';
 import { textScaleField } from '../text-scale.js';
-import { localeField } from '../locale-field.js';
-import { refreshSecField } from '../refresh-field.js';
+import { localeField, safeLocale } from '../locale-field.js';
+import { refreshSecField, refreshIntervalMs } from '../refresh-field.js';
 import { allEvents as parseIcsEvents } from '../ics-parse.js';
 import { escapeHtml } from '../utils/escape.js';
+import { isRemoteUrl } from '../plugin-network.js';
 
 const pad = n => String(n).padStart(2, '0');
 // Local "YYYY-MM-DDTHH:MM" string for a Date.
@@ -52,6 +53,7 @@ function mergeEvents(manual, live) {
 
 export default register({
   type: 'calendar',
+  network: c => isRemoteUrl(c?.icsUrl),
   label: 'Calendar',
   group: 'data',
   icon: '📅',
@@ -178,7 +180,7 @@ export default register({
 
     const opts = () => ({
       maxItems: c.maxItems ?? 6,
-      locale: c.locale || undefined,
+      locale: safeLocale(c.locale),
       hidePast: c.hidePast,
       daysAhead: Number(c.daysAhead) || 0,
       weekDays: c.weekDays || 'full',
@@ -208,7 +210,7 @@ export default register({
     // good events; manual events always render regardless.
     let fetchId = null;
     if (c.icsUrl) {
-      const refreshMs = c.refreshSec > 0 ? Math.max(5000, c.refreshSec * 1000) : 0;
+      const refreshMs = refreshIntervalMs(c.refreshSec);
       const pull = async () => {
         try {
           const res = await fetch(c.icsUrl, ctx?.signal ? { signal: ctx.signal } : {});

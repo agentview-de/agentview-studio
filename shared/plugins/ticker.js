@@ -135,7 +135,16 @@ export default register({
   render(slide, container, ctx) {
     ensureTickerKeyframes();
     const c = slide.content ?? {};
-    const items = (Array.isArray(c.items) ? c.items : [])
+    // A list of lines is the shape a person writes by hand, and the ticker
+    // accepted only an array — so an imported or hand-edited playlist carrying
+    // "Line one\nLine two" rendered an EMPTY bar with nothing to say about it.
+    // The array already tolerates plain-string entries; this extends the same
+    // tolerance one level up, exactly as kpi-cards does for its sparkline
+    // history. Splitting on newlines only: a message may well contain a comma.
+    const rawItems = typeof c.items === 'string'
+      ? c.items.split(/\r?\n/).map(s => s.trim())
+      : (Array.isArray(c.items) ? c.items : []);
+    const items = rawItems
       .map(i => (typeof i === 'string' ? { text: i } : { text: i?.text, accent: !!i?.accent }))
       .filter(i => i.text);
     const sep = c.separator ?? '•';

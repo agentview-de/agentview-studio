@@ -54,5 +54,15 @@ export function mountWidget(widget, slide, container, ctx = {}, pluginLookup = g
     console.warn('widget render failed', widget.type, e);
     ctx.onError?.();
   }
-  return () => { ctrl.abort(); try { fn(); } catch {} };
+  // Idempotent, as the contract above promises: the returned closure used to
+  // call fn() on EVERY invocation, so a host that disposed twice ran the
+  // plugin's teardown twice — and kept the plugin's closure (its DOM, its
+  // canvas, its fetched data) reachable for as long as anything held this
+  // dispose. Dropping fn is what actually releases the widget.
+  return () => {
+    ctrl.abort();
+    const teardown = fn;
+    fn = () => {};
+    try { teardown(); } catch {}
+  };
 }

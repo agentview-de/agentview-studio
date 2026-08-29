@@ -6,6 +6,8 @@ import { openModal } from './modal.js';
 import { toast } from './toast.js';
 import { t, tx } from '../i18n.js';
 import { escapeHtml } from '../../shared/utils/escape.js';
+import { uiIconSvg } from '../../shared/data/ui-icons.js';
+import { fmtBytes } from '../format-bytes.js';
 
 // Track whether the inspector modal is currently mounted so SSE
 // data.changed/data.deleted events can re-render it in place.
@@ -74,13 +76,13 @@ function row(s) {
   // Per swagger Screen.Central.Contracts.DataSlotListItem: slotId, slug, sizeBytes, readUrl, type, …
   const slug = s.slug ?? s.slotId ?? s.id;
   const isAggregate = s.type === 'aggregate' || s.slotType === 'aggregate';
-  const typeIcon = isAggregate ? '📦' : '✏️';
+  const typeIcon = uiIconSvg(isAggregate ? 'database' : 'pencil', 13);
   const typeLabel = isAggregate ? (t('slot.typeAggregate') || 'Collection') : (t('slot.typeValue') || 'Value');
 
   return `<li class="bb-slot-row" data-slug="${slug}">
     <span class="bb-slot-type-icon" title="${typeLabel}" style="margin-right: 4px; cursor: default;">${typeIcon}</span>
     <span class="bb-slot-slug">${slug}</span>
-    <span class="bb-slot-size">${formatBytes(s.sizeBytes ?? s.bytes ?? 0)}</span>
+    <span class="bb-slot-size">${fmtBytes(s.sizeBytes ?? s.bytes)}</span>
     <span class="bb-slot-actions">
       <button class="bb-iconbtn" data-act="edit">${t('slot.edit')}</button>
       <button class="bb-iconbtn" data-act="copy">${t('slot.copy')}</button>
@@ -154,7 +156,11 @@ async function editSlot(slug) {
 }
 
 async function showSlotUsage(slug) {
-  toast(t('common.loading', 'Lade…') || 'Lade…', { kind: 'info', ttl: 1500 });
+  // t(key, params) takes an OBJECT of interpolations; the string passed here
+  // was walked character by character, and the `||` fallback could never fire
+  // because a missing key comes back as the key itself — the toast said
+  // "common.loading".
+  toast(t('common.loading'), { kind: 'info', ttl: 1500 });
   try {
     const res = await api.usage(slug);
     const list = Array.isArray(res) ? res : (res?.displays ?? res?.items ?? []);
@@ -180,10 +186,3 @@ async function showSlotUsage(slug) {
   }
 }
 
-function formatBytes(b) {
-  if (!b) return '—';
-  const u = ['B','KB','MB','GB'];
-  let i = 0;
-  while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
-  return b.toFixed(1) + ' ' + u[i];
-}

@@ -12,7 +12,10 @@ export function setLocale(loc) {
   if (!DICTIONARIES[loc]) return;
   _current = loc;
   try { localStorage.setItem('bb_locale', loc); } catch {}
-  document.documentElement.lang = loc;
+  // Guarded like the bootstrap below: there is no document in the headless test
+  // run, and a language switch must not be the one thing that cannot be tested
+  // without a browser.
+  try { document.documentElement.lang = loc; } catch { /* no DOM */ }
   for (const fn of _subs) fn(loc);
 }
 

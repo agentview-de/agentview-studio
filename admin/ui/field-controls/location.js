@@ -86,6 +86,7 @@ export function renderLocation(f, v, set) {
 
   let map = null;
   let leafletMarkers = [];
+  let sizeTimer = 0;
   const commit = () => set({ ...val, markers: val.markers.map(m => ({ ...m })) });
 
   const renderMarkerList = () => {
@@ -191,7 +192,14 @@ export function renderLocation(f, v, set) {
     // Drop the "Leaflet" prefix (not required); keep the mandatory OSM/CARTO credit.
     map.attributionControl.setPrefix(false);
     L.tileLayer(TILE_LAYERS['carto-dark'], { attribution: TILE_ATTRIBUTION['carto-dark'] }).addTo(map);
-    setTimeout(() => map.invalidateSize(), 60);
+    // The panel is laid out around this map, so Leaflet has to re-measure once
+    // the flex/grid settles. Sixty milliseconds is also long enough for the
+    // inspector to have re-rendered this field away — selecting another widget
+    // does it — and Leaflet's remove() deletes the map pane while leaving the
+    // map "loaded", so a late invalidateSize() reads _leaflet_pos off nothing
+    // and throws where no try/catch can see it. Hold the timer and check the
+    // element is still on the page.
+    sizeTimer = setTimeout(() => { if (map && mapEl.isConnected) map.invalidateSize(); }, 60);
     refreshLeafletMarkers();
     map.on('moveend zoomend', () => {
       const c = map.getCenter();
@@ -207,7 +215,9 @@ export function renderLocation(f, v, set) {
   // Tear down the Leaflet instance when the inspector re-renders this away.
   const mo = new MutationObserver(() => {
     if (!document.contains(mapEl)) {
-      try { map?.remove(); } catch {}
+      clearTimeout(sizeTimer);
+      try { map?.remove(); } catch { /* already gone */ }
+      map = null;
       document.querySelectorAll('.bb-marker-icon-pop').forEach(el => el.remove());
       mo.disconnect();
     }

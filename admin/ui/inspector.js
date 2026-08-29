@@ -19,6 +19,8 @@ import { t, tx } from '../i18n.js';
 import { registerControl, getControl } from './field-controls/registry.js';
 import { filterFieldsByTier } from './tier-filter.js';
 import { loadCollapsed, saveCollapsed } from './fold-section.js';
+import { escapeHtml as esc } from '../../shared/utils/escape.js';
+import { uiIconSvg } from '../../shared/data/ui-icons.js';
 
 // Register the rich field controls (each its own module) into the control
 // registry — the seam renderField() dispatches through first, mirroring the
@@ -235,7 +237,7 @@ export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, 
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'bb-btn bb-btn-secondary bb-btn-sm';
-      btn.textContent = '⚡ ' + t('probe.test');
+      btn.innerHTML = uiIconSvg('plug', 14) + ' ' + esc(t('probe.test'));
       btn.addEventListener('click', async () => {
         btn.disabled = true;
         const label = btn.textContent;
@@ -439,10 +441,6 @@ export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, 
       for (const g of groups) { try { g.getCtrl?.().dispose?.(); } catch {} }
     },
   };
-}
-
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 function renderField(f, v, set, opts) {
@@ -671,7 +669,7 @@ function renderField(f, v, set, opts) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'bb-btn bb-btn-secondary';
-      btn.textContent = '📁 ' + tx('Browse');
+      btn.innerHTML = uiIconSvg('folder', 14) + ' ' + esc(tx('Browse'));
       row.appendChild(input);
       row.appendChild(btn);
 
@@ -757,7 +755,7 @@ function renderField(f, v, set, opts) {
           const rm = document.createElement('button');
           rm.type = 'button';
           rm.className = 'bb-btn bb-btn-ghost bb-list-rm';
-          rm.textContent = '✕';
+          rm.innerHTML = uiIconSvg('close', 14);
           rm.addEventListener('click', () => { list.splice(idx, 1); set([...list]); render(); });
           row.appendChild(rm);
           wrap.appendChild(row);
@@ -779,7 +777,7 @@ function renderField(f, v, set, opts) {
           const bulk = document.createElement('button');
           bulk.type = 'button';
           bulk.className = 'bb-btn bb-btn-secondary bb-btn-sm';
-          bulk.textContent = '🖼 ' + t('field.pickMultiple');
+          bulk.innerHTML = uiIconSvg('image', 14) + ' ' + esc(t('field.pickMultiple'));
           bulk.addEventListener('click', async () => {
             const urls = await opts.assetsPicker?.(f.bulkAsset);
             if (urls?.length) {
@@ -829,7 +827,7 @@ function wrapExpandable(inner, f, getValue, setValue, kind) {
   expand.type = 'button';
   expand.className = 'bb-textfield-expand';
   expand.title = t('rt.expand');
-  expand.textContent = '⛶';
+  expand.innerHTML = uiIconSvg('expand', 14);
   expand.addEventListener('click', () => openExpandedTextEditor(f, getValue, setValue, kind));
   wrap.appendChild(expand);
   return { el: wrap };

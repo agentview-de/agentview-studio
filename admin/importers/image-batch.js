@@ -1,5 +1,6 @@
 import { createSlideWithWidget } from '../../shared/slide-schema.js';
 import { stripExt } from './_helpers.js';
+import { tx } from '../i18n.js';
 
 export const id = 'image-batch';
 export const label = 'Images';
@@ -21,7 +22,7 @@ export async function convert(input, ctx) {
     fit: 'cover',
     kenBurns: true,
   }, {
-    title: files.length > 1 ? `${files.length} images` : stripExt(files[0]?.name, 'Image'),
+    title: files.length > 1 ? `${files.length} ${tx('images')}` : stripExt(files[0]?.name, tx('Image')),
     duration: Math.max(8, files.length * 5),
   });
   return { slides: [slide], assetsToUpload };

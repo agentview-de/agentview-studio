@@ -7,6 +7,8 @@ import { remoteJsonFields } from '../remote-json-fields.js';
 import { textScaleField } from '../text-scale.js';
 import { STATUS_COLORS } from '../status-colors.js';
 import { escapeHtml } from '../utils/escape.js';
+import { refreshIntervalMs } from '../refresh-field.js';
+import { remoteJsonNetwork } from '../plugin-network.js';
 
 // Normalises remote JSON into { headers:[], rows:[[...]] }. Accepts an array of
 // objects (keys → columns) or an array of arrays (first row = header).
@@ -30,7 +32,10 @@ export default register({
   label: 'Data Table',
   group: 'data',
   icon: '▦',
-  network: true,
+  // Inline data never leaves this machine, and gating it meant you could not
+  // see your own numbers while editing without granting a "live preview"
+  // that was never live — see shared/plugin-network.js.
+  network: remoteJsonNetwork,
   schemaVersion: 1,
   defaults: () => ({ ...colorOverrideDefaults(),
     source: 'inline',
@@ -276,7 +281,7 @@ export default register({
       const stop = liveSource({
         url: c.dataUrl,
         signal: ctx?.signal,
-        intervalMs: refreshSec > 0 ? Math.max(5000, refreshSec * 1000) : 0,
+        intervalMs: refreshIntervalMs(refreshSec),
         fetchInit: { cache: 'no-store' },
         maxErrors: 0,
         backoff: false,

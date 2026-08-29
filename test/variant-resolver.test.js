@@ -124,14 +124,21 @@ describe('resolveSlideWidgets · A/B weighted pick (injected rng)', () => {
   });
 
   test('language filtering happens BEFORE A/B — but a matching A/B variant wins', () => {
-    // lang resolves base→deW first; then the (single, full-weight) A/B variant
-    // overrides it, proving A/B runs on top of the language result.
+    // lang resolves base→deW first; then the A/B pick overrides it, proving A/B
+    // runs on top of the language result.
+    //
+    // TWO arms, deliberately. This case used to make its point with a single
+    // full-weight variant — which encoded the behaviour that turned out to be
+    // the bug: one arm is not a split, and a slide with one must play what the
+    // canvas shows (see "A/B · one arm is not a split" below). The ordering
+    // claim this test is named for needs two arms anyway.
     const s = {
       widgets: base,
       langs: { de: { widgets: deW } },
-      abVariants: [{ widgets: [{ id: 'ab' }], weight: 1 }],
+      abVariants: [{ widgets: [{ id: 'ab' }], weight: 1 }, { widgets: [{ id: 'ab2' }], weight: 1 }],
     };
-    expect(resolveSlideWidgets(s, { lang: 'de', rng: () => 0.5 })[0].id).toBe('ab');
+    expect(resolveSlideWidgets(s, { lang: 'de', rng: () => 0.1 })[0].id).toBe('ab');
+    expect(resolveSlideWidgets(s, { lang: 'de', rng: () => 0.9 })[0].id).toBe('ab2');
   });
 
   test('empty abVariants array leaves the language/base result untouched', () => {
@@ -173,5 +180,62 @@ describe('abVariantLabel', () => {
     expect(abVariantLabel({}, 0)).toBe('A');
     expect(abVariantLabel(null, 1)).toBe('B');
     expect(abVariantLabel(undefined, 2)).toBe('C');
+  });
+});
+
+// A split needs two arms.
+//
+// The editor's "add A/B variant" button copies the current slide.widgets into a
+// new arm and labels it A. One click therefore leaves EXACTLY ONE arm — and a
+// picker that always answers "arm 0" made the display show that snapshot from
+// then on, for good. The canvas kept showing slide.widgets, the user kept
+// editing it, and none of those edits ever reached a screen.
+//
+// Measured on the real player before the fix: the display read
+// "STAND-BEIM-KLICK" while the canvas read "SPAETER-BEARBEITET".
+describe('A/B · one arm is not a split', () => {
+  const w = (body) => [{ id: 'w-' + body, type: 'text', z: 1, rect: { x: 0, y: 0, w: 100, h: 100 }, content: { body } }];
+  const oneArm = () => ({
+    id: 's', duration: 10,
+    widgets: w('BUEHNE'),
+    abVariants: [{ label: 'A', weight: 1, widgets: w('SCHNAPPSCHUSS') }],
+  });
+  const body = (widgets) => widgets.map(x => x.content.body).join('|');
+
+  test('REGRESSION: with a single variant the slide plays what the canvas shows', () => {
+    expect(pickAbVariant(oneArm(), () => 0.5)).toBe(null);
+    expect(body(resolveSlideWidgets(oneArm(), { rng: () => 0.5 }))).toBe('BUEHNE');
+    // …whatever the die says.
+    for (const r of [0, 0.001, 0.5, 0.999]) {
+      expect(body(resolveSlideWidgets(oneArm(), { rng: () => r }))).toBe('BUEHNE');
+    }
+  });
+
+  test('the editor can still preview that one arm on purpose', () => {
+    // Forcing an index is what the variant preview control does; it must keep
+    // working, or you could not look at the arm you just made.
+    expect(body(resolveSlideWidgets(oneArm(), { abIdx: 0 }))).toBe('SCHNAPPSCHUSS');
+  });
+
+  test('a second arm turns it into a real split again', () => {
+    const two = oneArm();
+    two.abVariants.push({ label: 'B', weight: 1, widgets: w('ZWEITER-ARM') });
+    expect(pickAbVariant(two, () => 0.0)).toBe(0);
+    expect(pickAbVariant(two, () => 0.9)).toBe(1);
+    expect(body(resolveSlideWidgets(two, { rng: () => 0.0 }))).toBe('SCHNAPPSCHUSS');
+    expect(body(resolveSlideWidgets(two, { rng: () => 0.9 }))).toBe('ZWEITER-ARM');
+  });
+
+  test('deleting back down to one arm hands the slide back to the canvas', () => {
+    const two = oneArm();
+    two.abVariants.push({ label: 'B', weight: 1, widgets: w('ZWEITER-ARM') });
+    two.abVariants.pop();
+    expect(body(resolveSlideWidgets(two, { rng: () => 0.9 }))).toBe('BUEHNE');
+  });
+
+  test('language variants are unaffected — they are not a split', () => {
+    const s = oneArm();
+    s.langs = { de: { widgets: w('DEUTSCH') } };
+    expect(body(resolveSlideWidgets(s, { lang: 'de', rng: () => 0.5 }))).toBe('DEUTSCH');
   });
 });

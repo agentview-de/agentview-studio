@@ -6,10 +6,8 @@
 // widget simply forgot to offer the knob.
 //
 // The value is SECONDS (type 'duration' per the seconds convention; never a
-// plain number field). 0 means "fetch once at render". The render side is
-// responsible for the 5-second floor — clamp positive values UP via
-// `Math.max(5000, refreshSec * 1000)` (data-table.js is the reference) so a
-// stray "2" polls every 5 s instead of silently never refreshing.
+// plain number field). 0 means "fetch once at render", and the render side
+// turns the number into a timer with refreshIntervalMs() below.
 //
 // opts: { label?, help?, min?, showIf? } — label/help override the canonical
 // wording (pass help: '' to suppress the help line entirely), min defaults to
@@ -24,4 +22,23 @@ export function refreshSecField(opts = {}) {
   };
   if (opts.showIf) f.showIf = opts.showIf;
   return f;
+}
+
+// The render-side half of the same field: seconds in, milliseconds out.
+//
+// The 5-second floor used to be prose — "clamp positive values UP via
+// Math.max(5000, refreshSec * 1000), data-table.js is the reference" — and
+// THIRTEEN widgets each wrote that expression by hand. All thirteen got it
+// right, which is exactly the situation in which the fourteenth will not: a
+// display polling somebody's API every second is a small denial-of-service
+// that runs unattended, and nothing in the code would have said so.
+//
+// 0 (or anything that is not a positive number) means "fetch once" — the
+// caller arms no timer at all.
+export const REFRESH_MIN_MS = 5000;
+
+export function refreshIntervalMs(refreshSec, { min = REFRESH_MIN_MS } = {}) {
+  const sec = Number(refreshSec);
+  if (!Number.isFinite(sec) || sec <= 0) return 0;
+  return Math.max(min, Math.round(sec * 1000));
 }

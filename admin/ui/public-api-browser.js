@@ -23,7 +23,7 @@ export async function open(addSlide) {
       const r = await api.search(q);
       const items = Array.isArray(r) ? r : (r?.apis ?? r?.results ?? []);
       list.innerHTML = items.slice(0, 40).map(apiRow).join('') || `<div class="bb-empty-state">${tx('No matches.')}</div>`;
-    } catch (e) { list.innerHTML = `<div class="bb-empty-state">${tx('Search failed')}: ${e.message}</div>`; }
+    } catch (e) { list.innerHTML = `<div class="bb-empty-state">${tx('Search failed')}: ${escapeHtml(e.message)}</div>`; }
   };
   fetchResults('');
   host.querySelector('#papi-q').addEventListener('input', debounce(e => fetchResults(e.target.value), 300));

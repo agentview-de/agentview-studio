@@ -3,7 +3,7 @@ import { colorOverrideDefaults, themeColorSection, applyColorOverrides } from '.
 import { composeDispose } from '../plugin-contract.js';
 import { liveSource } from '../live-source.js';
 import { isStored, dataModeField, offlineLiveOpts } from '../offline-data.js';
-import { refreshSecField } from '../refresh-field.js';
+import { refreshSecField, refreshIntervalMs } from '../refresh-field.js';
 import { textScaleField } from '../text-scale.js';
 import { escapeHtml } from '../utils/escape.js';
 
@@ -186,7 +186,7 @@ export default register({
     const stop = liveSource({
       url: c.url,
       signal: ctx?.signal,
-      intervalMs: stored || refreshSec <= 0 ? 0 : Math.max(5000, refreshSec * 1000),
+      intervalMs: stored || refreshSec <= 0 ? 0 : refreshIntervalMs(refreshSec),
       ...offlineLiveOpts(c),
       fetchInit: { cache: 'no-store' },
       maxErrors: 3,

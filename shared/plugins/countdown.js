@@ -1,7 +1,7 @@
 import { register } from './registry.js';
 import { themeColorSection, colorOverrideDefaults, applyColorOverrides } from '../widget-color.js';
 import { textScaleField } from '../text-scale.js';
-import { localeField } from '../locale-field.js';
+import { localeField, safeLocale } from '../locale-field.js';
 import { defaultTz } from '../utils/default-tz.js';
 import { composeDispose } from '../plugin-contract.js';
 import { escapeHtml } from '../utils/escape.js';
@@ -20,7 +20,7 @@ const INTL_UNITS = { d: 'day', h: 'hour', m: 'minute', s: 'second' };
 
 function intlUnitLabel(k, count, locale, display) {
   try {
-    const part = new Intl.NumberFormat(locale || undefined, { style: 'unit', unit: INTL_UNITS[k], unitDisplay: display })
+    const part = new Intl.NumberFormat(safeLocale(locale), { style: 'unit', unit: INTL_UNITS[k], unitDisplay: display })
       .formatToParts(count).find(p => p.type === 'unit');
     return part?.value || null;
   } catch { return null; } // exotic embedders without style:'unit' support
@@ -41,8 +41,8 @@ function unitLabel(k, count, locale, style) {
 // not re-projected into the viewer's zone. Bad/missing tz → viewer zone.
 function formatTarget(target, tz, locale) {
   const opts = { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' };
-  try { return new Intl.DateTimeFormat(locale || undefined, { ...opts, timeZone: tz || undefined }).format(target); }
-  catch { return new Intl.DateTimeFormat(locale || undefined, opts).format(target); }
+  try { return new Intl.DateTimeFormat(safeLocale(locale), { ...opts, timeZone: tz || undefined }).format(target); }
+  catch { return new Intl.DateTimeFormat(safeLocale(locale), opts).format(target); }
 }
 
 const UNIT_KEYS = {
@@ -140,7 +140,7 @@ export default register({
   ],
   render(slide, container) {
     const c = slide.content ?? {};
-    const locale = c.locale || undefined;
+    const locale = safeLocale(c.locale);
     const unitStyle = c.unitStyle ?? 'short';
     const targetAt = (c.target && typeof c.target === 'object') ? c.target.at : null;
     const target = targetAt != null ? new Date(targetAt) : null;

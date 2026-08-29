@@ -9,7 +9,7 @@
 // Wording is deliberately unambiguous: only "Veröffentlichen" / "Publish".
 
 import { state } from './store.js';
-import { displays as displaysApi, slots, groups as groupsApi, assets } from './api.js';
+import { displays as displaysApi, slots, groups as groupsApi, assets, categoryIdOf } from './api.js';
 import { bundlePlayer, VENDOR_TYPES } from './publish.js';
 import { openModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
@@ -18,11 +18,15 @@ import { collectUniqueSlots } from '../shared/binding-resolver.js';
 import { offlineSlugFor, withOfflineBindings, offlineWidgets, isStored } from '../shared/offline-data.js';
 import { setOfflinePreview } from './offline-preview.js';
 import { get as getPlugin } from '../shared/plugins/registry.js';
+import { widgetIcon } from '../shared/data/widget-icons.js';
 import { buildSyncAnchor } from '../shared/sync-clock.js';
 import { isEditingVariant, exitVariantEdit } from './canvas/variant-ctx.js';
 // Reused at runtime only (publish-flow <-> displays is a module cycle; the
 // binding is resolved by the time the click handler fires).
 import { pairModal } from './views/displays.js';
+import { escapeHtml as esc } from '../shared/utils/escape.js';
+import { coalesce } from '../shared/async-refresh.js';
+import { getLocale } from './i18n.js';
 
 const slugFor = pl => 'avs-' + (pl?.id ?? 'data');
 const historySlugFor = pl => 'avs-' + (pl?.id ?? 'data') + '-history';
@@ -129,7 +133,8 @@ export async function openOfflineDataPanel() {
   const fmtStamp = (iso) => {
     if (!iso) return null;
     const d = new Date(iso);
-    return isNaN(d) ? null : d.toLocaleString();
+    // Studio language, and the same short shape the rest of the admin uses.
+    return isNaN(d) ? null : d.toLocaleString(getLocale(), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   // Read each slot's fetchedAt once, then paint. Re-run after a refresh.
@@ -142,7 +147,7 @@ export async function openOfflineDataPanel() {
     const stamps = await Promise.allSettled(widgets.map(w => slots.getValue(offlineSlugFor(w))));
     list.innerHTML = widgets.map((w, i) => {
       const plugin = getPlugin(w.type);
-      const icon = plugin?.icon ?? '◷';
+      const icon = widgetIcon(w.type, esc(String(plugin?.icon ?? '◷')), 20);
       const label = plugin?.label ?? w.type ?? 'Widget';
       const slug = offlineSlugFor(w);
       const val = stamps[i].status === 'fulfilled' ? stamps[i].value : null;
@@ -151,7 +156,7 @@ export async function openOfflineDataPanel() {
         ? (t('offline.lastUpdated', { when }) ?? `Last refreshed: ${when}`)
         : (t('offline.neverYet') ?? 'not provisioned yet');
       return `<div class="avs-ods-row" style="display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--bb-border,#2a2a35);border-radius:8px;">
-        <span style="font-size:20px;line-height:1;">${esc(String(icon))}</span>
+        <span style="font-size:20px;line-height:1;display:inline-flex;color:var(--bb-ink-muted);">${icon}</span>
         <div style="min-width:0;flex:1;">
           <div style="font-weight:600;">${esc(label)}${w.content?.title ? ' · ' + esc(w.content.title) : ''}</div>
           <div class="bb-form-help" style="margin:2px 0 0;">${esc(slug)} · ${esc(stand)}</div>
@@ -201,14 +206,21 @@ function unwrapAssets(raw) {
 // content-addressed (sha256) with a stable-name fallback, so the immutable vendor
 // files upload once per account — repeat publishes reuse them. The in-flight
 // `cache` keys by source URL so each file is fetched/hashed once per publish.
-function makeAssetResolver() {
+export function makeAssetResolver() {
   const cache = new Map();   // absoluteUrl → assetUrl (this publish)
-  let existing = null;       // lazily: { byHash, byName } from assets.list()
+  let existing = null;       // lazily: { byHash, byName } from assets.listAll()
   const ensureExisting = async () => {
     if (existing) return existing;
     existing = { byHash: new Map(), byName: new Map() };
     try {
-      for (const a of unwrapAssets(await assets.list())) {
+      // listAll, not list. The promise two comments up — "the immutable vendor
+      // files upload once per account" — is only kept if the index of what is
+      // already there covers the WHOLE account. Built from the server's first
+      // page, it stops finding the vendor bundle as soon as an account has more
+      // assets than fit on one, and every publish from then on re-uploads the
+      // same ten files: a store that grows without bound and a quota that runs
+      // out for no reason anybody could see.
+      for (const a of unwrapAssets(await assets.listAll())) {
         const url = a?.url || a?.publicUrl || a?.downloadUrl;
         if (!url) continue;
         if (a.sha256) existing.byHash.set(String(a.sha256).toLowerCase(), url);
@@ -350,7 +362,9 @@ export async function publishToGroup(groupId) {
 // re-publish with one click. Stored under state.meta.lastPublish via doPublish.
 export async function publishLast() {
   const last = state.meta?.lastPublish;
-  if (!last) { toast(t('pub.noLastTarget') ?? 'Noch nichts veröffentlicht — bitte zuerst Ziel wählen.', { kind: 'warn' }); openPublishPicker(); return; }
+  // `t()` returns the KEY when it is missing, never null — so the `??` that
+  // used to stand here could not fire and the toast read "pub.noLastTarget".
+  if (!last) { toast(t('pub.noLastTarget'), { kind: 'warn' }); openPublishPicker(); return; }
   if (last.mode === 'group') return doPublish({ mode: 'group', groupId: last.groupId });
   return doPublish({ mode: last.mode, displayIds: last.displayIds });
 }
@@ -391,7 +405,7 @@ export async function openPublishPicker(preselect = {}) {
       if (preselect.displayId) target.querySelector('#pub-one').value = preselect.displayId;
     } else if (mode === 'group') {
       target.innerHTML = groups.length
-        ? `<label>${t('pub.group')}</label><select id="pub-grp">${groups.map(g => `<option value="${g.id ?? g.categoryId}">${esc(g.name ?? g.label)}</option>`).join('')}</select>`
+        ? `<label>${t('pub.group')}</label><select id="pub-grp">${groups.map(g => `<option value="${categoryIdOf(g)}">${esc(g.name ?? g.label)}</option>`).join('')}</select>`
         : `<p class="bb-form-help">${t('pub.noGroups')}</p>`;
     } else {
       target.innerHTML = `<label>${t('pub.multi')}</label><div class="avs-pub-checks">${ds.map(d =>
@@ -443,6 +457,14 @@ async function doPublish({ mode, displayIds = [], groupId }) {
     toast(t('pub.emptyPlaylist'), { kind: 'warn' });
     return;
   }
+  // One publish at a time. Building the bundle, the dry-run and the upload
+  // take as long as they take — seconds on a big playlist, longer over a slow
+  // link — and until now nothing said so: the toolbar stayed live, the button
+  // stayed clickable, and Quick-Republish has no dialog in front of it at all.
+  // A second click sent a SECOND bundle to every targeted screen, wrote a
+  // second version snapshot, and delivered twice.
+  if (state.meta.publishingTo) { toast(t('pub.inFlight'), { kind: 'warn' }); return; }
+  state.meta.publishingTo = { mode, displayIds, groupId, at: Date.now() };
   toast(t('pub.publishing'), { kind: 'info', ttl: 2000 });
   try {
     const { html, name, sourcePlaylist } = await buildBundle();
@@ -492,11 +514,25 @@ async function doPublish({ mode, displayIds = [], groupId }) {
     refreshRunning(ids);
   } catch (e) {
     toast(t('pub.failed', { msg: e.message }), { kind: 'error' });
+  } finally {
+    // In `finally`, not after the happy path: a failed publish that left the
+    // flag standing would lock the button for the rest of the session.
+    state.meta.publishingTo = null;
   }
 }
 
 // Refresh "currently running" labels for the given displays (or all online).
-export async function refreshRunning(displayIds) {
+//
+// Coalesced, because the SSE handler calls this once per `content.delivered`
+// and each call fans out over every online display: publishing to twenty
+// screens produced twenty overlapping fan-outs of twenty requests. The merge
+// keeps what the collapsed calls asked for — a call for "all" absorbs the id
+// lists, otherwise they are unioned, so no display is left with a stale label.
+export const refreshRunning = coalesce(refreshRunningOnce, {
+  merge: ([a], [b]) => (!a?.length || !b?.length ? [undefined] : [[...new Set([...a, ...b])]]),
+});
+
+async function refreshRunningOnce(displayIds) {
   const ids = displayIds?.length ? displayIds
     : (state.fleet.displays ?? []).filter(d => d.status === 'online' || d.online).map(d => d.id);
   await Promise.all(ids.map(async id => {
@@ -523,8 +559,4 @@ function confetti() {
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 3000);
   }
-}
-
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

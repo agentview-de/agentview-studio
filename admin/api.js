@@ -6,8 +6,8 @@
 
 import { state } from './store.js';
 import { toast } from './ui/toast.js';
-import { t } from './i18n.js';
-import { authHeader, resolveUrl } from './api-url.js';
+import { t, getLocale } from './i18n.js';
+import { authHeader, resolveUrl, storeQuery, nextStoreOffset } from './api-url.js';
 
 // The server rejects admin/owner calls made with a non-admin token (a session
 // the user approved without admin rights, or a content_only API key) with a
@@ -56,11 +56,24 @@ async function request(method, path, body, opts = {}) {
   return data;
 }
 
-// duration is a non-nullable int32 in [1, 86400]; return it as a spreadable
-// fragment only when valid, so absent/invalid values are omitted (not sent null).
+// duration is an int32 in [1, 86400]; return it as a spreadable fragment only
+// when valid, so absent/invalid values are omitted (not sent null). 2.1.120
+// additionally documents 0 and null as "indefinite", but omitting means the
+// same thing and stays compatible with the stricter older validator.
 function validDuration(d) {
   const n = Number(d);
   return Number.isInteger(n) && n >= 1 && n <= 86400 ? { duration: n } : {};
+}
+
+// The privacy enum travels as 'Private' | 'Public' but is read back from list
+// payloads in whatever casing the server chose; keep both directions in one
+// place so a select can compare with privacyModeOf() and send the raw value.
+function normalisePrivacyMode(mode) {
+  const m = String(mode ?? '').toLowerCase();
+  return m === 'public' ? 'Public' : m === 'private' ? 'Private' : mode;
+}
+export function privacyModeOf(display) {
+  return String(display?.privacyMode ?? '').toLowerCase();
 }
 
 // ---------- Auth ----------
@@ -71,7 +84,27 @@ export const auth = {
   sessionStatus: (id) =>
     request('GET', `/api/v1/agent/session/status?id=${encodeURIComponent(id)}`),
   apiKeyList: () => request('GET', '/api/v1/agent/api-keys'),
-  apiKeyCreate: (params) => request('POST', '/api/v1/agent/api-keys', params),
+  // 2.1.x keys take far more than name+scope, and every extra narrows the
+  // key — it can never widen it:
+  //   expiresInDays  — omitted means the key never expires
+  //   permissions    — 'read' | 'write' | 'read_write' (default), matched
+  //                    against the HTTP verb on top of `scope`
+  //   capabilities   — 'slot.read' | 'slot.write' | 'display.read' |
+  //                    'display.send' | 'display.manage' (max: all of them)
+  //   allowedDisplayIds / allowedSlotSlugs — pin the key to ≤64 displays/slugs
+  // The server treats an empty array the same as an absent one ("no
+  // restriction"), so we omit empties instead of sending [] — the request then
+  // says exactly what it means.
+  apiKeyCreate: ({ name, scope, expiresInDays, permissions, capabilities, allowedDisplayIds, allowedSlotSlugs, orgId } = {}) =>
+    request('POST', '/api/v1/agent/api-keys', {
+      name, scope,
+      ...(Number.isInteger(expiresInDays) && expiresInDays > 0 ? { expiresInDays } : {}),
+      ...(permissions ? { permissions } : {}),
+      ...(capabilities?.length ? { capabilities } : {}),
+      ...(allowedDisplayIds?.length ? { allowedDisplayIds } : {}),
+      ...(allowedSlotSlugs?.length ? { allowedSlotSlugs } : {}),
+      ...(orgId ? { orgId } : {}),
+    }),
   apiKeyRevoke: (id) => request('DELETE', `/api/v1/agent/api-keys/${encodeURIComponent(id)}`),
   licenseInfo: () => request('GET', '/api/v1/agent/license-info'),
   // Current session introspection (token claims, scope, expiry) — new in the
@@ -86,6 +119,12 @@ export const auth = {
   redeemHandoff: (code) => request('POST', '/api/v1/studio/handoff/redeem', { code }),
 };
 
+// Lifetime for the signed preview links Studio mints. Every call site opens
+// the link right away, so the server's 1-hour default only widens the window
+// in which a leaked URL still renders the display; 15 minutes is plenty for a
+// look. The server clamps ttlSeconds to [60, 86400].
+export const PREVIEW_LINK_TTL_S = 900;
+
 // ---------- Displays ----------
 export const displays = {
   list: () => request('GET', '/api/v1/agent/displays'),
@@ -93,16 +132,32 @@ export const displays = {
   create: (body) => request('POST', '/api/v1/agent/displays', body),
   patch: (id, body) => request('PATCH', `/api/v1/agent/displays/${id}`, body),
   remove: (id) => request('DELETE', `/api/v1/agent/displays/${id}`),
+  // { code, profileName?, targetDisplayId? } — targetDisplayId (2.1.x) moves
+  // an EXISTING display profile onto the freshly paired hardware instead of
+  // creating a new one, so content, groups and licence stay attached.
   pairByCode: (body) => request('POST', '/api/v1/agent/displays/pair-by-code', body),
   capabilities: (id) => request('GET', `/api/v1/agent/displays/${id}/capabilities`),
+  // One body for every display setting (camelCased from the configure_display
+  // MCP tool): name, locked, privacyMode, origins, allowCamera/-Microphone/
+  // -Geolocation, preferredLanguage, showMouseCursor, showBadgeOverlay,
+  // watermarkPosition, plus the per-display network policy
+  // (connectivityMode / whitelist / strictWhitelist) that used to be org-only.
   configure: (id, body) => request('POST', `/api/v1/agent/displays/${id}/configure`, body),
   lock: (id) => request('POST', `/api/v1/agent/displays/${id}/lock`),
   unlock: (id) => request('POST', `/api/v1/agent/displays/${id}/unlock`),
+  // The server enum is PascalCase ('Private' | 'Public') — per the
+  // configure_display MCP schema — while the Studio's selects speak lowercase.
+  // Normalise on the way out so a lowercase value can't be rejected; read the
+  // value back case-insensitively (see privacyModeOf below).
   setPrivacyMode: (id, mode) =>
-    request('PATCH', `/api/v1/agent/displays/${id}/privacy-mode`, { privacyMode: mode }),
+    request('PATCH', `/api/v1/agent/displays/${id}/privacy-mode`, { privacyMode: normalisePrivacyMode(mode) }),
   setEmbeddableOrigins: (id, origins) =>
     request('PATCH', `/api/v1/agent/displays/${id}/embeddable-origins`, { origins }),
-  previewLink: (id) => request('POST', `/api/v1/agent/displays/${id}/preview-link`),
+  // ttlSeconds (2.1.x) shortens the signed link's lifetime — pass one for
+  // anything shared outside the room. Omitted → the server default.
+  previewLink: (id, ttlSeconds) =>
+    request('POST', `/api/v1/agent/displays/${id}/preview-link`,
+      Number.isInteger(ttlSeconds) && ttlSeconds > 0 ? { ttlSeconds } : undefined),
   rotateManagedSecret: (id) =>
     request('POST', `/api/v1/agent/displays/${id}/managed-secret/rotate`),
   revokeManagedSecret: (id) =>
@@ -124,7 +179,8 @@ export const displays = {
   // Server-side category broadcast (2.1.x): sends to every display in the
   // given categories in ONE call — no client-side membership resolution, no
   // stale-member race; locked displays are skipped with reason='locked'.
-  // Body mirrors the MCP broadcast_to_categories tool (camelCased):
+  // Body mirrors the MCP broadcast_content tool's category mode (camelCased;
+  // that tool absorbed the former broadcast_to_categories in 2.1.x):
   // { includeCategoryIds, html, description?, includeDescendants?, dryRun? }.
   broadcastByCategory: (categoryIds, html, opts = {}) =>
     request('POST', '/api/v1/owner/displays/broadcast-by-category', {
@@ -139,16 +195,37 @@ export const displays = {
   // Raw rendered HTML currently on the display (live or idle). Server replaces
   // a template's {{slot:…}} with real read URLs before serving, so this is the
   // source for the "Inhalte" tab's preview + slot discovery.
-  readHtml: (id, type = 'live') =>
-    request('GET', `/api/v1/agent/displays/${id}/html${type ? `?contentType=${encodeURIComponent(type)}` : ''}`),
+  // The documented query key is snake_case (`content_type`, matching the
+  // read_display_html MCP tool); Studio used to send only camelCase, which the
+  // server ignores — so ?contentType=idle silently returned the LIVE document.
+  // Both spellings go out: the unknown one is dropped, whichever it is.
+  readHtml: (id, type = 'live') => {
+    const qs = type ? `?content_type=${encodeURIComponent(type)}&contentType=${encodeURIComponent(type)}` : '';
+    return request('GET', `/api/v1/agent/displays/${id}/html${qs}`);
+  },
   // Pre-publish dry-run validation (1 MB limit) — returns warnings, never ships.
-  testContent: (html) => request('POST', '/api/v1/agent/displays/test/content', { html }),
+  // description is required by the test_display_content MCP tool and shown in
+  // the documented curl example, so send one rather than rely on it staying
+  // optional on the REST side.
+  testContent: (html, description = 'agentView Studio check') =>
+    request('POST', '/api/v1/agent/displays/test/content', { html, description }),
   // Load a plain URL in the display's iframe (alternative to HTML content).
+  // duration applies to the url call too (documented alongside content and
+  // broadcast); same [1, 86400] guard, omitted = stays until replaced.
   sendUrl: (id, url, opts = {}) =>
     request('POST', `/api/v1/agent/displays/${id}/url`,
-      { url, description: opts.description ?? 'agentView Studio URL', contentDescription: opts.description ?? 'agentView Studio URL' }),
-  // Adopt an unconfigured display.
-  claim: (id) => request('POST', `/api/v1/agent/displays/${id}/claim`),
+      { url, description: opts.description ?? 'agentView Studio URL',
+        contentDescription: opts.description ?? 'agentView Studio URL', ...validDuration(opts.duration) }),
+  // Adopt an unconfigured display. claim_display (MCP) requires a
+  // profile_name; the REST body historically took none, and we cannot tell
+  // which the deployed server wants without an account — so send the name when
+  // we have one and retry bare on a 400. Either server shape works.
+  claim: async (id, profileName) => {
+    const path = `/api/v1/agent/displays/${id}/claim`;
+    if (!profileName) return request('POST', path);
+    try { return await request('POST', path, { profileName }); }
+    catch (e) { if (e.status !== 400) throw e; return request('POST', path); }
+  },
   getSourceLock: (id) => request('GET', `/api/v1/owner/displays/${id}/source-lock`),
   setSourceLock: (id, apiKeyId) => request('PUT', `/api/v1/owner/displays/${id}/source-lock`, { apiKeyId }),
 };
@@ -159,6 +236,32 @@ export const displays = {
 // real display-categories — server-side, persistent, visible in the owner portal.
 // Category membership is NOT on the display object; read it via the agent
 // displays filter (?categoryId=…). Category id field is `categoryId`.
+/**
+ * The identifier the display-category endpoints take.
+ *
+ * Every write in `groups` below addresses a category by `categoryId` —
+ * `/display-categories/{categoryId}`, `?categoryId=…`, `{ categoryIds }` — so
+ * that is what "the id of a group" means in this app. The UI resolved it four
+ * times in three different ways, and two of them preferred `id`:
+ *
+ *   displays.js  membersOf(c.categoryId ?? c.id)   // read membership
+ *   displays.js  groupId = g => g.id ?? g.categoryId
+ *   displays.js  cid = c.id ?? c.categoryId
+ *   publish-flow.js  <option value="${g.id ?? g.categoryId}">
+ *
+ * As long as a payload carries only one of the two names, all four agree. The
+ * moment it carries both — a row id AND the category id, which REST APIs do —
+ * membership is read under one key while publishing, patching, deleting and
+ * assigning go to the other. One helper, one precedence, matching the endpoint.
+ *
+ * Accepts a category object or a bare id string (a display's `categoryIds`
+ * entries are sometimes one, sometimes the other).
+ */
+export function categoryIdOf(group) {
+  if (typeof group === 'string') return group;
+  return group?.categoryId ?? group?.id ?? '';
+}
+
 export const groups = {
   list: () => request('GET', '/api/v1/owner/display-categories'),
   create: (body) => request('POST', '/api/v1/owner/display-categories', body), // { name, parentCategoryId? }
@@ -174,14 +277,52 @@ export const groups = {
     request('GET', `/api/v1/agent/displays?categoryId=${encodeURIComponent(categoryId)}`),
   // Bulk add/remove ONE category across many displays (2.1.x). Owner-scoped:
   // touches only the caller's assignment rows. mode: 'add' | 'remove'.
+  // The MCP counterpart (assign_display_categories) also models a 'replace'
+  // mode over category_ids[]; on REST that is setForDisplay() above, so the
+  // singular categoryId body stays the right shape here.
   bulkAssign: (categoryId, displayIds, mode = 'add') =>
     request('POST', '/api/v1/owner/display-categories/bulk-assign',
       { categoryId, displayIds, mode }),
 };
 
 // ---------- Assets ----------
+// The asset list endpoint pages like the store catalog does; this is the page
+// size the panel asks for. listAll() below walks past it.
+const ASSET_PAGE = 200;
+
 export const assets = {
-  list: () => request('GET', '/api/v1/assets'),
+  // 2.1.x filters server-side: type ('image' | 'video' | 'audio' | 'document'
+  // | 'font'), search (name/description), plus limit/offset paging. Called
+  // bare it behaves exactly as before.
+  list: (opts = {}) => {
+    const qs = new URLSearchParams();
+    if (opts.search) qs.set('search', opts.search);
+    if (opts.type) qs.set('type', opts.type);
+    if (opts.limit) qs.set('limit', String(opts.limit));
+    if (opts.offset) qs.set('offset', String(opts.offset));
+    const q = qs.toString();
+    return request('GET', '/api/v1/assets' + (q ? '?' + q : ''));
+  },
+  // Walk every page. The panel used to ask for the server's maximum page size
+  // and call the result complete — which it is, right up to the customer whose
+  // library holds one asset more than a page. Then the grid quietly shows a
+  // prefix and nothing says so. Same shape as storeTemplates.searchAll(): the
+  // envelope the caller already knows, with everything in it.
+  listAll: async (opts = {}) => {
+    const limit = opts.limit ?? ASSET_PAGE;
+    const out = [];
+    let offset = 0, total = null;
+    for (let page = 0; page < 25; page++) {
+      const r = await assets.list({ ...opts, limit, offset });
+      const batch = Array.isArray(r) ? r : (r?.assets ?? r?.items ?? r?.data ?? []);
+      out.push(...batch);
+      if (Number.isFinite(r?.total)) total = r.total;
+      const next = nextStoreOffset({ offset, limit, returned: batch.length, total });
+      if (next == null) break;
+      offset = next;
+    }
+    return { assets: out, total: total ?? out.length };
+  },
   // Multipart upload: 1-20 files under field "files" + a REQUIRED "descriptions"
   // field (JSON array indexed by file order). The descriptions requirement is
   // undocumented in the spec — discovered from the 400 error body.
@@ -193,7 +334,25 @@ export const assets = {
     return request('POST', '/api/v1/assets', fd);
   },
   patch: (id, body) => request('PATCH', `/api/v1/assets/${id}`, body),
-  remove: (id) => request('DELETE', `/api/v1/assets/${id}`),
+  // delete_asset (MCP) takes asset_ids[]; REST has had one DELETE per id. One
+  // id → the classic call. Several → try a collection DELETE and fall back to
+  // sequential deletes when the server does not know that shape (400/404/405).
+  // The fallback tolerates a 404 per id so a partially-applied bulk attempt
+  // cannot strand the rest.
+  remove: async (idOrIds) => {
+    const ids = (Array.isArray(idOrIds) ? idOrIds : [idOrIds]).filter(Boolean);
+    if (ids.length <= 1) return request('DELETE', `/api/v1/assets/${encodeURIComponent(ids[0] ?? '')}`);
+    try { return await request('DELETE', '/api/v1/assets', { assetIds: ids }); }
+    catch (e) {
+      if (![400, 404, 405].includes(e.status)) throw e;
+      let deleted = 0;
+      for (const id of ids) {
+        try { await request('DELETE', `/api/v1/assets/${encodeURIComponent(id)}`); deleted++; }
+        catch (err) { if (err.status !== 404) throw err; }
+      }
+      return { deleted };
+    }
+  },
   quota: () => request('GET', '/api/v1/assets/quota'),
 };
 
@@ -210,14 +369,49 @@ function unwrapSlotJson(raw) {
   return body;
 }
 
+// The slot list pages like the asset list and the store catalog: server default
+// 50, maximum 200. This is what listAll() asks for per page.
+const SLOT_PAGE = 200;
+
 export const slots = {
-  list: () => request('GET', '/api/v1/data'),
+  // 2.1.x adds search (slug/label) and limit/offset paging to the slot list;
+  // bare list() is unchanged for the callers that just want everything.
+  list: (opts = {}) => {
+    const qs = new URLSearchParams();
+    if (opts.search) qs.set('search', opts.search);
+    if (opts.limit) qs.set('limit', String(opts.limit));
+    if (opts.offset) qs.set('offset', String(opts.offset));
+    const q = qs.toString();
+    return request('GET', '/api/v1/data' + (q ? '?' + q : ''));
+  },
   // PUT requires ?label= when creating a new slug (and a type). Sending both
   // always is safe — they're ignored on update.
   put: (slug, value, opts = {}) => {
     // type must be 'value' | 'aggregate' (NOT 'json'); label required on create.
     const qs = new URLSearchParams({ label: opts.label ?? slug, type: opts.type ?? 'value' });
     return request('PUT', `/api/v1/data/${encodeURIComponent(slug)}?${qs.toString()}`, value);
+  },
+  // Walk every page. Called bare, the endpoint answers ONE page (server
+  // default 50, max 200) — and this app writes a slot per published playlist
+  // plus one per offline-provisioned widget, so a working account crosses that
+  // line by itself. Both places that listed slots read the first page and
+  // called it the whole set: "Aus agentView öffnen" stopped offering older
+  // playlists, and the binding inspector's slug list stopped suggesting them.
+  // Same walk as assets.listAll(), same envelope back.
+  listAll: async (opts = {}) => {
+    const limit = opts.limit ?? SLOT_PAGE;
+    const out = [];
+    let offset = 0, total = null;
+    for (let page = 0; page < 25; page++) {
+      const r = await slots.list({ ...opts, limit, offset });
+      const batch = Array.isArray(r) ? r : (r?.slots ?? r?.items ?? r?.data ?? []);
+      out.push(...batch);
+      if (Number.isFinite(r?.total)) total = r.total;
+      const next = nextStoreOffset({ offset, limit, returned: batch.length, total });
+      if (next == null) break;
+      offset = next;
+    }
+    return { slots: out, total: total ?? out.length };
   },
   get: (slug) => request('GET', `/api/v1/data/${encodeURIComponent(slug)}`),
   getValue: async (slug) => unwrapSlotJson(await request('GET', `/api/v1/data/${encodeURIComponent(slug)}`)),
@@ -322,15 +516,46 @@ export const approval = {
 // plural (`agent-artifacts`) and has a `/{key}/raw` subpath for the raw body.
 // The mutation endpoint is `/send` (Studio's UX-naming "install" is just
 // historical) plus a `/copy` to clone the template into the user's own slot.
+// The catalog is localised: without ?language= the server answers in German,
+// so every read passes the Studio's current UI locale (verified live: title,
+// shortDescription and the nested category title all switch). The list is also
+// paged — ?limit is capped at 100 and the envelope carries { total, offset,
+// limit } — hence searchAll() below.
+const STORE_PAGE = 100;
+
 export const storeTemplates = {
-  categories: () => request('GET', '/api/v1/store/categories'),
-  search: (query, category) => {
-    const qs = new URLSearchParams();
-    if (query) qs.set('q', query);
-    if (category) qs.set('category', category);
-    return request('GET', '/api/v1/store/templates?' + qs.toString());
+  categories: (language = getLocale()) =>
+    request('GET', '/api/v1/store/categories' + (language ? `?language=${encodeURIComponent(language)}` : '')),
+  // NOTE: the free-text key is `search`, not `q` — see storeQuery() in
+  // api-url.js. Prefer searchAll() for anything user-facing; this raw call
+  // returns one page.
+  search: (query, category, opts = {}) => {
+    const qs = storeQuery({
+      search: query, category, language: opts.language ?? getLocale(),
+      limit: opts.limit ?? STORE_PAGE, offset: opts.offset,
+    });
+    return request('GET', '/api/v1/store/templates' + (qs ? '?' + qs : ''));
   },
-  details: (slug) => request('GET', `/api/v1/store/templates/${encodeURIComponent(slug)}`),
+  // Walk every page so the Library shows the whole catalog instead of the
+  // server's first page. Returns the same envelope shape as search().
+  searchAll: async (query, category, opts = {}) => {
+    const limit = Math.min(opts.limit ?? STORE_PAGE, STORE_PAGE);
+    const templates = [];
+    let offset = 0, total = null;
+    for (let page = 0; page < 20; page++) {
+      const r = await storeTemplates.search(query, category, { ...opts, limit, offset });
+      const batch = Array.isArray(r) ? r : (r?.templates ?? r?.items ?? []);
+      templates.push(...batch);
+      if (Number.isFinite(r?.total)) total = r.total;
+      const next = nextStoreOffset({ offset, limit, returned: batch.length, total });
+      if (next == null) break;
+      offset = next;
+    }
+    return { templates, total: total ?? templates.length };
+  },
+  details: (slug, language = getLocale()) =>
+    request('GET', `/api/v1/store/templates/${encodeURIComponent(slug)}`
+      + (language ? `?language=${encodeURIComponent(language)}` : '')),
   // Raw display-HTML body of a template + its static slot defs + allowed
   // origins — the source for "Insert as slide". {{asset:…}} is server-resolved
   // to public URLs; {{slot:KEY.prop}} stays literal so the template's own JS
@@ -340,11 +565,21 @@ export const storeTemplates = {
   content: (slug, version) =>
     request('GET', `/api/v1/store/templates/${encodeURIComponent(slug)}/content`
       + (version ? `?version=${encodeURIComponent(version)}` : '')),
-  installOptions: (slug) =>
-    request('GET', `/api/v1/store/templates/${encodeURIComponent(slug)}/install-options`),
-  sendToDisplay: (slug, displayId, overrides = {}) =>
-    request('POST', `/api/v1/store/templates/${encodeURIComponent(slug)}/send`,
-      { displayId, slotOverrides: overrides }),
+  installOptions: (slug, language = getLocale()) =>
+    request('GET', `/api/v1/store/templates/${encodeURIComponent(slug)}/install-options`
+      + (language ? `?language=${encodeURIComponent(language)}` : '')),
+  // The MCP tool names the overrides data_slot_overrides; REST has taken
+  // slotOverrides historically and we cannot tell without an account which one
+  // the deployed server reads. Send both camelCased names — an unknown key is
+  // ignored, and a strict 400 retries with the legacy shape alone. Silently
+  // dropped overrides would install a template with placeholder data.
+  sendToDisplay: async (slug, displayId, overrides = {}) => {
+    const path = `/api/v1/store/templates/${encodeURIComponent(slug)}/send`;
+    const legacy = { displayId, slotOverrides: overrides };
+    if (!overrides || !Object.keys(overrides).length) return request('POST', path, legacy);
+    try { return await request('POST', path, { ...legacy, dataSlotOverrides: overrides }); }
+    catch (e) { if (e.status !== 400) throw e; return request('POST', path, legacy); }
+  },
   copy: (slug, displayName) =>
     request('POST', `/api/v1/store/templates/${encodeURIComponent(slug)}/copy`,
       displayName ? { displayName } : {}),

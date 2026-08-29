@@ -3,7 +3,7 @@ import { textScaleField } from '../text-scale.js';
 import { colorOverrideDefaults, applyColorOverrides, themeColorSection } from '../widget-color.js';
 import { composeDispose } from '../plugin-contract.js';
 import { escapeHtml } from '../utils/escape.js';
-import { localeField } from '../locale-field.js';
+import { localeField, safeLocale } from '../locale-field.js';
 import { defaultTz } from '../utils/default-tz.js';
 import { STATUS_COLORS } from '../status-colors.js';
 
@@ -134,7 +134,7 @@ export default register({
       return composeDispose(() => root.remove());
     }
 
-    const locale = c.locale || undefined;
+    const locale = safeLocale(c.locale);
     const words = wordsFor(c.locale);
     const recordDays = Math.max(0, Number(c.recordDays) || 0);
 

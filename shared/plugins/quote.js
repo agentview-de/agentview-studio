@@ -5,6 +5,7 @@ import { composeDispose } from '../plugin-contract.js';
 import { sanitizeHtml, plainToHtml, looksLikeHtml } from '../sanitize-html.js';
 import { escapeHtml, escapeAttr } from '../utils/escape.js';
 import { isSafeImgUrl, cssUrl } from '../safe-url.js';
+import { isRemoteUrl } from '../plugin-network.js';
 
 // Decorative opening-mark glyph per markStyle. 'none' renders no mark at all.
 const MARK_GLYPHS = { classic: '“', guillemet: '»', none: '' };
@@ -26,6 +27,7 @@ function rotationEntries(c) {
 
 export default register({
   type: 'quote',
+  network: c => isRemoteUrl(c?.portrait),
   label: 'Quote',
   group: 'basic',
   icon: '❝',
@@ -179,7 +181,10 @@ export default register({
       }
       if (layout === 'fullscreen') {
         const bq = card.querySelector('blockquote');
-        if (bq) bq.style.font = '700 calc(clamp(32px, 9cqmin, 150px) * var(--bb-quote-text-scale, 1))/1.15 var(--bb-serif)';
+        // 800, not 700: fullscreen wants a heavier quote than the base 600, and
+        // Playfair ships 400/600/800 — 700 resolved to 800 anyway. Declaring the
+        // shipped weight keeps the glyph identical and states the real intent.
+        if (bq) bq.style.font = '800 calc(clamp(32px, 9cqmin, 150px) * var(--bb-quote-text-scale, 1))/1.15 var(--bb-serif)';
         const cite = card.querySelector('cite');
         if (cite) cite.style.fontSize = 'calc(clamp(16px, 3cqmin, 40px) * var(--bb-quote-text-scale, 1))';
       }

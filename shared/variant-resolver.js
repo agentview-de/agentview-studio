@@ -25,7 +25,9 @@ export function resolveSlideWidgets(slide, opts = {}) {
   }
 
   if (Array.isArray(slide.abVariants) && slide.abVariants.length) {
-    // A forced, in-range index (editor preview) wins; otherwise pick by weight.
+    // A forced, in-range index (editor preview) wins — previewing the one arm a
+    // slide has is exactly what that control is for. Without one, the weighted
+    // pick decides, and it declines a one-armed split (see pickAbVariant).
     const idx = (Number.isInteger(abIdx) && abIdx >= 0 && abIdx < slide.abVariants.length)
       ? abIdx
       : pickAbVariant(slide, rng);
@@ -39,8 +41,16 @@ export function resolveSlideWidgets(slide, opts = {}) {
 }
 
 // Choose an A/B variant index by weight. Returns the chosen index, or null when
-// the slide has no usable abVariants (missing/empty array, or all weights ≤ 0).
-// Variants with a missing/invalid weight count as 1.
+// the slide has nothing to split between. Variants with a missing/invalid
+// weight count as 1.
+//
+// A SPLIT NEEDS TWO ARMS. The editor's "add A/B variant" button copies the
+// current slide.widgets into a new arm labelled A — so one click leaves exactly
+// one arm, and a picker that always answers "arm 0" made the display show that
+// snapshot from then on, for good. The canvas kept showing slide.widgets, the
+// user kept editing it, and none of it ever reached a screen. With fewer than
+// two arms there is nothing to choose, so the slide plays what the canvas shows
+// and the arm sits there inert until a second one joins it.
 //
 // Split out from resolveSlideWidgets so the PLAYER can make the pick, memoize
 // the index per slide.id (so re-renders don't reroll and flicker), and then feed
@@ -49,7 +59,7 @@ export function resolveSlideWidgets(slide, opts = {}) {
 // deterministic tests.
 export function pickAbVariant(slide, rng = Math.random) {
   const variants = slide?.abVariants;
-  if (!Array.isArray(variants) || !variants.length) return null;
+  if (!Array.isArray(variants) || variants.length < 2) return null;
   const weightOf = v => (Number.isFinite(+v?.weight) ? +v.weight : 1);
   const total = variants.reduce((s, v) => s + weightOf(v), 0);
   if (total <= 0) return null;

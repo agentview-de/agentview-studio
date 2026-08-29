@@ -5,6 +5,7 @@ import { mountTab, table, esc, unwrapList, openFormModal, revealSecretModal } fr
 import { webhooks as webhooksApi } from '../../api.js';
 import { t } from '../../i18n.js';
 import { toast } from '../../ui/toast.js';
+import { fmtDateTime } from '../../format-date.js';
 
 export function mountWebhooks(body) {
   return mountTab(body, {
@@ -26,7 +27,7 @@ export function mountWebhooks(body) {
           <td><code>${esc(w.eventPattern ?? '*')}</code></td>
           <td>${esc(w.isActive ? t('wh.stateActive') : t('wh.stateInactive'))}${w.consecutiveFailures > 0 ? ` · <span style="color:#fca5a5;">${esc(t('wh.errors', { n: w.consecutiveFailures }))}</span>` : ''}</td>
           <td><code>${esc(w.secretPrefix ?? '—')}…</code></td>
-          <td>${esc((w.lastTriggeredAt ?? '').slice(0, 19))}</td>
+          <td>${esc(fmtDateTime(w.lastTriggeredAt))}</td>
           <td>
             <button class="bb-btn" data-test="${esc(w.id)}">${t('admin.test')}</button>
             <button class="bb-btn" data-toggle="${esc(w.id)}" data-currently="${w.isActive ? '1' : '0'}">${w.isActive ? t('wh.pause') : t('wh.activate')}</button>

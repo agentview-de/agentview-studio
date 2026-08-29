@@ -9,6 +9,7 @@ import { auth as authApi } from '../../api.js';
 import { state } from '../../store.js';
 import { t } from '../../i18n.js';
 import { toast } from '../../ui/toast.js';
+import { fmtDate } from '../../format-date.js';
 
 export function mountApiKeys(body) {
   return mountTab(body, {
@@ -53,7 +54,7 @@ export function mountApiKeys(body) {
           <td><code>${esc(k.keyPrefix ?? k.prefix ?? '')}…</code></td>
           <td>${esc(k.scope ?? '—')}</td>
           <td>${esc(k.permissions ?? '—')}</td>
-          <td>${esc((k.createdAt ?? '').slice(0, 10))}</td>
+          <td>${esc(fmtDate(k.createdAt))}</td>
           <td>${esc((k.lastUsedAt ?? '').slice(0, 10))}</td>
           <td>${k.isRevoked ? '' : `<button class="bb-btn bb-btn-danger" data-revoke="${esc(k.keyId ?? k.id)}">${t('admin.revoke')}</button>`}</td>
         </tr>`)
@@ -70,7 +71,14 @@ export function mountApiKeys(body) {
   });
 }
 
+// Capability flags a key may exercise. They NARROW a key — never widen it —
+// and combine with scope + permissions + the resource allowlists. Nothing
+// ticked means "no capability restriction", which is why the form has to say so
+// out loud: an empty box here is the permissive choice, not the safe one.
+const CAPABILITIES = ['slot.read', 'slot.write', 'display.read', 'display.send', 'display.manage'];
+
 async function addApiKey(ctx) {
+  const displays = state.fleet.displays ?? [];
   const box = await openFormModal({
     title: t('ak.addTitle'),
     body: `
@@ -78,15 +86,58 @@ async function addApiKey(ctx) {
     <div class="bb-form-group"><label>${t('ak.scope')}</label>
       <select id="ak-scope">
         <option value="admin">${t('ak.scopeAdmin')}</option>
-        <option value="content_only">${t('ak.scopeContent')}</option>
+        <option value="content_only" selected>${t('ak.scopeContent')}</option>
       </select>
-    </div>`,
+    </div>
+    <div class="bb-form-group"><label>${t('ak.permissions')}</label>
+      <select id="ak-perm">
+        <option value="read_write">${t('ak.permReadWrite')}</option>
+        <option value="read">${t('ak.permRead')}</option>
+        <option value="write">${t('ak.permWrite')}</option>
+      </select>
+      <p class="bb-form-help">${t('ak.permHelp')}</p>
+    </div>
+    <div class="bb-form-group"><label>${t('ak.expiry')}</label>
+      <select id="ak-exp">
+        <option value="30">${t('ak.expiry30')}</option>
+        <option value="90" selected>${t('ak.expiry90')}</option>
+        <option value="365">${t('ak.expiry365')}</option>
+        <option value="">${t('ak.expiryNever')}</option>
+      </select>
+    </div>
+    <details class="bb-form-group">
+      <summary style="cursor:pointer;">${t('ak.restrictTitle')}</summary>
+      <p class="bb-form-help">${t('ak.restrictHelp')}</p>
+      <label style="display:block;margin-top:8px;font-size:11px;opacity:.7;">${t('ak.capabilities')}</label>
+      ${CAPABILITIES.map(c => `<label class="avs-flex-row" style="font-size:12px;">
+        <input type="checkbox" data-cap="${esc(c)}"> <code>${esc(c)}</code></label>`).join('')}
+      <label style="display:block;margin-top:8px;font-size:11px;opacity:.7;">${t('ak.allowedDisplays')}</label>
+      ${displays.length
+        ? `<select id="ak-displays" multiple size="${Math.min(displays.length, 6)}" style="width:100%;">
+             ${displays.map(d => `<option value="${esc(d.id ?? '')}">${esc(d.name ?? d.id ?? '')}</option>`).join('')}
+           </select>`
+        : `<p class="bb-form-help">${t('ak.noDisplays')}</p>`}
+      <label style="display:block;margin-top:8px;font-size:11px;opacity:.7;">${t('ak.allowedSlots')}</label>
+      <input id="ak-slots" placeholder="sensor-lobby, sensor-garage">
+    </details>`,
   });
   if (!box) return;
   try {
+    // Empty selections are dropped by apiKeyCreate() — the server reads an
+    // absent allowlist as "unrestricted", so we never send [] and pretend it
+    // means something stricter.
+    const capabilities = [...box.querySelectorAll('[data-cap]')].filter(c => c.checked).map(c => c.dataset.cap);
+    const allowedDisplayIds = [...(box.querySelector('#ak-displays')?.selectedOptions ?? [])].map(o => o.value).filter(Boolean);
+    const allowedSlotSlugs = box.querySelector('#ak-slots').value.split(',').map(v => v.trim()).filter(Boolean);
+    const expiresInDays = Number(box.querySelector('#ak-exp').value) || undefined;
     const created = await authApi.apiKeyCreate({
       name: box.querySelector('#ak-name').value.trim() || 'Studio Key',
       scope: box.querySelector('#ak-scope').value,
+      permissions: box.querySelector('#ak-perm').value,
+      expiresInDays,
+      capabilities,
+      allowedDisplayIds,
+      allowedSlotSlugs,
     });
     const key = created?.apiKey ?? created?.key ?? created?.plaintext;
     if (key) {

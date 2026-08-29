@@ -3,6 +3,7 @@ import { composeDispose } from '../plugin-contract.js';
 import { escapeHtml } from '../utils/escape.js';
 import { mediaPlaceholder } from '../media-placeholder.js';
 import { themeColorSection, colorOverrideDefaults, applyColorOverrides } from '../widget-color.js';
+import { canvasColor, fadeToTransparent } from '../css-color.js';
 
 export default register({
   type: 'audio-viz',
@@ -119,8 +120,12 @@ export default register({
     const style = ['bars', 'waveform', 'circle', 'dots'].includes(c.style) ? c.style : 'bars';
     // Clearable colours: '' must fall through to the widget defaults (and the
     // `colorA + '00'` alpha-tail concat in drawDots relies on a 6-digit hex).
-    const colorA = c.colorA || '#8b5cf6';
-    const colorB = c.colorB || '#06b6d4';
+    // canvasColor, not `|| default`: a gradient stop THROWS on a colour the
+    // browser cannot parse, and the throw happens inside the animation frame
+    // — the draw loop dies and the widget stays blank. `FF00FF` from an
+    // import or a half-typed `#12` is enough.
+    const colorA = canvasColor(c.colorA, '#8b5cf6');
+    const colorB = canvasColor(c.colorB, '#06b6d4');
     const gain = Math.max(50, Math.min(300, Number(c.sensitivity) || 100)) / 100;
     const mirror = c.mirror === true && (style === 'bars' || style === 'dots');
 
@@ -339,7 +344,7 @@ function drawDots(ctx, analyser, canvas, bc, colorA, colorB, gain, mirror) {
   const dot = (x, radius) => {
     const grad = ctx.createRadialGradient(x, cy, 1, x, cy, radius);
     grad.addColorStop(0, colorB);
-    grad.addColorStop(1, colorA + '00');  // fade alpha tail
+    grad.addColorStop(1, fadeToTransparent(colorA));  // fade alpha tail
     ctx.fillStyle = grad;
     ctx.beginPath(); ctx.arc(x, cy, radius, 0, Math.PI * 2); ctx.fill();
   };

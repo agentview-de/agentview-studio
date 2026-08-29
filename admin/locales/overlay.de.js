@@ -10,6 +10,22 @@
 export const overlayDe = {
   // --- Inspector field search ---
   "Search settings…": "Einstellungen suchen…",
+  // --- Importers: the titles they write into the operator's playlist, and
+  //     the one heading that reaches the screen ---
+  "Upcoming Events": "Nächste Termine",
+  "JSON Chart": "JSON-Diagramm",
+  "Live JSON": "Live-JSON",
+  "Stream": "Stream",
+  "images": "Bilder",
+  "RSS": "RSS",
+  "PDF": "PDF",
+  // --- Displays filter bar (aria labels) ---
+  "Search displays": "Displays durchsuchen",
+  "Filter by status": "Nach Status filtern",
+  "Filter by lock state": "Nach Sperrzustand filtern",
+  // --- Icon picker (field-controls/icon.js) ---
+  "Search icons…": "Icons suchen…",
+  "No icons match": "Keine Symbole gefunden",
   "No matching settings": "Keine passenden Einstellungen",
   // --- Widget Designer / My widgets ---
   "Custom Widget": "Eigenes Widget",
@@ -97,6 +113,11 @@ export const overlayDe = {
   "Upload from disk": "Von Festplatte hochladen",
   "Upload": "Hochladen",
   "assets": "Medien",
+  "Search assets…": "Medien suchen…",
+  "All types": "Alle Typen",
+  "No matching assets": "Keine passenden Medien",
+  "Deleted": "Gelöscht",
+  "asset": "Medium",
   "Quota": "Kontingent",
   "Drop files here to upload": "Dateien zum Hochladen hier ablegen",
   "No assets yet": "Noch keine Medien",
@@ -153,6 +174,9 @@ export const overlayDe = {
   "Location": "Standort",
   "Unlocked": "Entsperrt",
   "Locked": "Gesperrt",
+  "not supported": "nicht unterstützt",
+  "This display has not reported its capabilities.": "Dieses Display hat seine Fähigkeiten nicht gemeldet.",
+  "The capabilities report arrived empty.": "Die Fähigkeiten-Meldung kam leer an.",
   "Source lock": "Source-Lock (Quellbindung)",
   "Binds the display exclusively to a specific API key. Other API keys can then no longer send content to this display.": "Bindet das Display exklusiv an einen bestimmten API-Schlüssel. Andere API-Schlüssel können dann keine Inhalte mehr an dieses Display senden.",
   "(No source lock)": "(Keine Quellbindung)",
@@ -820,6 +844,9 @@ export const overlayDe = {
   "Good threshold should be above the Warn threshold.": "Die Gut-Schwelle sollte über der Warnschwelle liegen.",
   "Provided-offline — appears on the display after “Refresh data”.": "Offline bereitgestellt — erscheint auf dem Display nach „Daten aktualisieren“.",
   "Add a JSON URL in the inspector.": "Füge im Inspector eine JSON-URL hinzu.",
+  "Add cards in the inspector.": "Füge im Inspector Karten hinzu.",
+  "Add menu items in the inspector.": "Füge im Inspector Gerichte hinzu.",
+  "No menu items match the section filter.": "Keine Gerichte passen zum Bereichsfilter.",
   "Could not load progress data": "Fortschrittsdaten konnten nicht geladen werden",
   "Anything — scanners will show it as plain text.": "Beliebiger Text — Scanner zeigen ihn als reinen Text an.",
   "Guest-WiFi": "Gast-WLAN",

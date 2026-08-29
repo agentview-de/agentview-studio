@@ -10,6 +10,7 @@ import { state } from '../../store.js';
 import { t } from '../../i18n.js';
 import { toast } from '../../ui/toast.js';
 import { openModal } from '../../ui/modal.js';
+import { fmtDate } from '../../format-date.js';
 
 // Mirror of the server's GroupTypeRegistry. Roles highest-privilege first; the
 // FIRST is the owner role (never invitable/settable). `manage` = roles with
@@ -108,7 +109,7 @@ function renderRoster(orgId, detail, ctx) {
         <td>${esc(m.name ?? '—')}</td>
         <td>${roleCell}</td>
         <td>${esc(m.allocatedDisplays ?? 0)}</td>
-        <td>${esc((m.joinedAt ?? '').slice(0, 10))}</td>
+        <td>${esc(fmtDate(m.joinedAt))}</td>
         ${actionCell}
       </tr>`;
     })));
@@ -174,7 +175,7 @@ async function addMember(ctx) {
   try {
     const res = await orgsApi.invite(orgId, { role, ...(email && { email }) });
     const url = res?.inviteUrl ?? res?.url ?? res?.inviteToken ?? res?.token ?? '—';
-    const expires = (res?.expiresAt ?? '').slice(0, 10);
+    const expires = res?.expiresAt ? fmtDate(res.expiresAt) : '';
     await revealSecretModal({
       title: t('mem.inviteLinkTitle'),
       intro: `<p>${t('mem.inviteCreated', { role: `<code>${esc(res?.role ?? role)}</code>`, boundTo: res?.inviteeEmail ? t('mem.inviteBoundTo', { email: `<b>${esc(res.inviteeEmail)}</b>` }) : '' })}</p>`

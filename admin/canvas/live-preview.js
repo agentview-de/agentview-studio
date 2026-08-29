@@ -9,6 +9,7 @@
 
 import { t } from '../i18n.js';
 import { escapeHtml } from '../../shared/utils/escape.js';
+import { widgetIcon } from '../../shared/data/widget-icons.js';
 
 const _ids = new Set();
 // Canvas re-render hooks, wired once by mountCanvas via configureLivePreview.
@@ -44,7 +45,7 @@ export function mountPrivacyPlaceholder(content, widget, plugin) {
   const el = document.createElement('div');
   el.className = 'avs-live-preview-ph';
   el.innerHTML = `
-    <div class="avs-lpp-icon">${escapeHtml(plugin?.icon ?? '◻')}</div>
+    <div class="avs-lpp-icon">${widgetIcon(widget.type, escapeHtml(plugin?.icon ?? '◻'), '1em')}</div>
     <div class="avs-lpp-title">${escapeHtml(plugin?.label ?? widget.type)} · ${escapeHtml(t('privacy.livePreviewTitle'))}</div>
     <div class="avs-lpp-body">${escapeHtml(t('privacy.livePreviewBody', { provider }))}</div>
     <button type="button" class="bb-btn bb-btn-secondary avs-lpp-btn">${escapeHtml(t('privacy.loadPreview'))}</button>`;

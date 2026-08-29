@@ -1,7 +1,7 @@
 import { register } from './registry.js';
 import { colorOverrideDefaults, themeColorSection, applyColorOverrides } from '../widget-color.js';
 import { textScaleField } from '../text-scale.js';
-import { localeField } from '../locale-field.js';
+import { localeField, safeLocale } from '../locale-field.js';
 import { composeDispose } from '../plugin-contract.js';
 import { escapeHtml } from '../utils/escape.js';
 
@@ -157,7 +157,7 @@ export default register({
       return composeDispose(() => root.remove());
     }
 
-    const locale = c.locale || undefined;
+    const locale = safeLocale(c.locale);
     const display = c.display ?? 'time-date';
     const dateOnly = display === 'date';
     const showDate = display === 'time-date';

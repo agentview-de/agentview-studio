@@ -3,9 +3,10 @@ import { textScaleField } from '../text-scale.js';
 import { themeColorSection, colorOverrideDefaults, applyColorOverrides } from '../widget-color.js';
 import { composeDispose } from '../plugin-contract.js';
 import { liveSource } from '../live-source.js';
-import { refreshSecField } from '../refresh-field.js';
+import { refreshSecField, refreshIntervalMs } from '../refresh-field.js';
 import { sanitizeHtml } from '../sanitize-html.js';
 import { escapeHtml } from '../utils/escape.js';
+import { isRemoteUrl } from '../plugin-network.js';
 
 // marked.js is loaded as a CDN script in both host shells; we read it from
 // window. marked 5+ dropped its built-in sanitizer, so we MUST pipe the
@@ -62,6 +63,7 @@ function startAutoScroll(viewport, inner, secs) {
 
 export default register({
   type: 'markdown',
+  network: c => isRemoteUrl(c?.sourceUrl),
   label: 'Markdown',
   group: 'basic',
   icon: '✍️',
@@ -216,7 +218,7 @@ export default register({
         signal: ctx?.signal,
         parse: 'text',
         fetchInit: { cache: 'no-store' },
-        intervalMs: refreshSec > 0 ? Math.max(5000, refreshSec * 1000) : 0,
+        intervalMs: refreshIntervalMs(refreshSec),
         maxErrors: 0,
         backoff: false,
         stopOnCorsError: false,

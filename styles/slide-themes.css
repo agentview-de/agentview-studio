@@ -1672,7 +1672,10 @@
 .bb-slide-quote { align-items: center; justify-content: center; }
 .bb-quote-card { display: flex; align-items: center; gap: 40px; max-width: 1100px; }
 .bb-quote-portrait { width: 220px; height: 220px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-.bb-quote-mark { font: 900 calc(clamp(48px, 10cqmin, 160px) * var(--bb-quote-text-scale, 1))/0.8 var(--bb-serif); color: var(--bb-st-accent); display: block; margin-bottom: 4px; }
+/* 800, not 900: Playfair Display ships 400/600/800 (see fonts/), so 900 was
+   rounded down anyway — declaring the weight we actually ship keeps the glyph
+   identical and stops the browser from reaching for a synthetic bold. */
+.bb-quote-mark { font: 800 calc(clamp(48px, 10cqmin, 160px) * var(--bb-quote-text-scale, 1))/0.8 var(--bb-serif); color: var(--bb-st-accent); display: block; margin-bottom: 4px; }
 .bb-quote-text blockquote { margin: 0; font: 600 calc(clamp(24px, 5.6cqmin, 88px) * var(--bb-quote-text-scale, 1))/1.2 var(--bb-serif); }
 .bb-quote-text cite { display: block; margin-top: 12px; opacity: .7; font-style: normal; font-size: calc(clamp(14px, 2.4cqmin, 32px) * var(--bb-quote-text-scale, 1)); }
 

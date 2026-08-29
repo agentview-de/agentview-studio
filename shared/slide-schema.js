@@ -260,38 +260,56 @@ export function validateSlide(s) {
 //
 // Mutates the playlist in place and returns it. Safe to call on a freshly-
 // migrated v2 playlist; widgets already at the latest version are no-ops.
+// Run fn(widget, slide) for every widget a playlist carries: the slide's own
+// array, then its A/B variants, then its language variants. THE place that
+// enumeration is written.
+//
+// It lived in offline-data.js, which is where it was first needed. Two callers
+// in the schema layer needed it too and only one of them knew: the legacy
+// icon-rotation lift walked variants, and applyWidgetMigrations right beside it
+// did not — so a widget inside a German variant never had its content migrated
+// and never got its version stamp. An image widget whose `overlay` changed from
+// a 0…1 fraction to a 0…100 percent kept the fraction there: the same slide
+// showed a 40 % dark overlay in the default and a 0.4 % one in German, which is
+// to say none, with white text on top of it.
+export function walkAllWidgets(pl, fn) {
+  for (const slide of pl?.slides ?? []) {
+    (slide.widgets ?? []).forEach(w => w && fn(w, slide));
+    if (Array.isArray(slide.abVariants)) for (const v of slide.abVariants) (v?.widgets ?? []).forEach(w => w && fn(w, slide));
+    if (slide.langs) for (const k of Object.keys(slide.langs)) (slide.langs[k]?.widgets ?? []).forEach(w => w && fn(w, slide));
+  }
+}
+
 export function applyWidgetMigrations(pl, getPlugin) {
   if (!pl || !Array.isArray(pl.slides)) return pl;
-  for (const slide of pl.slides) {
-    liftLegacyIconRotation(slide);
-    if (!Array.isArray(slide.widgets)) continue;
-    for (const w of slide.widgets) {
-      const plugin = getPlugin?.(w.type);
-      if (!plugin) continue;
-      // Unstamped legacy widgets are treated as v1; stamp only when missing,
-      // never downgrade an existing higher stamp (could be a forward-dated
-      // playlist from a newer Studio build).
-      const stamped = Number.isInteger(w.contentVersion);
-      const from = stamped ? w.contentVersion : 1;
-      const target = Number.isInteger(plugin.schemaVersion) ? plugin.schemaVersion : 1;
-      if (from >= target) {
-        if (!stamped) w.contentVersion = target;
-        continue;
-      }
-      if (typeof plugin.migrate === 'function') {
-        try {
-          const next = plugin.migrate(w.content ?? {}, from);
-          if (next && typeof next === 'object') w.content = next;
-        } catch (e) {
-          // A broken migrator must not kill the playlist load. Leave content
-          // as-is, log loudly, keep the old stamp so the next load tries again.
-          console.error(`[migrate] plugin "${w.type}" v${from}→v${target} threw:`, e);
-          continue;
-        }
-      }
-      w.contentVersion = target;
+  for (const slide of pl.slides) liftLegacyIconRotation(slide);
+  // EVERY widget, variants included — see walkAllWidgets above.
+  walkAllWidgets(pl, w => {
+    const plugin = getPlugin?.(w.type);
+    if (!plugin) return;
+    // Unstamped legacy widgets are treated as v1; stamp only when missing,
+    // never downgrade an existing higher stamp (could be a forward-dated
+    // playlist from a newer Studio build).
+    const stamped = Number.isInteger(w.contentVersion);
+    const from = stamped ? w.contentVersion : 1;
+    const target = Number.isInteger(plugin.schemaVersion) ? plugin.schemaVersion : 1;
+    if (from >= target) {
+      if (!stamped) w.contentVersion = target;
+      return;
     }
-  }
+    if (typeof plugin.migrate === 'function') {
+      try {
+        const next = plugin.migrate(w.content ?? {}, from);
+        if (next && typeof next === 'object') w.content = next;
+      } catch (e) {
+        // A broken migrator must not kill the playlist load. Leave content
+        // as-is, log loudly, keep the old stamp so the next load tries again.
+        console.error(`[migrate] plugin "${w.type}" v${from}→v${target} threw:`, e);
+        return;
+      }
+    }
+    w.contentVersion = target;
+  });
   return pl;
 }
 

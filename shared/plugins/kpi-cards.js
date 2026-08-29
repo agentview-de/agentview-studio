@@ -8,6 +8,10 @@ import { STATUS_COLORS } from '../status-colors.js';
 import { textScaleField } from '../text-scale.js';
 import { localeField } from '../locale-field.js';
 import { escapeHtml } from '../utils/escape.js';
+import { refreshIntervalMs } from '../refresh-field.js';
+import { formatNumber, formatCompact, formatPercent } from '../format-number.js';
+import { mediaPlaceholder } from '../media-placeholder.js';
+import { remoteJsonNetwork } from '../plugin-network.js';
 
 function fmt(v, unit, opts = {}) {
   // The return value lands in innerHTML, so escape every untrusted piece. The
@@ -24,12 +28,12 @@ function fmt(v, unit, opts = {}) {
   // 'compact' (default, the historical output) abbreviates with k/M; 'full'
   // shows the exact figure — finance audiences often require it. Grouping
   // follows the audience language ('' falls through to the device default).
-  const locale = opts.locale || undefined;
-  if (opts.format !== 'full') {
-    if (Math.abs(n) >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M' + u;
-    if (Math.abs(n) >= 1_000)     return (n / 1_000).toFixed(1)     + 'k' + u;
-  }
-  return n.toLocaleString(locale) + u;
+  // Both branches go through the reader's locale. They used not to: the
+  // abbreviated one wrote toFixed(1), so a German board showed "987,4" on one
+  // card and "1.2k" on the next — see shared/format-number.js.
+  const locale = opts.locale;
+  if (opts.format !== 'full' && Math.abs(n) >= 1_000) return formatCompact(n, locale) + u;
+  return formatNumber(n, locale) + u;
 }
 
 function parseHistory(hist) {
@@ -77,7 +81,10 @@ export default register({
   label: 'KPI Cards',
   group: 'data',
   icon: '📈',
-  network: true,
+  // Inline data never leaves this machine, and gating it meant you could not
+  // see your own numbers while editing without granting a "live preview"
+  // that was never live — see shared/plugin-network.js.
+  network: remoteJsonNetwork,
   schemaVersion: 2,
   defaults: () => ({ ...colorOverrideDefaults(),
     cards: [
@@ -208,14 +215,17 @@ export default register({
         const targetBar = hasTarget
           ? `<div class="bb-kpi-target" data-field="showTarget cards numberFormat">
                <div class="bb-kpi-targetbar"><div class="bb-kpi-targetfill" style="width:${pct}%;background:${statusColor};"></div></div>
-               <div class="bb-kpi-targettext">${pct}% ${ofWord(c.locale)} ${fmt(target, card.unit, fmtOpts)}</div>
+               <div class="bb-kpi-targettext">${formatPercent(pct, c.locale, { maximumFractionDigits: 0 })} ${ofWord(c.locale)} ${fmt(target, card.unit, fmtOpts)}</div>
              </div>`
           : '';
         // The class still carries the arrow DIRECTION (up/down); the inline
         // colour carries the GOODNESS, so lower-is-better cards colour
         // correctly even though the stylesheet pins up=green / down=red.
+        // The arrow owns the direction, the number owns the magnitude. It used
+        // to read "▼ -3,5 %" — the same fact stated twice, and the minus sign
+        // is the half a reader at ten metres cannot see anyway.
         const deltaLine = showDelta
-          ? `<div class="bb-kpi-delta bb-kpi-${up ? 'up' : 'down'}" data-field="showDelta cards" style="color:${statusColor};">${up ? '▲' : '▼'} ${delta.toFixed(1)}%</div>`
+          ? `<div class="bb-kpi-delta bb-kpi-${up ? 'up' : 'down'}" data-field="showDelta cards" style="color:${statusColor};">${up ? '▲' : '▼'} ${formatPercent(Math.abs(delta), c.locale)}</div>`
           : '';
         const spark = showSparkline
           ? `<div class="bb-kpi-spark" data-field="showSparkline cards density">${sparkline(parseHistory(card.history), statusColor)}</div>`
@@ -235,6 +245,18 @@ export default register({
     // Inline cards paint immediately; a remote source fetches through the
     // shared live-source seam and paints (or shows the load error) on arrival.
     const stored = c.source === 'stored';
+    // The URL branches below have said something sensible about having nothing
+    // for a long time. The INLINE branch did not: delete the last card and the
+    // widget drew an empty grid — no cards, no message, nothing to click.
+    if (!stored && c.source !== 'url' && !(Array.isArray(c.cards) && c.cards.length)) {
+      // On the ROOT, not in the grid: the placeholder should fill the widget
+      // box the way every other widget's does, rather than sit inside the
+      // card area it is standing in for.
+      grid.remove();
+      root.appendChild(mediaPlaceholder({ icon: '📊', message: 'Add cards in the inspector.' }));
+      container.appendChild(root);
+      return composeDispose(() => root.remove());
+    }
     if (stored || c.source === 'url') {
       // Offline with nothing provisioned yet → neutral placeholder.
       if (stored && c._offline?.data === undefined) {
@@ -255,7 +277,7 @@ export default register({
       const stop = liveSource({
         url: c.dataUrl,
         signal: ctx?.signal,
-        intervalMs: refreshSec > 0 ? Math.max(5000, refreshSec * 1000) : 0,
+        intervalMs: refreshIntervalMs(refreshSec),
         fetchInit: { cache: 'no-store' },
         maxErrors: 0,
         backoff: false,

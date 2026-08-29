@@ -16,6 +16,7 @@ import * as publicApiBrowser from '../ui/public-api-browser.js';
 import { toast } from '../ui/toast.js';
 import { t, tx } from '../i18n.js';
 import { widgetIcon } from '../../shared/data/widget-icons.js';
+import { uiIconSvg } from '../../shared/data/ui-icons.js';
 import { escapeHtml, escapeAttr } from '../../shared/utils/escape.js';
 import { isSafeImgUrl } from '../../shared/safe-url.js';
 import { storeTemplates } from '../api.js';
@@ -93,7 +94,9 @@ async function renderStore(body) {
     status.textContent = '…';
     grid.replaceChildren();
     try {
-      const r = await storeTemplates.search(q);
+      // searchAll walks the server's pages (?limit caps at 100) so the grid
+      // shows the whole catalog, not just the first page.
+      const r = await storeTemplates.searchAll(q);
       // tolerate the call failing or returning multiple shapes
       if (q !== lastQuery) return;
       const list = Array.isArray(r) ? r : (r?.templates ?? r?.items ?? []);
@@ -259,7 +262,7 @@ function renderWidgets(body) {
         btn.title = tx(p.label);
         btn.innerHTML = `<span class="avs-widget-ic">${widgetIcon(p.type, p.icon ?? '&#9633;', 24)}</span><span class="avs-widget-lab">${escapeHtml(tx(p.label))}</span>`;
         // Usage/licensing badge — a quiet amber corner glyph for plugins whose
-        // data source carries a constraint (private-only 🔒 / byo-key 🔑).
+        // data source carries a constraint (private-only / bring-your-own-key).
         // business-ok is intentionally left unbadged (see mountUsageBadge).
         mountUsageBadge(btn, p.usage);
         btn.addEventListener('click', () => {
@@ -307,14 +310,14 @@ function renderMyWidgets(groupsWrap, q) {
   actions.style.cssText = 'display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;';
   const newBtn = document.createElement('button');
   newBtn.className = 'bb-btn bb-btn-secondary bb-btn-sm';
-  newBtn.textContent = '🎨 ' + tx('New custom widget');
+  newBtn.innerHTML = uiIconSvg('brandkit', 14) + escapeHtml(tx('New custom widget'));
   newBtn.addEventListener('click', () => {
     const w = addWidget('custom');
     if (w) openWidgetDesigner(w, { onApply: () => { commit('widget-design'); canvasRender(); } });
   });
   const slideBtn = document.createElement('button');
   slideBtn.className = 'bb-btn bb-btn-secondary bb-btn-sm';
-  slideBtn.textContent = '🧩 ' + tx('Save slide');
+  slideBtn.innerHTML = uiIconSvg('puzzle', 14) + escapeHtml(tx('Save slide'));
   slideBtn.title = tx('Save every widget on the current slide as one composite');
   slideBtn.addEventListener('click', () => {
     const pl = state.playlist;
@@ -323,7 +326,7 @@ function renderMyWidgets(groupsWrap, q) {
   });
   const impBtn = document.createElement('button');
   impBtn.className = 'bb-btn bb-btn-secondary bb-btn-sm';
-  impBtn.textContent = '📥 ' + tx('Import');
+  impBtn.innerHTML = uiIconSvg('upload', 14) + escapeHtml(tx('Import'));
   impBtn.addEventListener('click', () => importCustomWidget());
   actions.append(newBtn, slideBtn, impBtn);
   sec.appendChild(actions);
@@ -345,7 +348,7 @@ function renderMyWidgets(groupsWrap, q) {
     btn.className = 'avs-widget-tile';
     btn.title = entry.name;
     btn.style.position = 'relative';
-    btn.innerHTML = `<span class="avs-widget-ic">${escapeHtml(entry.icon ?? '🎨')}</span><span class="avs-widget-lab">${escapeHtml(entry.name)}</span>`;
+    btn.innerHTML = `<span class="avs-widget-ic">${widgetIcon('custom', escapeHtml(entry.icon ?? ''), 24)}</span><span class="avs-widget-lab">${escapeHtml(entry.name)}</span>`;
     btn.addEventListener('click', () => placeEntry(entry));
     // Drag-to-canvas: the canvas resolves `avs/custom-id` on drop.
     btn.draggable = true;
@@ -361,18 +364,23 @@ function renderMyWidgets(groupsWrap, q) {
     const corner = document.createElement('span');
     corner.className = 'avs-mine-corner';
     corner.style.cssText = 'position:absolute;top:2px;right:2px;display:flex;gap:1px;';
-    const mkCorner = (glyph, title, fn) => {
-      const b = document.createElement('span');
-      b.textContent = glyph;
+    // <button>, not <span>: these are the export and DELETE actions on a saved
+    // widget. As spans they had a cursor and a tooltip but no keyboard path at
+    // all — a destructive action reachable only by mouse.
+    const mkCorner = (icon, title, fn) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'avs-mine-corner-btn';
+      b.innerHTML = uiIconSvg(icon, 12);
       b.title = title;
-      b.style.cssText = 'cursor:pointer;font-size:11px;line-height:1;padding:2px 3px;border-radius:4px;background:color-mix(in srgb,var(--bb-bg-2,#1a1d24) 70%,transparent);';
+      b.setAttribute('aria-label', title);
       const stop = e => { e.preventDefault(); e.stopPropagation(); };
       b.addEventListener('mousedown', stop);
       b.addEventListener('click', e => { stop(e); fn(); });
       return b;
     };
-    corner.appendChild(mkCorner('⤓', tx('Export'), () => exportEntry(entry)));
-    corner.appendChild(mkCorner('✕', tx('Delete'), async () => {
+    corner.appendChild(mkCorner('download', tx('Export'), () => exportEntry(entry)));
+    corner.appendChild(mkCorner('trash', tx('Delete'), async () => {
       const ok = await openModal({
         title: tx('Delete widget'),
         body: (() => { const d = document.createElement('div'); d.innerHTML = `<p>${escapeHtml(tx('Delete'))} “${escapeHtml(entry.name)}”?</p>`; return d; })(),
@@ -395,7 +403,7 @@ function renderAssets(body) {
   }
   const addBtn = document.createElement('button');
   addBtn.className = 'bb-btn bb-btn-secondary';
-  addBtn.textContent = '🖼 ' + t('lib.addImage');
+  addBtn.innerHTML = uiIconSvg('image', 14) + escapeHtml(t('lib.addImage'));
   addBtn.addEventListener('click', async () => {
     const url = await assetLibrary.pickAsset('image');
     if (url) addWidget('image', { url, fit: 'cover', overlay: 0 });
@@ -411,7 +419,7 @@ function renderApis(body) {
   body.innerHTML = `<p class="bb-form-help">${t('lib.apisHelp')}</p>`;
   const btn = document.createElement('button');
   btn.className = 'bb-btn bb-btn-primary';
-  btn.textContent = '🔌 ' + t('lib.openApis');
+  btn.innerHTML = uiIconSvg('plug', 14) + escapeHtml(t('lib.openApis'));
   btn.addEventListener('click', () =>
     publicApiBrowser.open(slide => {
       addWidget(slide.type ?? 'live-json', slide.content ?? {});
@@ -425,7 +433,7 @@ function renderApis(body) {
 //   { tier: 'business-ok' | 'private-only' | 'byo-key', note?, attribution?, providerTerms? }
 // We badge ONLY the tiers that carry a constraint the operator must know
 // BEFORE picking the widget — and quietly: a single amber glyph in the tile
-// corner (🔑 byo-key, 🔒 private-only), not a loud word-pill. The readable
+// corner (a key for byo-key, a padlock for private-only), not a loud word-pill. The readable
 // tier, note and attribution ride along in the hover tooltip + click popover,
 // and the full note is repeated in the inspector once the widget is placed
 // (see admin/panels/inspector.js).
@@ -436,8 +444,8 @@ function renderApis(body) {
 // badge here: it's a *display*-time duty already rendered on the widget itself
 // (e.g. weather/map), so the library only needs to signal the *constraint*.
 const USAGE_BADGES = {
-  'private-only': { glyph: '🔒', labelKey: 'usage.privateOnly' },
-  'byo-key':      { glyph: '🔑', labelKey: 'usage.byoKey' },
+  'private-only': { icon: 'lock',    labelKey: 'usage.privateOnly' },
+  'byo-key':      { icon: 'apikeys', labelKey: 'usage.byoKey' },
 };
 
 function mountUsageBadge(tile, usage) {
@@ -448,7 +456,7 @@ function mountUsageBadge(tile, usage) {
   const tok = 'var(--bb-warn)';
   const badge = document.createElement('span');
   badge.className = 'avs-usage-badge';
-  badge.textContent = def.glyph;
+  badge.innerHTML = uiIconSvg(def.icon, 11);
   // Icon-only: a small amber-tinted dot, not a word-pill. Quiet enough not to
   // compete with the widget icon/label, but still reads as "this one has
   // strings attached". Tier label + note travel in the tooltip / popover.
@@ -465,9 +473,20 @@ function mountUsageBadge(tile, usage) {
   badge.setAttribute('aria-label', tipParts.join('. '));
   // Clicking the badge opens the details popover and must NOT fall through to
   // the tile's "add widget" / drag handlers.
+  // Focusable: the badge is the only way into the popover with the provider's
+  // terms, and it sat on a <span> that Tab could not reach. The aria-label above
+  // already carries tier + note, so a screen-reader user was not blind to the
+  // constraint — but could not open the detail.
+  badge.tabIndex = 0;
+  badge.setAttribute('role', 'button');
   const stop = e => { e.preventDefault(); e.stopPropagation(); };
   badge.addEventListener('mousedown', stop);
   badge.addEventListener('click', e => { stop(e); openUsagePopover(badge, usage, tok); });
+  badge.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    stop(e);
+    openUsagePopover(badge, usage, tok);
+  });
   tile.appendChild(badge);
 }
 

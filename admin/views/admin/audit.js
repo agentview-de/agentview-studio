@@ -9,6 +9,7 @@ import { mountTab, table, emptyState, esc, unwrapList } from './shell.js';
 import { audit as auditApi } from '../../api.js';
 import { state } from '../../store.js';
 import { t } from '../../i18n.js';
+import { fmtDateTime } from '../../format-date.js';
 
 export function mountAudit(body) {
   return mountTab(body, {
@@ -17,11 +18,14 @@ export function mountAudit(body) {
       const filter = state.admin.auditFilter ?? {};
       ctx.content.innerHTML = `
         <div class="avs-admin-filter">
-          <input id="f-display" placeholder="${t('audit.fDisplay')}" value="${esc(filter.display ?? '')}">
-          <input id="f-user" placeholder="${t('audit.fActor')}" value="${esc(filter.user ?? '')}">
-          <input id="f-action" placeholder="${t('audit.fAction')}" value="${esc(filter.action ?? '')}">
-          <input id="f-from" type="date" placeholder="${t('audit.fFrom')}" value="${esc(filter.from ?? '')}">
-          <input id="f-to" type="date" placeholder="${t('audit.fTo')}" value="${esc(filter.to ?? '')}">
+          <!-- aria-label, not just a placeholder: a placeholder disappears the
+               moment you type, and a date input never shows one at all. The
+               strings already exist — only the naming was missing. -->
+          <input id="f-display" aria-label="${t('audit.fDisplay')}" placeholder="${t('audit.fDisplay')}" value="${esc(filter.display ?? '')}">
+          <input id="f-user" aria-label="${t('audit.fActor')}" placeholder="${t('audit.fActor')}" value="${esc(filter.user ?? '')}">
+          <input id="f-action" aria-label="${t('audit.fAction')}" placeholder="${t('audit.fAction')}" value="${esc(filter.action ?? '')}">
+          <input id="f-from" type="date" aria-label="${t('audit.fFrom')}" placeholder="${t('audit.fFrom')}" value="${esc(filter.from ?? '')}">
+          <input id="f-to" type="date" aria-label="${t('audit.fTo')}" placeholder="${t('audit.fTo')}" value="${esc(filter.to ?? '')}">
           <button class="bb-btn" id="f-apply">${t('audit.fApply')}</button>
         </div>
         <div id="audit-tbody"></div>`;
@@ -59,7 +63,7 @@ export function mountAudit(body) {
           all.map(r => {
             // Verified live: `timestamp`, `actorUserId`, `ipAddressPrefix`,
             // `metadata` as a JSON string.
-            const ts = r.timestamp ?? r.at ?? '';
+            const ts = fmtDateTime(r.timestamp ?? r.at);
             const actor = r.actor ?? r.actorUserId ?? '—';
             const ip = r.ipAddressPrefix ?? r.ipPrefix ?? '';
             let metaPretty = '—';

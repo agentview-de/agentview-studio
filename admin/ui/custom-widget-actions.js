@@ -13,6 +13,7 @@ import { t, tx } from '../i18n.js';
 import { escapeHtml } from '../../shared/utils/escape.js';
 import * as customWidgets from '../../shared/custom-widgets.js';
 import { addWidget, addComposite } from '../canvas/canvas.js';
+import { downloadJson, pickJsonFile } from '../file-io.js';
 
 const clone = v => (v == null ? v : JSON.parse(JSON.stringify(v)));
 
@@ -113,44 +114,22 @@ export function removeEntry(id) {
 // Download an entry as a .json file the user can share.
 export function exportEntry(entry) {
   if (!entry) return;
-  const data = JSON.stringify(customWidgets.toExportJson(entry), null, 2);
-  const blob = new Blob([data], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${slug(entry.name)}.avswidget.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadJson(`${slug(entry.name)}.avswidget.json`, customWidgets.toExportJson(entry));
 }
 
 // Open a file picker, parse the chosen .json, save it, and notify the palette.
 // Resolves to the imported entry, or null on cancel / parse failure.
-export function importCustomWidget() {
-  return new Promise(resolve => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'application/json,.json';
-    input.style.display = 'none';
-    document.body.appendChild(input);
-    input.addEventListener('change', async () => {
-      const file = input.files?.[0];
-      input.remove();
-      if (!file) { resolve(null); return; }
-      try {
-        const text = await file.text();
-        const entry = customWidgets.fromImportJson(JSON.parse(text));
-        const saved = commitEntry(entry);
-        toast(tx('Imported “{name}”').replace('{name}', saved.name), { kind: 'success' });
-        resolve(saved);
-      } catch (e) {
-        toast(tx('Could not import file: ') + (e.message ?? e), { kind: 'error' });
-        resolve(null);
-      }
-    }, { once: true });
-    input.click();
-  });
+export async function importCustomWidget() {
+  const picked = await pickJsonFile();
+  if (!picked) return null;
+  try {
+    const saved = commitEntry(customWidgets.fromImportJson(JSON.parse(picked.text)));
+    toast(tx('Imported “{name}”').replace('{name}', saved.name), { kind: 'success' });
+    return saved;
+  } catch (e) {
+    toast(tx('Could not import file: ') + (e.message ?? e), { kind: 'error' });
+    return null;
+  }
 }
 
 function slug(s) {

@@ -1,5 +1,6 @@
 import { createSlideWithWidget } from '../../shared/slide-schema.js';
 import { barChartContent, stripExt } from './_helpers.js';
+import { tx } from '../i18n.js';
 
 export const id = 'json';
 export const label = 'JSON';
@@ -30,7 +31,7 @@ export async function convert(file) {
   if (data) {
     return {
       slides: [createSlideWithWidget('chart', barChartContent(data),
-        { title: stripExt(file.name, 'JSON Chart'), duration: 12 })],
+        { title: stripExt(file.name, tx('JSON Chart')), duration: 12 })],
     };
   }
   return {

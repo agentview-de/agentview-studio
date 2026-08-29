@@ -21,10 +21,8 @@ import { t } from '../../i18n.js';
 import { toast } from '../../ui/toast.js';
 import { openModal } from '../../ui/modal.js';
 import { runTabLifecycle, runAction } from './lifecycle.js';
-
-export function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
+import { escapeHtml as esc } from '../../../shared/utils/escape.js';
+export { esc };
 
 export function header(title, extraButtons = '') {
   return `<header class="avs-admin-section-head">

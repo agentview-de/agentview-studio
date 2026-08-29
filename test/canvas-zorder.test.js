@@ -155,3 +155,64 @@ describe('canvas · widget rotation', () => {
     state.ui.selectedWidgetId = null; renderSlide();
   });
 });
+
+// Whose arrow key is this?
+//
+// The canvas nudges the selected widget with the arrow keys while its frame has
+// focus — real keyboard access, and the only way a pointer-less user can arrange
+// anything. But the inline text editor makes `.bb-body`, INSIDE that same frame,
+// contenteditable. Its arrow keys bubbled straight into the nudge handler: while
+// writing on the canvas, ← slid the widget sideways and the caret never moved,
+// because the handler also called preventDefault().
+//
+// This drives the REAL frame built by renderSlide(), not a copy of the rule.
+describe('canvas · arrow keys while writing belong to the caret', () => {
+  const arrow = (el, key, mods = {}) => {
+    const e = new KeyboardEvent('keydown', {
+      key, bubbles: true, cancelable: true,
+      shiftKey: !!mods.shift, altKey: !!mods.alt, ctrlKey: !!mods.ctrl, metaKey: !!mods.meta,
+    });
+    el.dispatchEvent(e);
+    return e;
+  };
+
+  test('REGRESSION: an arrow key from the editable body does not move the widget', async () => {
+    const w = createWidget('text', { z: 1, rect: { x: 20, y: 20, w: 40, h: 30 }, content: { body: '<p>Text</p>' } });
+    showWidgets([w]);
+    const frame = document.querySelector(`.avs-widget-frame[data-id="${w.id}"]`);
+    expect(frame === null).toBeFalsy();
+    const body = frame.querySelector('.bb-body');
+    expect(body === null).toBeFalsy();
+
+    // Exactly what enterInlineTextEdit() does to that element.
+    body.contentEditable = 'true';
+    try {
+      const before = { ...w.rect };
+      const e = arrow(body, 'ArrowLeft');
+      expect(w.rect.x).toBe(before.x);
+      expect(w.rect.y).toBe(before.y);
+      // …and the caret gets the keystroke it was aimed at.
+      expect(e.defaultPrevented).toBeFalsy();
+      // Selecting text with shift+arrow is the body's business too.
+      arrow(body, 'ArrowRight', { shift: true });
+      expect(w.rect.x).toBe(before.x);
+    } finally {
+      body.contentEditable = 'false';
+      body.removeAttribute('contenteditable');
+    }
+  });
+
+  test('the frame itself still nudges — this is keyboard access, not decoration', () => {
+    const w = createWidget('text', { z: 1, rect: { x: 20, y: 20, w: 40, h: 30 }, content: { body: '<p>Text</p>' } });
+    showWidgets([w]);
+    const frame = document.querySelector(`.avs-widget-frame[data-id="${w.id}"]`);
+    const before = { ...w.rect };
+    const e = arrow(frame, 'ArrowRight');
+    expect(w.rect.x > before.x).toBeTruthy();
+    expect(e.defaultPrevented).toBeTruthy();
+    // Alt resizes rather than moves.
+    const mid = { ...w.rect };
+    arrow(frame, 'ArrowDown', { alt: true });
+    expect(w.rect.h > mid.h).toBeTruthy();
+  });
+});

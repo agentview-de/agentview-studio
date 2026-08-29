@@ -130,7 +130,7 @@ agentview-studio/              ← this repository (standalone, no build, no npm
 ├── player/
 │   ├── runtime.js             polls slot · day-parting · renders slide.widgets[] · plays builds · 6h hard reload
 │   ├── transitions.js         9 slide transitions (fade · zoom · push · wipe · flip …)
-│   └── debug-hud.js           ?debug=1 → state HUD
+│   └── debug-hud.js           diagnostics overlay: ?debug=1, 5 taps top-left, or shift+D
 │
 ├── shared/                    imported by BOTH admin + player — single source of truth
 │   ├── plugin-contract.js     { type, label, group, icon, defaults, schema, render } + helpers
@@ -203,6 +203,15 @@ agentview-studio/              ← this repository (standalone, no build, no npm
    `⌘/Ctrl+scroll` to zoom, **Fit** to frame everything.
 4. Select a widget to open its **Inspector** (auto-generated form); the preview updates as you type.
 
+### Find a slide in a long playlist
+
+Once a playlist passes a dozen slides, a filter box appears above the slide
+rail. It matches on the slide name, the **widgets on it** ("qr", "wetter") and
+its schedule text, keeps the real slide numbers so you still know where you are,
+and reports the hit rate. Reordering is switched off while a filter is active —
+a drop between two visible cards has no defined meaning when there are hidden
+ones in between. `Esc` clears the box.
+
 ### Import an existing file
 
 Drop a file anywhere on the window. Studio detects the type and creates the right slide(s):
@@ -250,6 +259,17 @@ within seconds.
 
 On a display card, click the 👁 icon — a new tab opens with agentView's official
 preview-link URL. Edit in the studio; the preview updates as the slot updates.
+
+### Diagnose a screen you are standing in front of
+
+A published display runs one fixed URL in kiosk mode — no address bar, no
+console. **Five taps in the top-left corner** (within three seconds) or
+**shift+D** opens the player's diagnostics overlay: which slot it polls, how
+many slides are visible, when the last *successful* fetch was, whether the
+playlist on screen is the cached one, how many fetches have failed in a row and
+what the last error said. It closes with the same gesture and, when opened that
+way, on its own after a minute. `?debug=1` still opens it for good when you can
+reach the URL.
 
 ### Discover free data feeds
 
@@ -334,13 +354,17 @@ There is **no build step** — these scripts only cover linting and tests.
 npm install        # dev tooling only (eslint + playwright); not needed to run the app
 npm run lint       # eslint .
 npm test           # headless pure-logic suite (node test/run-node.mjs)
-npm run test:browser   # full suite via Playwright (node test/run-browser.mjs)
-npm run check      # lint + test
+npm run test:browser   # all four browser pages via Playwright (node test/run-browser.mjs)
+npm run i18n       # every t() key present in both dictionaries (tools/i18n-check.mjs)
+npm run check      # lint + i18n + test
 ```
 
-The **full** test suite (including DOM-dependent tests) also runs in any browser by
-opening `test/index.html`. See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution
-workflow and coding conventions.
+The DOM-dependent tests live on four pages under `test/`, each of which also runs
+by opening it in any browser: `index.html` (everything the Node runner has plus the
+DOM-only suites), `canvas-zorder.test.html`, `publish-e2e.test.html` (builds the real
+publish bundle and boots it) and `plugin-resilience.test.html` (all 34 plugins against
+hostile input; every inspector form built and torn down). See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow and coding conventions.
 
 ---
 

@@ -17,6 +17,7 @@ import { get as getPlugin } from '../../../shared/plugins/registry.js';
 import { t } from '../../i18n.js';
 import { toast } from '../../ui/toast.js';
 import { openModal } from '../../ui/modal.js';
+import { fmtDateTime } from '../../format-date.js';
 
 export function mountVersions(body) {
   return mountTab(body, {
@@ -38,7 +39,7 @@ export function mountVersions(body) {
       ctx.content.innerHTML = table(
         [t('ver.colTime'), t('ver.colBy'), t('ver.colSlides'), t('ver.colDeployed'), t('ver.colAction')],
         versions.map((v, idx) => `<tr>
-          <td>${esc(v.at ?? '')}</td>
+          <td>${esc(fmtDateTime(v.at))}</td>
           <td>${esc(v.by ?? '—')}</td>
           <td>${esc(v.snapshot?.slides?.length ?? 0)}</td>
           <td>${esc((v.deployedTo ?? []).length)}</td>
@@ -54,7 +55,7 @@ export function mountVersions(body) {
         if (!v?.snapshot) return;
         const ok = await openModal({
           title: t('admin.restore'),
-          body: (() => { const d = document.createElement('div'); d.innerHTML = `<p>${t('ver.restoreConfirm', { at: `<b>${esc(v.at)}</b>` })}</p>`; return d; })(),
+          body: (() => { const d = document.createElement('div'); d.innerHTML = `<p>${t('ver.restoreConfirm', { at: `<b>${esc(fmtDateTime(v.at))}</b>` })}</p>`; return d; })(),
           actions: [{ label: t('common.cancel') }, { label: t('admin.restore'), kind: 'primary', value: 1 }],
         });
         if (!ok) return;

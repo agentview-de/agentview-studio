@@ -5,9 +5,10 @@ import { composeDispose, childSignal } from '../plugin-contract.js';
 import { escapeHtml } from '../utils/escape.js';
 import { fetchFeedItems } from '../feeds.js';
 import { isStored, dataModeField } from '../offline-data.js';
-import { refreshSecField } from '../refresh-field.js';
-import { localeField } from '../locale-field.js';
+import { refreshSecField, refreshIntervalMs } from '../refresh-field.js';
+import { localeField, safeLocale } from '../locale-field.js';
 import { ensureTickerKeyframes } from '../ticker-keyframes.js';
+import { dataModeNetwork } from '../plugin-network.js';
 
 // Map one <item>/<entry> node to the shape the widget renders. Shared by the
 // live fetch and offline provisioning so both store/show identical data.
@@ -51,7 +52,8 @@ export default register({
   label: 'RSS Feed',
   group: 'live',
   icon: '📰',
-  network: true,
+  // 'stored' reads data the Studio fetched earlier; only 'live' calls out.
+  network: dataModeNetwork,
   // Same third-party-content caveat as the News with Photos widget (its
   // image-card sibling): headlines + descriptions are pulled from publisher
   // feeds, so flag it private-only and point to the publisher's terms.
@@ -178,11 +180,11 @@ export default register({
     let dateTimer = null;
     let currentPage = 0;
 
-    // Format one item's epoch-ms timestamp for the audience. `c.locale || undefined`
+    // Format one item's epoch-ms timestamp for the audience. `safeLocale(c.locale)`
     // (never ??) so the '' = browser-default sentinel falls through to the device.
     const fmtDate = (ts) => {
       if (!showDate || !ts) return '';
-      const loc = c.locale || undefined;
+      const loc = safeLocale(c.locale);
       try {
         if (dateFormat === 'time') {
           return new Intl.DateTimeFormat(loc, { hour: '2-digit', minute: '2-digit' }).format(ts);
@@ -318,7 +320,7 @@ export default register({
       if (refreshSec > 0) {
         refreshTimer = setInterval(() => {
           if (!ctrl.signal.aborted) loadLive(false);
-        }, Math.max(5000, refreshSec * 1000));
+        }, refreshIntervalMs(refreshSec));
       }
     }
 

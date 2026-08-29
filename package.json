@@ -18,7 +18,9 @@
     "test:browser": "node test/run-browser.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "check": "npm run lint && npm test"
+    "check": "npm run lint && npm run i18n -- --quiet && npm run store && npm test",
+    "i18n": "node tools/i18n-check.mjs",
+    "store": "node tools/store-check.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

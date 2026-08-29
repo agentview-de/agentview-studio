@@ -8,6 +8,7 @@ import { approval as approvalApi } from '../../api.js';
 import { state } from '../../store.js';
 import { t } from '../../i18n.js';
 import { toast } from '../../ui/toast.js';
+import { fmtDateTime } from '../../format-date.js';
 
 export function mountApprovals(body) {
   return mountTab(body, {
@@ -42,7 +43,7 @@ export function mountApprovals(body) {
         pending.map(p => `
           <article class="avs-admin-card">
             <h3>${esc(p.display.name ?? p.display.id)}</h3>
-            <p class="avs-muted">🟡 ${esc((p.pending.submittedAt ?? '').slice(0, 19))} · ${esc(p.pending.submittedBy ?? '—')}</p>
+            <p class="avs-muted">🟡 ${esc(fmtDateTime(p.pending.submittedAt))} · ${esc(p.pending.submittedBy ?? '—')}</p>
             <p>${esc(p.pending.description ?? p.pending.contentDescription ?? '—')}</p>
             <div class="avs-admin-card-actions">
               <button class="bb-btn bb-btn-primary" data-accept="${esc(p.display.id)}">${t('approval.accept')}</button>

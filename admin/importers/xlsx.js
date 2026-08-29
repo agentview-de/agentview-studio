@@ -1,5 +1,5 @@
 import { createSlideWithWidget } from '../../shared/slide-schema.js';
-import { barChartContent, labelValuePairs } from './_helpers.js';
+import { barChartContent, looksLikeHeader, labelValuePairs, parseNumberColumn } from './_helpers.js';
 
 export const id = 'xlsx';
 export const label = 'Excel Spreadsheet';
@@ -36,15 +36,17 @@ export async function convert(file) {
     const ws = wb.Sheets[name];
     const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
     if (!data.length) continue;
-    // First row headers, columns A is label, col B numeric
-    const labels = [], values = [];
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
-      if (!row || row.length === 0) continue;
-      labels.push(String(row[0] ?? ''));
-      const v = parseFloat(row[1]);
-      if (Number.isFinite(v)) values.push(v);
-    }
+    // Column A is the label, column B the value. Whether row 1 names them or
+    // already holds data is decided, not assumed — see looksLikeHeader.
+    const body = data.slice(looksLikeHeader(data) ? 1 : 0).filter(r => r && r.length);
+    // One value per label — see csv.js. A single text cell used to leave the two
+    // arrays at different lengths, which the guard below then turned into a
+    // markdown table: one "n/a" cost the whole sheet its chart. Numeric cells
+    // arrive as numbers, but a sheet that stores them as TEXT hands over
+    // "1.234,56" — read as a column so the convention is decided once.
+    const labels = body.map(r => String(r[0] ?? ''));
+    const values = parseNumberColumn(body.map(r => r[1]))
+      .map(v => (Number.isFinite(v) ? v : 0));
     if (values.length === labels.length && values.length > 0) {
       slides.push(createSlideWithWidget('chart',
         barChartContent(labelValuePairs(labels, values)),

@@ -7,6 +7,7 @@
 // canvas.js; only the widget chrome lives here.
 
 import { t } from '../i18n.js';
+import { uiIconSvg } from '../../shared/data/ui-icons.js';
 
 // Compact toolbar shown while a text widget is being inline-edited. Holds the
 // essentials (B/I/U/S, colour, sizes, alignment, lists, undo, Done). Power
@@ -46,6 +47,7 @@ export function buildInlineToolbar(editor, onCommit, onExit) {
     if (cmd) b.dataset.cmd = cmd;
     b.type = 'button';
     b.title = title;
+    b.setAttribute('aria-label', title);
     b.innerHTML = label;
     b.addEventListener('mousedown', e => e.preventDefault());
     b.addEventListener('click', handler);
@@ -81,9 +83,14 @@ export function buildInlineToolbar(editor, onCommit, onExit) {
   // Alignment
   tb.append(sep());
   tb.append(
-    btn('⇤', t('rt.alignLeft'),   () => exec('justifyLeft'),   'justifyLeft'),
-    btn('↔', t('rt.alignCenter'), () => exec('justifyCenter'), 'justifyCenter'),
-    btn('⇥', t('rt.alignRight'),  () => exec('justifyRight'),  'justifyRight'),
+    // The same three icons the inspector's rich-text bar uses. This toolbar
+    // still had the typographic arrows ⇤ ↔ ⇥ — including the ↔ for "centre"
+    // that ui-icons.js documents as actively misleading, since a left-right
+    // arrow reads as "stretch to the full width". Two toolbars, one editor,
+    // one vocabulary.
+    btn(uiIconSvg('align-left'),   t('rt.alignLeft'),   () => exec('justifyLeft'),   'justifyLeft'),
+    btn(uiIconSvg('align-center'), t('rt.alignCenter'), () => exec('justifyCenter'), 'justifyCenter'),
+    btn(uiIconSvg('align-right'),  t('rt.alignRight'),  () => exec('justifyRight'),  'justifyRight'),
   );
 
   // Lists
@@ -95,7 +102,7 @@ export function buildInlineToolbar(editor, onCommit, onExit) {
 
   // Clear, exit
   tb.append(sep());
-  tb.append(btn('⊘', t('rt.clearFormat'), () => exec('removeFormat')));
+  tb.append(btn(uiIconSvg('clear-format'), t('rt.clearFormat'), () => exec('removeFormat')));
   tb.append(btn(t('rt.inline.done'), t('rt.inline.doneTitle'), onExit));
 
   const stateButtons = tb.querySelectorAll('[data-cmd]');
@@ -284,7 +291,10 @@ export function buildInlineTableBar(editor, hostEl, onCommit) {
     b.className = 'avs-inline-btn';
     b.type = 'button';
     b.title = title;
-    b.textContent = label;
+    // Icon-only, so the title is not enough on its own: a screen reader needs a
+    // name, and title is only consulted by sighted hover.
+    b.setAttribute('aria-label', title);
+    b.innerHTML = label;
     b.addEventListener('mousedown', e => e.preventDefault());
     b.addEventListener('click', () => act(action));
     return b;
@@ -292,14 +302,14 @@ export function buildInlineTableBar(editor, hostEl, onCommit) {
   const sep = () => { const s = document.createElement('span'); s.className = 'avs-inline-sep'; return s; };
 
   el.append(
-    btn('+⤴', t('rt.table.rowAbove'), 'rowAbove'),
-    btn('+⤵', t('rt.table.rowBelow'), 'rowBelow'),
-    btn('+⇤', t('rt.table.colLeft'),  'colLeft'),
-    btn('+⇥', t('rt.table.colRight'), 'colRight'),
+    btn(uiIconSvg('table-row-above'), t('rt.table.rowAbove'), 'rowAbove'),
+    btn(uiIconSvg('table-row-below'), t('rt.table.rowBelow'), 'rowBelow'),
+    btn(uiIconSvg('table-col-left'),  t('rt.table.colLeft'),  'colLeft'),
+    btn(uiIconSvg('table-col-right'), t('rt.table.colRight'), 'colRight'),
     sep(),
-    btn('−⇕', t('rt.table.delRow'),   'delRow'),
-    btn('−⇔', t('rt.table.delCol'),   'delCol'),
-    btn('🗑',  t('rt.table.delTable'), 'delTable'),
+    btn(uiIconSvg('table-row-delete'), t('rt.table.delRow'), 'delRow'),
+    btn(uiIconSvg('table-col-delete'), t('rt.table.delCol'), 'delCol'),
+    btn(uiIconSvg('trash'), t('rt.table.delTable'), 'delTable'),
   );
 
   function refresh() {

@@ -266,3 +266,62 @@ describe('validateWidget / validateSlide', () => {
     expect(validateSlide({ duration: 10, widgets: [] })).toBeFalsy();  // no id
   });
 });
+
+// The other half of the round trip: not one widget's defaults, but a playlist
+// with everything the schema allows on it. Export writes this file and import
+// reads it back through the migrators, so anything they quietly drop is a
+// backup that cannot be restored — and nobody finds out until they need it.
+describe('round-trip · a playlist with all its trimmings survives export→import', () => {
+  const RICH = {
+    schemaVersion: SCHEMA_VERSION,
+    id: 'pl-rich', name: 'Reich', canvas: { w: 1920, h: 1080, fit: 'contain' },
+    defaults: { duration: 9, transition: 'zoom', theme: 'gradient-purple' },
+    brandKit: { accent: '#ff0066', font: 'Inter' },
+    syncAnchor: { at: 1700000000000, total: 3 },
+    slotEndpoints: { preise: 'https://example.com/preise' },
+    slides: [{
+      id: 's1', name: 'Angebot', duration: 12, theme: 'minimal-dark', transition: 'wipe',
+      schedule: {
+        daysOfWeek: [1, 2, 3],
+        timeRanges: [{ start: '09:00', end: '18:00' }],
+        dateRange: { from: '2026-01-01', to: '2026-12-31' },
+      },
+      brandKit: { accent: '#00ffcc' },
+      langs: { en: { widgets: [{ id: 'w1', type: 'text', z: 1, rect: { x: 1, y: 2, w: 3, h: 4 }, content: { text: 'EN' } }] } },
+      abVariants: [{ label: 'B', widgets: [{ id: 'w1', type: 'text', z: 1, rect: { x: 1, y: 2, w: 3, h: 4 }, content: { text: 'B' } }] }],
+      widgets: [{
+        id: 'w1', type: 'text', z: 3, rotation: 15, rect: { x: 10, y: 20, w: 30, h: 40 },
+        content: { text: 'DE' },
+        bindings: { text: 'preise.titel' },
+        onError: { mode: 'text', text: 'Fehler' },
+        build: { kind: 'fade-up', delay: 300 },
+      }],
+    }],
+  };
+
+  /** Every leaf of `a` that `b` does not answer with the same value. */
+  function lostLeaves(a, b, path = '') {
+    if (a === null || typeof a !== 'object') {
+      return JSON.stringify(a) === JSON.stringify(b) ? [] : [`${path}: ${JSON.stringify(a)} → ${JSON.stringify(b)}`];
+    }
+    return Object.keys(a).flatMap(k => lostLeaves(a[k], b?.[k], path ? `${path}.${k}` : k));
+  }
+
+  test('nothing is dropped on the way through the migrators', () => {
+    const back = migratePlaylist(JSON.parse(JSON.stringify(RICH)));
+    expect(lostLeaves(RICH, back)).toEqual([]);
+  });
+
+  test('the pieces a signage playlist is actually made of are all still there', () => {
+    const s = migratePlaylist(JSON.parse(JSON.stringify(RICH))).slides[0];
+    expect(s.schedule.timeRanges[0].start).toBe('09:00');
+    expect(s.schedule.daysOfWeek).toEqual([1, 2, 3]);
+    expect(s.langs.en.widgets[0].content.text).toBe('EN');
+    expect(s.abVariants[0].widgets[0].content.text).toBe('B');
+    expect(s.widgets[0].bindings.text).toBe('preise.titel');
+    expect(s.widgets[0].onError.mode).toBe('text');
+    expect(s.widgets[0].build.kind).toBe('fade-up');
+    expect(s.widgets[0].rotation).toBe(15);
+    expect(s.brandKit.accent).toBe('#00ffcc');
+  });
+});

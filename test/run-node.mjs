@@ -9,8 +9,13 @@
 import { runAllConsole } from './runner.js';
 
 const suites = [
-  // escape.test.js / sanitize.test.js are intentionally absent — they assert
-  // real DOM attribute/HTML safety and only run in the browser suite.
+  // sanitize.test.js is intentionally absent — it asserts real DOM HTML safety
+  // and only runs in the browser suite. plugin-resilience.test.js is absent for
+  // the same reason: it MOUNTS all 34 plugins into a real document. escape.test.js used to be excluded for
+  // the same reason, but only ONE of its cases needs a DOM (it self-skips now):
+  // escapeHtml is the single escape implementation for the whole app, so its
+  // tests belong in the run everybody actually executes.
+  './escape.test.js',
   './safe-url.test.js',
   './module-graph.test.js',
   './live-source.test.js',
@@ -48,6 +53,21 @@ const suites = [
   // Reactive store deep-Proxy: identity stability + path notification.
   // store.js touches localStorage/setTimeout only inside functions, not at load.
   './store.test.js',
+  // Undo/redo: the pure stack, plus the two store cases that were timing bugs
+  // (ctrl+Z inside the commit debounce; the missing baseline on load).
+  './undo-stack.test.js',
+  // Re-entrancy guards for async refreshes — coalescing bursts (fleet refresh)
+  // and dropping stale answers (asset search).
+  './async-refresh.test.js',
+  // Reconnect schedule for the event stream (exponential, capped, jittered).
+  './reconnect-backoff.test.js',
+  // The two strings the player puts on a screen itself (banner), localised by
+  // the display's own language setting.
+  './player-messages.test.js',
+  // Canvas colours: a gradient stop throws where fillStyle silently ignores.
+  './css-color.test.js',
+  // Which field is "the id of a display group" — the endpoints take categoryId.
+  './category-id.test.js',
   // Weather widget pure formatters (colour ramp, compass, KPI subtitles).
   './weather-format.test.js',
   // Pure canvas viewport + snap math (zoom transforms, edge/centre snapping).
@@ -56,6 +76,17 @@ const suites = [
   './rich-text-table.test.js',
   // API client pure decisions: auth-header selection + URL/proxy resolution.
   './api-url.test.js',
+  // Display capability three-state reader — pins that a MISSING flag makes no
+  // claim, which is the bug the drawer shipped with.
+  './display-capabilities.test.js',
+  // Design catalog + the icon derived from each design rects.
+  './designs.test.js',
+  // Player front door: only a real playlist may be applied or cached.
+  './playlist-response.test.js',
+  // Day-parting re-check: cursor bookkeeping when the visible set changes.
+  './schedule-reconcile.test.js',
+  // URL-probe verdict: the status is judged for every kind, JSON included.
+  './probe-verdict.test.js',
   // Importer file-type routing + the CSV/JSON pure parse cores.
   './importers.test.js',
   // Plugin contract + schema shape validation across all registered widgets.
@@ -75,17 +106,45 @@ const suites = [
   './brand-kit-form.test.js',
   // Widget Designer "Looks" galleries — shape + every patch key is a real field.
   './looks.test.js',
+  // Multi-display sync: the shared timeline AND the tick that keeps two screens
+  // on one wall showing the same slide (simulated over an hour, both ways).
+  './sync-clock.test.js',
+  // The calendar widget's five views — multi-day events, escaping, locale.
+  './calendar-views.test.js',
+  // "Text in Slides aufteilen" — one slide per heading, heading included.
+  './smart-split.test.js',
+  // One way to write a server timestamp — the Studio's language, everywhere.
+  './format-date.test.js',
+  './format-bytes.test.js',
+  // The sandbox invariant for the two web-embed widgets — the DOM half of
+  // this suite skips itself here and runs in the browser page.
+  './web-embed.test.js',
+  './refresh-field.test.js',
+  './poll-schedule.test.js',
+  './plugin-network.test.js',
+  './format-number.test.js',
+  './current-slide.test.js',
 ];
 
+// A suite that fails to import must not abort the others — but it MUST fail the
+// run. It used to only print a warning, so the suite silently vanished from the
+// count and the run still exited 0 and said "All N tests passed". That is how a
+// broken import ships: the number quietly drops and nothing goes red. (Found by
+// exactly that: a missing import took shell.test.js out and the run still
+// reported success, four tests lighter.)
+const loadErrors = [];
 for (const s of suites) {
   try {
     await import(s);
   } catch (e) {
-    // A suite that hasn't been written yet (or fails to import) shouldn't abort
-    // the others — report and continue so the rest still run.
+    loadErrors.push({ suite: s, message: e?.message ?? String(e) });
     console.error(`! could not load ${s}: ${e.message}`);
   }
 }
 
 const { fail } = await runAllConsole();
-process.exit(fail === 0 ? 0 : 1);
+if (loadErrors.length) {
+  console.error(`\n✗ ${loadErrors.length} suite(s) could not be loaded — their tests did not run:`);
+  for (const e of loadErrors) console.error(`    ${e.suite}: ${e.message}`);
+}
+process.exit(fail === 0 && loadErrors.length === 0 ? 0 : 1);

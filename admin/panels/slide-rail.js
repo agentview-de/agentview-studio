@@ -2,15 +2,33 @@
 // thumbnails (widget rects as blocks, no live plugin render so a long rail
 // stays cheap).
 
-import { state, commit, subscribe } from '../store.js';
+import { state, commit, subscribe, withSavedShape } from '../store.js';
 import { createSlide } from '../../shared/slide-schema.js';
 import { get as getPlugin } from '../../shared/plugins/registry.js';
 import { describeSchedule } from '../../shared/scheduler-core.js';
 import { makeReorderable } from '../ui/drag-drop.js';
 import { openContextMenu } from '../ui/context-menu.js';
-import { t, tx } from '../i18n.js';
+import { getLocale, t, tx } from '../i18n.js';
+import { uiIconSvg } from '../../shared/data/ui-icons.js';
 import { widgetIcon } from '../../shared/data/widget-icons.js';
 import { escapeHtml } from '../../shared/utils/escape.js';
+import { walkAllWidgets } from '../../shared/slide-schema.js';
+
+// Below this many slides a search box is clutter; above it, scrolling a flat
+// list is the only way to find anything. The rail grows the affordance when it
+// starts to need it.
+const FILTER_MIN = 12;
+let _filter = '';
+
+/** What a slide can be found by: its name, its widgets, its schedule. */
+function haystack(slide) {
+  const parts = [slide.name ?? ''];
+  for (const w of slide.widgets ?? []) parts.push(tx(getPlugin(w.type)?.label ?? w.type), w.type);
+  const sched = describeSchedule(slide, getLocale());
+  if (sched) parts.push(sched);
+  return parts.join(' ').toLowerCase();
+}
+const slideMatches = slide => !_filter || haystack(slide).includes(_filter);
 
 export function mountSlideRail(host) {
   host.classList.add('avs-rail');
@@ -19,10 +37,34 @@ export function mountSlideRail(host) {
       <span class="avs-rail-title">${t('rail.slides')}</span>
       <button class="avs-chip avs-chip-accent" id="avs-add-slide">+ ${t('rail.add')}</button>
     </div>
+    <div class="avs-rail-filterbar" id="avs-rail-filterbar" hidden>
+      <input type="search" class="avs-rail-filter" id="avs-rail-filter"
+             placeholder="${t('rail.filter')}" aria-label="${t('rail.filter')}">
+      <span class="avs-rail-filter-count" id="avs-rail-count" role="status" aria-live="polite"></span>
+    </div>
     <div class="avs-rail-list" id="avs-rail-list"></div>`;
 
   const list = host.querySelector('#avs-rail-list');
+  // A listbox, not a pile of divs: one Tab stop for the whole rail, arrows to
+  // move within it. Same pattern the drawer's tab strip already uses.
+  list.setAttribute('role', 'listbox');
+  list.setAttribute('aria-label', t('rail.slides'));
   host.querySelector('#avs-add-slide').addEventListener('click', addSlide);
+
+  const filterBar = host.querySelector('#avs-rail-filterbar');
+  const filterInput = host.querySelector('#avs-rail-filter');
+  const filterCount = host.querySelector('#avs-rail-count');
+  filterInput.addEventListener('input', () => {
+    _filter = filterInput.value.trim().toLowerCase();
+    applyFilter();
+  });
+  filterInput.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || !filterInput.value) return;
+    e.stopPropagation();          // Escape clears the field before it deselects
+    filterInput.value = '';
+    _filter = '';
+    applyFilter();
+  });
 
   makeReorderable(list, {
     dragSelector: '.avs-slide-card',
@@ -33,14 +75,101 @@ export function mountSlideRail(host) {
     },
   });
 
-  subscribe('playlist', refresh);
-  subscribe('ui', p => { if (p === 'ui.activeSlideId') refresh(); });
+  // The rail used to rebuild EVERY card on every notification, and the store
+  // notifies for any nested change — so one keystroke in a text field, or
+  // clicking another slide, rebuilt the whole list. Measured on a 200-slide
+  // playlist: ~50 ms per keystroke and ~54 ms per selection, i.e. typing at 20
+  // frames a second. The store hands each subscriber the PATH that changed, so
+  // the rail can be exact about what it redraws.
+  subscribe('playlist', onPlaylistChange);
+  subscribe('ui', p => { if (p === 'ui.activeSlideId') setActive(); });
   refresh();
+
+  function onPlaylistChange(path) {
+    // 'playlist.slides.7.name' → only card 7. Anything shorter or broader
+    // (the playlist itself, the slides array, a default that every thumbnail
+    // reads) still means everything.
+    const m = /^playlist\.slides\.(\d+)(?:\.|$)/.exec(path ?? '');
+    if (m) refreshCard(Number(m[1]));
+    else refresh();
+  }
 
   function refresh() {
     const slides = state.playlist?.slides ?? [];
+    // replaceChildren() destroys whatever had focus. Reordering a slide
+    // re-renders the whole rail, so without this a keyboard user is thrown out
+    // of the list on their first keystroke.
+    const hadFocus = list.contains(document.activeElement);
     list.replaceChildren();
     slides.forEach((s, i) => list.appendChild(card(s, i)));
+    if (hadFocus) list.querySelector('.avs-slide-card[tabindex="0"]')?.focus();
+    // The box appears once a playlist is long enough to get lost in — and stays
+    // while a term is active, so it cannot vanish under the cursor.
+    filterBar.hidden = slides.length < FILTER_MIN && !_filter;
+    applyFilter();
+  }
+
+  /**
+   * Hide the cards that do not match. Reordering is switched OFF while a filter
+   * is active: a drop between two visible cards has no defined meaning when
+   * there are hidden ones in between, and neither does alt+arrow.
+   */
+  function applyFilter() {
+    const slides = state.playlist?.slides ?? [];
+    let shown = 0;
+    list.childNodes.forEach((el, i) => {
+      const ok = slideMatches(slides[i] ?? {});
+      el.hidden = !ok;
+      el.draggable = !_filter;
+      if (ok) shown++;
+    });
+    if (!_filter) filterCount.textContent = '';
+    else filterCount.textContent = shown
+      ? t('rail.filterCount', { shown, total: slides.length })
+      : t('rail.filterEmpty');
+    filterCount.classList.toggle('avs-rail-filter-empty', !!_filter && !shown);
+  }
+
+  /** Redraw exactly one card, or fall back when the list shape moved under us. */
+  function refreshCard(index) {
+    const slides = state.playlist?.slides ?? [];
+    const slide = slides[index];
+    const old = list.children[index];
+    // A push/splice notifies per index AND for `length`; the index write can
+    // arrive while the DOM is still a card short. Rebuilding then is both
+    // correct and rare.
+    if (!slide || !old || list.children.length !== slides.length) return refresh();
+    const hadFocus = old.contains(document.activeElement);
+    const fresh = card(slide, index);
+    fresh.hidden = !slideMatches(slide);
+    fresh.draggable = !_filter;
+    old.replaceWith(fresh);
+    if (hadFocus) fresh.focus();
+  }
+
+  /**
+   * Selection is three attributes on two cards — it was a full rebuild of the
+   * list, which is also what threw a dragging or focused card away.
+   */
+  function setActive() {
+    const id = state.ui.activeSlideId;
+    // Only when the keyboard is already IN the rail: the arrows move the
+    // selection, and the roving tabindex has to follow it or the next keypress
+    // is computed from the card the user has visually left. (Before this was a
+    // targeted update, the full rebuild moved focus as a side effect — the
+    // arrows walked one step and then stuck.) Selection changes from
+    // elsewhere — deleting a slide, loading a playlist — must not steal focus.
+    const moveFocus = list.contains(document.activeElement);
+    let target = null;
+    for (const el of list.children) {
+      const on = el.dataset.id === id;
+      if (on) target = el;
+      if (el.classList.contains('avs-on') === on && (el.tabIndex === 0) === on) continue;
+      el.classList.toggle('avs-on', on);
+      el.setAttribute('aria-selected', String(on));
+      el.tabIndex = on ? 0 : -1;
+    }
+    if (moveFocus && target && target !== document.activeElement) target.focus();
   }
 }
 
@@ -50,9 +179,20 @@ function card(slide, index) {
   el.draggable = true;
   el.title = t('field.dragReorder');
   el.dataset.id = slide.id;
-  if (slide.id === state.ui.activeSlideId) el.classList.add('avs-on');
+  const isActive = slide.id === state.ui.activeSlideId;
+  if (isActive) el.classList.add('avs-on');
+  // Roving tabindex: the rail is ONE Tab stop and the arrows move inside it,
+  // rather than Tab walking through every slide and its two action buttons.
+  el.setAttribute('role', 'option');
+  el.setAttribute('aria-selected', String(isActive));
+  el.tabIndex = isActive ? 0 : -1;
+  // Just the position and the name — the listbox itself is already named
+  // 'Slides', so repeating the plural heading per option read as 'Slides 2'.
+  el.setAttribute('aria-label', `${index + 1}: ${slide.name || t('rail.untitled')}`);
+  el.addEventListener('focus', () => { state.ui.activeSlideId = slide.id; });
+  el.addEventListener('keydown', e => onCardKey(e, slide.id));
 
-  const sched = describeSchedule(slide);
+  const sched = describeSchedule(slide, getLocale());
   el.innerHTML = `
     <div class="avs-slide-index">${index + 1}</div>
     <div class="avs-rail-thumb bb-theme-${slide.theme ?? state.playlist?.defaults?.theme ?? 'minimal-dark'}">
@@ -64,15 +204,15 @@ function card(slide, index) {
     </div>
     <div class="avs-slide-meta">
       <span class="avs-slide-name">${escapeHtml(slide.name || t('rail.untitled'))}</span>
-      ${sched ? `<span class="avs-slide-sched" title="${escapeHtml(sched)}">⏰</span>` : ''}
-      ${slide.langs && Object.keys(slide.langs).length ? `<span class="avs-slide-badge" title="${escapeHtml(Object.keys(slide.langs).join(', '))}">🌐</span>` : ''}
-      ${Array.isArray(slide.abVariants) && slide.abVariants.length ? `<span class="avs-slide-badge" title="${slide.abVariants.length} ${tx('A/B variants')}">🎲</span>` : ''}
-      ${slide.brandKit ? `<span class="avs-slide-badge" title="${tx('Brand Kit override')}">🎨</span>` : ''}
-      ${anyBindings(slide) ? `<span class="avs-slide-badge" title="${tx('Slot bindings')}">🔗</span>` : ''}
+      ${sched ? `<span class="avs-slide-sched" title="${escapeHtml(sched)}">${uiIconSvg('clock', 11)}</span>` : ''}
+      ${slide.langs && Object.keys(slide.langs).length ? `<span class="avs-slide-badge" title="${escapeHtml(Object.keys(slide.langs).join(', '))}">${uiIconSvg('connectivity', 11)}</span>` : ''}
+      ${Array.isArray(slide.abVariants) && slide.abVariants.length ? `<span class="avs-slide-badge" title="${slide.abVariants.length} ${tx('A/B variants')}">${uiIconSvg('dice', 11)}</span>` : ''}
+      ${slide.brandKit ? `<span class="avs-slide-badge" title="${tx('Brand Kit override')}">${uiIconSvg('brandkit', 11)}</span>` : ''}
+      ${anyBindings(slide) ? `<span class="avs-slide-badge" title="${tx('Slot bindings')}">${uiIconSvg('link', 11)}</span>` : ''}
     </div>
     <div class="avs-slide-actions">
-      <button class="avs-iconbtn" data-act="dup" title="${t('rail.duplicate')}">⧉</button>
-      <button class="avs-iconbtn" data-act="del" title="${t('rail.delete')}">🗑</button>
+      <button class="avs-iconbtn" data-act="dup" title="${t('rail.duplicate')}">${uiIconSvg('copy', 14)}</button>
+      <button class="avs-iconbtn" data-act="del" title="${t('rail.delete')}">${uiIconSvg('trash', 14)}</button>
     </div>`;
 
   el.addEventListener('click', e => {
@@ -89,8 +229,46 @@ function card(slide, index) {
   return el;
 }
 
+// Arrow keys move BETWEEN slides; Alt+arrow moves the slide itself. Reordering
+// was drag-and-drop only — makeReorderable() has no keyboard path at all — so a
+// pointer-less user could select a slide but never change its position.
+function onCardKey(e, id) {
+  const all = state.playlist?.slides ?? [];
+  // While a filter is active the arrows walk what is VISIBLE — stepping into a
+  // hidden slide would move the selection somewhere the user cannot see.
+  const slides = _filter ? all.filter(slideMatches) : all;
+  const ix = slides.findIndex(s => s.id === id);
+  if (ix < 0) return;
+
+  if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    // Reordering a filtered list has no defined meaning: "one down" from a
+    // visible card lands on a slide that is not on screen.
+    if (_filter) return;
+    const to = ix + (e.key === 'ArrowDown' ? 1 : -1);
+    if (to < 0 || to >= slides.length) return;
+    e.preventDefault();
+    const next = [...all];
+    next.splice(to, 0, next.splice(ix, 1)[0]);
+    state.playlist.slides = next;
+    commit('reorder-slides');
+    return;
+  }
+
+  let to = null;
+  if (e.key === 'ArrowDown') to = Math.min(ix + 1, slides.length - 1);
+  else if (e.key === 'ArrowUp') to = Math.max(ix - 1, 0);
+  else if (e.key === 'Home') to = 0;
+  else if (e.key === 'End') to = slides.length - 1;
+  else return;
+  e.preventDefault();
+  // Setting the active slide moves the roving tabindex AND the focus (see
+  // setActive) so the next arrow keypress starts from the card that is now
+  // selected.
+  state.ui.activeSlideId = slides[to].id;
+}
+
 // True iff any widget in any variant of this slide (default, langs, abVariants)
-// has a non-empty bindings map. Renders the 🔗 rail badge.
+// has a non-empty bindings map. Renders the link badge in the rail.
 function anyBindings(slide) {
   const hasIn = arr => Array.isArray(arr) && arr.some(w => w?.bindings && Object.keys(w.bindings).length);
   if (hasIn(slide.widgets)) return true;
@@ -103,14 +281,14 @@ function slideMenuItems(id) {
   const arr = state.playlist?.slides ?? [];
   const ix = arr.findIndex(s => s.id === id);
   return [
-    { label: t('ctx.newAfter'), icon: '➕', run: () => insertAfter(id) },
-    { label: t('ctx.duplicate'), icon: '⧉', run: () => duplicate(id) },
-    { label: t('ctx.delete'), icon: '🗑', run: () => remove(id) },
+    { label: t('ctx.newAfter'), icon: uiIconSvg('plus', 14), run: () => insertAfter(id) },
+    { label: t('ctx.duplicate'), icon: uiIconSvg('copy', 14), run: () => duplicate(id) },
+    { label: t('ctx.delete'), icon: uiIconSvg('trash', 14), run: () => remove(id) },
     { separator: true },
-    { label: t('ctx.moveUp'), icon: '⬆️', disabled: ix <= 0, run: () => move(id, -1) },
-    { label: t('ctx.moveDown'), icon: '⬇️', disabled: ix < 0 || ix >= arr.length - 1, run: () => move(id, 1) },
+    { label: t('ctx.moveUp'), icon: uiIconSvg('arrow-up', 14), disabled: ix <= 0, run: () => move(id, -1) },
+    { label: t('ctx.moveDown'), icon: uiIconSvg('arrow-down', 14), disabled: ix < 0 || ix >= arr.length - 1, run: () => move(id, 1) },
     { separator: true },
-    { label: t('ctx.rename'), icon: '✏️', run: () => rename(id) },
+    { label: t('ctx.rename'), icon: uiIconSvg('pencil', 14), run: () => rename(id) },
   ];
 }
 
@@ -153,9 +331,19 @@ function duplicate(id) {
   const ix = state.playlist.slides.findIndex(s => s.id === id);
   if (ix === -1) return;
   // JSON-clone, not structuredClone — slide data is a reactive Proxy.
-  const copy = JSON.parse(JSON.stringify(state.playlist.slides[ix]));
+  // Duplicating the slide you are currently variant-editing would otherwise
+  // copy the VARIANT as the new slide's default — same bracket as saving.
+  const copy = withSavedShape(() => JSON.parse(JSON.stringify(state.playlist.slides[ix])));
   copy.id = createSlide().id;
-  copy.widgets = (copy.widgets ?? []).map(w => ({ ...w, id: 'w_' + Math.random().toString(36).slice(2, 10) }));
+  // Fresh ids for EVERY widget the slide carries — the default array AND the
+  // language / A/B variants. Only the default array used to be renumbered, so
+  // a duplicated slide's variant widgets kept the originals' ids, and the
+  // offline-data slot is keyed on exactly that id (offlineSlugFor →
+  // `avs-d-<widget id>`): both slides then wrote to and read from ONE slot.
+  // Change the URL in one, hit "Refresh data", and the other slide silently
+  // shows the first one's numbers. walkAllWidgets is the module that already
+  // owns "every widget of a playlist, variants included".
+  walkAllWidgets({ slides: [copy] }, w => { w.id = 'w_' + Math.random().toString(36).slice(2, 10); });
   state.playlist.slides.splice(ix + 1, 0, copy);
   state.ui.activeSlideId = copy.id;
   commit('duplicate-slide');

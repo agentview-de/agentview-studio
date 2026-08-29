@@ -33,6 +33,19 @@ describe('widget-host · mountWidget', () => {
     expect(signal.aborted).toBe(true);
   });
 
+  test('REGRESSION: disposing twice runs the teardown once, and lets the plugin go', () => {
+    // The comment on mountWidget has always said "runs the plugin's teardown
+    // once"; the closure ran fn() on every call. The player's empty-schedule
+    // branch calls its teardown every 30 seconds, all night.
+    let disposed = 0;
+    const plugin = { type: 'fake', render: () => () => { disposed++; } };
+    const dispose = mountWidget({ id: 'w', type: 'fake', content: {} }, {}, {}, {}, () => plugin);
+    dispose();
+    dispose();
+    dispose();
+    expect(disposed).toBe(1);
+  });
+
   test('a synchronous render throw calls onError and still returns a safe dispose', () => {
     let onError = 0;
     const plugin = { type: 'fake', render: () => { throw new Error('boom'); } };

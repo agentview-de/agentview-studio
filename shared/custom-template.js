@@ -26,6 +26,8 @@
 // Content keys that are part of the custom-widget MACHINERY, not author field
 // values — collectValues() skips these (and any key starting with "_", e.g.
 // the offline-data cache) so they never leak into token substitution.
+import { escapeHtml as escapeText } from './utils/escape.js';
+
 export const CUSTOM_RESERVED_KEYS = Object.freeze([
   'template', 'css', 'fields', 'theme', 'textColor', 'accentColor',
 ]);
@@ -37,12 +39,6 @@ export const CUSTOM_RESERVED_KEYS = Object.freeze([
 // {{ key }} or {{ key | filter }}. The key is a JS-identifier-ish field key;
 // the optional filter is a single lowercase word from FILTERS below.
 const TOKEN_RE = /\{\{\s*([a-zA-Z_$][\w$]*)\s*(?:\|\s*([a-zA-Z]+)\s*)?\}\}/g;
-
-function escapeText(s) {
-  return String(s).replace(/[&<>"']/g, c => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-  ));
-}
 
 // Apply a display filter to a raw value. Unknown filters pass the value
 // through unchanged (forgiving — a typo shows the raw value, not an error).

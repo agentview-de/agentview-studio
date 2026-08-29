@@ -7,13 +7,38 @@ import { DESIGN_RECTS, createWidget, normalizeRect } from './slide-schema.js';
 import { get as getPlugin } from './plugins/registry.js';
 
 export const DESIGNS = Object.freeze([
-  { id: 'single',        label: 'Fullscreen',    icon: '▢' },
-  { id: 'split-50-50',   label: 'Split 50/50',   icon: '▯▯' },
-  { id: 'split-70-30',   label: 'Split 70/30',   icon: '◧' },
-  { id: 'ticker-bottom', label: 'Main + ticker', icon: '▤' },
-  { id: 'grid-2x2',      label: '2×2 grid',      icon: '田' },
-  { id: 'header-main',   label: 'Header + main', icon: '▥' },
+  { id: 'single',        label: 'Fullscreen' },
+  { id: 'split-50-50',   label: 'Split 50/50' },
+  { id: 'split-70-30',   label: 'Split 70/30' },
+  { id: 'ticker-bottom', label: 'Main + ticker' },
+  { id: 'grid-2x2',      label: '2×2 grid' },
+  { id: 'header-main',   label: 'Header + main' },
 ].map(d => ({ ...d, rects: DESIGN_RECTS[d.id] })));
+
+// A design's icon is DRAWN FROM ITS OWN RECTS, never hand-picked.
+//
+// Each entry used to carry an `icon` glyph — ▢ ▯▯ ◧ ▤ 田 ▥ — a hand-maintained
+// second description of a layout the `rects` already describe exactly. It could
+// drift from the layout, it cost a decision for every new design, and it did not
+// survive contact with real machines: 田 is a CJK ideograph standing in for a
+// 2×2 grid, so it renders in whatever CJK font the box happens to have, at a
+// different weight and size than everything beside it. ▯▯ was two characters
+// pretending to be one icon.
+//
+// The inspector's design picker already drew the rects directly (see
+// .avs-design-thumb) — this is the same idea, packaged so the command palette
+// and any future surface get it too. Add a seventh design and its icon exists
+// the moment its rects do.
+export function designIconSvg(design, size = 16) {
+  const rects = design?.rects ?? [];
+  if (!rects.length) return '';
+  // 100×100 user units = the percent space the rects are already in, so the
+  // rect values drop straight in. The 2px inset keeps a 0/0 rect's stroke from
+  // being clipped at the viewBox edge.
+  const boxes = rects.map(r =>
+    `<rect x="${r.x + 2}" y="${r.y + 2}" width="${Math.max(r.w - 4, 1)}" height="${Math.max(r.h - 4, 1)}" rx="4"/>`).join('');
+  return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round" aria-hidden="true">${boxes}</svg>`;
+}
 
 // Default widget type + sample content for a named slot. Without demo
 // content, applying a design produced N empty grey rectangles the user had

@@ -2,6 +2,7 @@
 //   mountSlideSettings(host)     always-visible slide-level controls
 //   renderWidgetInspector(host)  the selected widget's properties (swaps with Library)
 
+
 import { state, commit, subscribe, on } from '../store.js';
 import { get as getPlugin } from '../../shared/plugins/registry.js';
 import { buildForm } from '../ui/inspector.js';
@@ -12,6 +13,7 @@ import { getControl } from '../ui/field-controls/registry.js';
 import { widgetIcon } from '../../shared/data/widget-icons.js';
 import { THEME_SWATCHES } from '../../shared/data/themes.js';
 import { DESIGNS } from '../../shared/designs.js';
+import { uiIconSvg } from '../../shared/data/ui-icons.js';
 import { CANVAS_PRESETS, resolveCanvas } from '../../shared/slide-schema.js';
 import { SLIDE_TRANSITIONS, WIDGET_BUILDS, AMBIENT_EFFECTS, BUILD_DEFAULT_MS } from '../../shared/animations.js';
 import {
@@ -31,6 +33,9 @@ import { t, tx } from '../i18n.js';
 import { enterVariantEdit } from '../canvas/variant-ctx.js';
 import { openTemplateContentEditor } from './template-editor.js';
 import { slots as slotsApi } from '../api.js';
+import { escapeHtml as esc } from '../../shared/utils/escape.js';
+import { alignRect } from '../canvas/widget-frame.js';
+import { usesNetwork } from '../../shared/plugin-network.js';
 
 // Lazy slot-slug cache for the binding-inspector datalist. Populated on first
 // inspector mount per session; invalidated by SSE data.changed/data.deleted
@@ -39,7 +44,9 @@ let _slotSlugCache = null;
 async function getSlotSlugs() {
   if (_slotSlugCache) return _slotSlugCache;
   try {
-    const r = await slotsApi.list();
+    // Every page: a datalist that silently stops at the server's first page
+    // suggests nothing for the slots a working account accumulates last.
+    const r = await slotsApi.listAll();
     const list = Array.isArray(r) ? r : (r?.slots ?? r?.items ?? r?.data ?? []);
     _slotSlugCache = list.map(s => s.slug ?? s.name ?? s.id).filter(Boolean);
   } catch { _slotSlugCache = []; }
@@ -77,7 +84,7 @@ export function mountSlideSettings(host) {
     const name = slide.name?.trim() || t('insp.slideName');
     host.innerHTML = `
       <button class="avs-ss-trigger" id="ss-open" type="button" aria-label="${t('insp.slideSettings')}">
-        <span class="avs-ss-trigger-icon" aria-hidden="true">⚙️</span>
+        <span class="avs-ss-trigger-icon" aria-hidden="true">${uiIconSvg('gear', 16)}</span>
         <span class="avs-ss-trigger-label">${t('insp.slideSettings')}</span>
         <span class="avs-ss-trigger-sub">${esc(name)}</span>
       </button>`;
@@ -152,12 +159,12 @@ function buildSlideSettingsBody(slide) {
       </div>
     </div>
     <div class="avs-ss-actions">
-      <button class="bb-btn bb-btn-secondary" id="sm-bg" type="button">🎨 ${t('bg.slideTitle')}</button>
-      <button class="bb-btn bb-btn-secondary" id="sm-schedule" type="button">⏰ ${t('insp.schedule')}</button>
-      <button class="bb-btn bb-btn-secondary" id="sm-brandkit" type="button">🎨 ${t('admin.brandkit')}</button>
+      <button class="bb-btn bb-btn-secondary" id="sm-bg" type="button">${uiIconSvg('image', 14)} ${t('bg.slideTitle')}</button>
+      <button class="bb-btn bb-btn-secondary" id="sm-schedule" type="button">${uiIconSvg('clock', 14)} ${t('insp.schedule')}</button>
+      <button class="bb-btn bb-btn-secondary" id="sm-brandkit" type="button">${uiIconSvg('brandkit', 14)} ${t('admin.brandkit')}</button>
     </div>
     <details class="avs-variants-details">
-      <summary>🌐 ${t('variants.langs')} <span class="avs-variants-count" id="sm-lang-count">${esc(slide.langs ? Object.keys(slide.langs).length : 0)}</span></summary>
+      <summary>${uiIconSvg('connectivity', 13)} ${t('variants.langs')} <span class="avs-variants-count" id="sm-lang-count">${esc(slide.langs ? Object.keys(slide.langs).length : 0)}</span></summary>
       <div id="sm-langs"></div>
       <div class="avs-flex-row" style="margin-top:6px;">
         <input id="sm-lang-input" placeholder="${t('variants.langPlaceholder')}" style="max-width:120px;">
@@ -165,7 +172,7 @@ function buildSlideSettingsBody(slide) {
       </div>
     </details>
     <details class="avs-variants-details">
-      <summary>🎲 ${t('variants.ab')} <span class="avs-variants-count" id="sm-ab-count">${esc(Array.isArray(slide.abVariants) ? slide.abVariants.length : 0)}</span></summary>
+      <summary>${uiIconSvg('dice', 13)} ${t('variants.ab')} <span class="avs-variants-count" id="sm-ab-count">${esc(Array.isArray(slide.abVariants) ? slide.abVariants.length : 0)}</span></summary>
       <div id="sm-abs"></div>
       <button class="bb-btn" id="sm-ab-add" type="button" style="margin-top:6px;">${t('variants.addAb')}</button>
     </details>`;
@@ -294,7 +301,12 @@ function buildSlideSettingsBody(slide) {
     const host = box.querySelector('#sm-abs');
     const list = Array.isArray(slide.abVariants) ? slide.abVariants : [];
     if (!list.length) { host.innerHTML = `<p class="avs-muted">${t('variants.noAb')}</p>`; return; }
-    host.innerHTML = list.map((v, i) => `
+    // One arm is not a split. The player plays what the canvas shows until a
+    // second arm joins it — say so here, or the count badge reading "1" looks
+    // like a live experiment while the slide is playing something else.
+    const lonely = list.length === 1
+      ? `<p class="avs-muted avs-variant-hint">${t('variants.abNeedsTwo')}</p>` : '';
+    host.innerHTML = lonely + list.map((v, i) => `
       <div class="avs-variant-row" data-ab="${i}">
         <input data-ab-label="${i}" value="${esc(v.label ?? String.fromCharCode(65 + i))}" style="max-width:80px;">
         <label style="font-size:11px;opacity:.7;">${t('variants.weight')}<input type="number" data-ab-weight="${i}" min="0" step="0.5" value="${esc(v.weight ?? 1)}" style="max-width:60px;margin-left:4px;"></label>
@@ -449,6 +461,25 @@ export function renderWidgetInspector(host) {
     top: 'insp.preset.top', bot: 'insp.preset.bottom', center: 'insp.preset.center',
     tl: 'insp.preset.tl', tr: 'insp.preset.tr', bl: 'insp.preset.bl', br: 'insp.preset.br',
   };
+  // Align: move to an edge or centre WITHOUT resizing — a different job from
+  // the presets below, which replace the whole rect. Drawn in the same mini-
+  // slide language so the two rows read as one family; the block inside each
+  // mini sits where the widget will end up.
+  // The mini is 26×16 px, so a 26%×30% block came out 6×4 — a speck. These
+  // read as a bar pushed against the edge they name.
+  const ALIGN = {
+    left:    { x: 0,  y: 18, w: 30, h: 64 },
+    hcenter: { x: 35, y: 18, w: 30, h: 64 },
+    right:   { x: 70, y: 18, w: 30, h: 64 },
+    top:     { x: 20, y: 0,  w: 60, h: 34 },
+    vmiddle: { x: 20, y: 33, w: 60, h: 34 },
+    bottom:  { x: 20, y: 66, w: 60, h: 34 },
+  };
+  const alignButtonsHtml = Object.entries(ALIGN).map(([key, m]) => {
+    const title = t(`insp.align.${key}`);
+    return `<button class="avs-geo-preset" data-align="${key}" title="${esc(title)}" aria-label="${esc(title)}"><span class="avs-geo-mini"><span class="avs-geo-mini-fill" style="left:${m.x}%;top:${m.y}%;width:${m.w}%;height:${m.h}%"></span></span></button>`;
+  }).join('');
+
   const presetButtonsHtml = Object.keys(PRESETS).map(key => {
     const p = PRESETS[key];
     const title = t(PRESET_TITLES[key]);
@@ -471,10 +502,10 @@ export function renderWidgetInspector(host) {
       </button>
       <span class="avs-inspector-title">${widgetIcon(widget.type, plugin?.icon ?? '◻', 18)} ${tx(plugin?.label ?? widget.type)}</span>
       <div class="avs-inspector-actions">
-        <button class="avs-iconbtn" id="ins-save-widget" title="${esc(tx('Save as widget'))}">⭐</button>
+        <button class="avs-iconbtn" id="ins-save-widget" title="${esc(tx('Save as widget'))}">${uiIconSvg('star')}</button>
         <button class="avs-iconbtn" id="ins-reset" title="${t('insp.reset')}">↺</button>
         <button class="avs-iconbtn" id="ins-dup" title="${t('rail.duplicate')}">⧉</button>
-        <button class="avs-iconbtn" id="ins-del" title="${t('rail.delete')}">🗑</button>
+        <button class="avs-iconbtn" id="ins-del" title="${t('rail.delete')}">${uiIconSvg('trash')}</button>
       </div>
     </div>
     <div class="avs-inspector-body">
@@ -491,6 +522,9 @@ export function renderWidgetInspector(host) {
                 <input type="number" data-geo="${g.k}" ${g.attrs} value="${g.val}" title="${esc(g.hint)}">
               </label>`).join('')}
           </div>
+          <div class="avs-geo-rowlabel">${t('insp.alignOnSlide')}</div>
+          <div class="avs-geo-presets" aria-label="${t('insp.alignOnSlide')}">${alignButtonsHtml}</div>
+          <div class="avs-geo-rowlabel">${t('insp.layoutPresets')}</div>
           <div class="avs-geo-presets" aria-label="${t('insp.layoutPresets')}">${presetButtonsHtml}</div>
         </div>
       </section>
@@ -544,6 +578,22 @@ export function renderWidgetInspector(host) {
       // Re-sync the X/Y/W/H inputs with the new values without re-rendering.
       host.querySelectorAll('[data-geo]').forEach(inp => {
         if (inp.dataset.geo in p) inp.value = p[inp.dataset.geo];
+      });
+      markActivePreset();
+    });
+  });
+  host.querySelectorAll('[data-align]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      // Size is preserved on purpose — that is the whole difference from a
+      // preset. One history entry per click, so a click is one undo.
+      const next = alignRect(widget.rect, btn.dataset.align);
+      setWidgetGeometry(widget.id, next);
+      commit('widget-align');
+      // Sync from the rect we just computed, the way the preset row does —
+      // reading `widget.rect` back gave the value from BEFORE the write, so
+      // the canvas moved and the X field went on claiming the old number.
+      host.querySelectorAll('[data-geo]').forEach(inp => {
+        if (inp.dataset.geo in next) inp.value = next[inp.dataset.geo];
       });
       markActivePreset();
     });
@@ -625,7 +675,7 @@ export function renderWidgetInspector(host) {
     const help = widget.type === 'custom'
       ? tx('Large live stage, all settings, and the template / CSS / fields editor.')
       : tx('Open the full-screen designer with a large live preview.');
-    dz.innerHTML = `<button class="bb-btn bb-btn-primary" id="ins-open-designer2" style="width:100%;">🎨 ${esc(tx('Open designer'))}</button>
+    dz.innerHTML = `<button class="bb-btn bb-btn-primary" id="ins-open-designer2" style="width:100%;">${uiIconSvg('brandkit', 14)} ${esc(tx('Open designer'))}</button>
       <p class="bb-form-help">${esc(help)}</p>`;
     dz.querySelector('#ins-open-designer2').addEventListener('click', () => {
       const cv = resolveCanvas(state.playlist?.canvas);
@@ -678,7 +728,7 @@ export function renderWidgetInspector(host) {
   // Exception: a widget in "provided offline" mode makes NO network call in the
   // editor (it reads pre-fetched data from its slot), so the IP note and the
   // live-preview toggle don't apply — the Studio, not the display, did the fetch.
-  if (plugin?.network && !isStored(widget.content)) {
+  if (usesNetwork(plugin, widget.content) && !isStored(widget.content)) {
     const provider = usage?.attribution || t('privacy.providerGeneric');
     // Compact + collapsible: a one-line summary keeps the live-preview toggle
     // always reachable, while the full IP/DSGVO explanation folds away.
@@ -689,7 +739,7 @@ export function renderWidgetInspector(host) {
     sum.className = 'avs-note-summary';
     const title = document.createElement('span');
     title.className = 'avs-note-title';
-    title.textContent = '🛈 ' + t('privacy.ipSummary');
+    title.innerHTML = uiIconSvg('info', 13) + ' ' + esc(t('privacy.ipSummary'));
     sum.appendChild(title);
     // Grant / withdraw the live-preview permission for this widget (Art. 7(3)
     // DSGVO: as easy to revoke as to give). Lives in the summary so it stays one
@@ -724,7 +774,7 @@ export function renderWidgetInspector(host) {
     const tplWrap = document.createElement('div');
     tplWrap.className = 'avs-inspector-section';
     const count = widget.content.slotDefs.length;
-    tplWrap.innerHTML = `<div class="avs-section-title">🎛 ${t('inspector.editContent')}</div>
+    tplWrap.innerHTML = `<div class="avs-section-title">${uiIconSvg('sliders', 13)} ${t('inspector.editContent')}</div>
       <p class="bb-form-help">${t('content.editHelp')}</p>
       <button class="bb-btn bb-btn-primary" id="tpl-edit-content" style="width:100%;">${t('inspector.editContent')} (${count})</button>`;
     host.querySelector('.avs-inspector-body').appendChild(tplWrap);
@@ -738,7 +788,7 @@ export function renderWidgetInspector(host) {
   // buildForm engine the widget's own content uses, instead of hand-wired
   // controls. The `section` field makes buildForm own the fold (same storage-key
   // convention as the other sections via fold-section.js).
-  if (plugin?.network) {
+  if (usesNetwork(plugin, widget.content)) {
     const oe = widget.onError ?? {};
     const errForm = buildForm({
       formKey: widget.type,
@@ -858,7 +908,7 @@ export function renderWidgetInspector(host) {
   // v3: Slot-Bindings section. Lets the editor wire any widget.content field
   // (by field-path) to a data slot. Player resolves at render time. Foldable
   // like its siblings, default open.
-  const { section: bindWrap, body: bindBody } = foldSection(widget.type, '_bindings', `🔗 ${t('binding.sectionTitle')}`);
+  const { section: bindWrap, body: bindBody } = foldSection(widget.type, '_bindings', `${uiIconSvg('link', 13)} ${t('binding.sectionTitle')}`);
   bindBody.innerHTML = `<p class="bb-form-help">${t('binding.help')}</p>
     <div id="bind-list"></div>
     <div class="avs-flex-row" style="margin-top:6px;">
@@ -952,6 +1002,3 @@ export function renderWidgetInspector(host) {
   renderBindings();
 }
 
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}

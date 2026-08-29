@@ -12,9 +12,10 @@
 // opts.forceGrid (internal): always render the spreadsheet grid regardless of
 //   column count — passed by the expand modal where width is plentiful.
 
-import { t, tx } from '../../i18n.js';
+import { t, tx, getLocale } from '../../i18n.js';
 import { openModal } from '../modal.js';
 import { h, esc } from './_shared.js';
+import { uiIconSvg } from '../../../shared/data/ui-icons.js';
 
 const STACK_THRESHOLD = 4;
 
@@ -59,10 +60,13 @@ function makeCellInput(col, row, commit, opts = {}) {
     dtp.addEventListener('change', () => {
       if (!dtp.value) return;
       const d = new Date(dtp.value);
-      const txt = d.toLocaleString(undefined, { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+      // This string is stored as CONTENT and ends up on the display, so it is
+      // frozen at edit time either way — better the language the operator is
+      // looking at than whatever their browser happens to be set to.
+      const txt = d.toLocaleString(getLocale(), { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
       inp.value = txt; row[col.key] = txt; commit();
     });
-    const btn = h('button', 'bb-btn bb-btn-ghost bb-date-btn', '📅');
+    const btn = h('button', 'bb-btn bb-btn-ghost bb-date-btn', uiIconSvg('calendar', 14));
     btn.type = 'button';
     btn.title = t('field.pickDate');
     btn.setAttribute('aria-label', t('field.pickDate'));
@@ -90,7 +94,7 @@ function makeCellInput(col, row, commit, opts = {}) {
     if (col.placeholder) inp.placeholder = col.placeholder;
     inp.value = row[col.key] ?? '';
     inp.addEventListener('input', () => { row[col.key] = inp.value; commit(); });
-    const btn = h('button', 'bb-btn bb-btn-ghost bb-asset-cell-btn', '📁');
+    const btn = h('button', 'bb-btn bb-btn-ghost bb-asset-cell-btn', uiIconSvg('folder', 14));
     btn.type = 'button';
     btn.title = t('field.pickAsset');
     btn.setAttribute('aria-label', t('field.pickAsset'));
@@ -175,7 +179,7 @@ export function renderTable(f, v, set, opts = {}) {
     return handle;
   };
   const makeRemoveBtn = (idx) => {
-    const rm = h('button', 'bb-btn bb-btn-ghost', '✕');
+    const rm = h('button', 'bb-btn bb-btn-ghost', uiIconSvg('close', 14));
     rm.type = 'button';
     rm.dataset.row = idx;
     rm.setAttribute('aria-label', t('common.delete') + ' ' + tx('row') + ' ' + (idx + 1));
@@ -248,12 +252,12 @@ export function renderTable(f, v, set, opts = {}) {
     rows.push(Object.fromEntries(cols.map(c => [c.key, c.type === 'number' ? null : ''])));
     draw(); commit();
   });
-  const pasteBtn = h('button', 'bb-btn bb-btn-secondary bb-btn-sm', '📋 ' + t('field.pasteSheet'));
+  const pasteBtn = h('button', 'bb-btn bb-btn-secondary bb-btn-sm', uiIconSvg('copy', 14) + ' ' + esc(t('field.pasteSheet')));
   pasteBtn.type = 'button';
   // Expand button — for tables with many columns the inspector inputs become
   // tiny even in card mode (long descriptions, image URLs). The modal renders
   // the same table in a wide layout where each column has real working width.
-  const expandBtn = h('button', 'bb-btn bb-btn-secondary bb-btn-sm', '⛶');
+  const expandBtn = h('button', 'bb-btn bb-btn-secondary bb-btn-sm', uiIconSvg('expand', 14));
   expandBtn.type = 'button';
   expandBtn.title = t('rt.expand');
   expandBtn.setAttribute('aria-label', t('rt.expand'));

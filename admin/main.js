@@ -5,9 +5,10 @@
 // APIs, language, theme, import/export) lives in the connection chip and the
 // overflow menu, or the ⌘K command palette.
 
+
 import { toast, mount as mountToasts } from './ui/toast.js';
 import { setLocale, getLocale, t, tx } from './i18n.js';
-import { state, subscribe, commit, undo, redo, persist, persistConn, hydrate, emit } from './store.js';
+import { state, subscribe, commit, undo, redo, persist, persistConn, hydrate, emit, on, markBaseline, canUndo, canRedo } from './store.js';
 import { auth, resetScopeWarning } from './api.js';
 import * as sse from './sse.js';
 import { open as openPalette, registerCommand } from './ui/command-palette.js';
@@ -21,7 +22,8 @@ import { createPlaylist, createSlide, migratePlaylist, migrateSlide, applyWidget
 import { list as listPlugins, get as getPlugin } from '../shared/plugins/registry.js';
 import { widgetIcon } from '../shared/data/widget-icons.js';
 import '../shared/plugins/all.js';
-import { DESIGNS } from '../shared/designs.js';
+import { DESIGNS, designIconSvg } from '../shared/designs.js';
+import { uiIconSvg } from '../shared/data/ui-icons.js';
 import { importFiles, importUrl } from './importers/index.js';
 import { makeDropZone } from './ui/drag-drop.js';
 import * as assetLibrary from './ui/asset-library.js';
@@ -36,12 +38,20 @@ import { splitText } from './ai/smart-split.js';
 import { exportPlaylist, importPlaylist } from './playlist-io.js';
 import { isEditingVariant, variantBannerLabel, exitVariantEdit } from './canvas/variant-ctx.js';
 import { legalLinks } from './legal-links.js';
+import { escapeHtml as esc } from '../shared/utils/escape.js';
+import { wireTablist } from './ui/tablist.js';
+
+let viewTabs = null;
 
 // ---------- Boot ----------
 mountToasts();
 hydrate();
 state.playlist = applyWidgetMigrations(migratePlaylist(state.playlist ?? createPlaylist('Studio Demo')), getPlugin);
 ensureSlide();
+// The document as it was loaded is the floor of the undo stack. Without this
+// baseline the first edit of a session could not be undone: canUndo() is
+// "cursor > 0", and the first commit only creates entry 0.
+markBaseline('load');
 document.title = t('app.title');
 
 let displaysMounted = false;
@@ -70,6 +80,7 @@ function ensureSlide() {
 function mountShell() {
   const root = document.getElementById('app');
   root.innerHTML = `
+    <h1 class="bb-sr-only">agentView Studio</h1>
     <header class="avs-topbar">
       <div class="avs-brand">
         <a class="avs-brandlink" id="t-dashboard" href="${esc(dashboardUrl())}" target="_blank" rel="noopener noreferrer" title="${t('dash.tip')}">
@@ -85,16 +96,16 @@ function mountShell() {
       <div class="avs-top-actions">
         <span class="avs-savechip" id="avs-save"></span>
         <span class="avs-orgchip" id="avs-orgchip" style="display:none;"></span>
-        <button class="avs-iconbtn" id="t-undo" title="${t('tb.undo')} (${kbd('mod+z')})">↶</button>
-        <button class="avs-iconbtn" id="t-redo" title="${t('tb.redo')} (${kbd('mod+shift+z')})">↷</button>
-        <button class="avs-iconbtn" id="t-preview" title="${t('preview.go')} (${kbd('shift+p')})">▶</button>
+        <button class="avs-iconbtn" id="t-undo" title="${t('tb.undo')} (${kbd('mod+z')})">${uiIconSvg('undo')}</button>
+        <button class="avs-iconbtn" id="t-redo" title="${t('tb.redo')} (${kbd('mod+shift+z')})">${uiIconSvg('redo')}</button>
+        <button class="avs-iconbtn" id="t-preview" title="${t('preview.go')} (${kbd('shift+p')})">${uiIconSvg('play')}</button>
         <button class="bb-btn bb-btn-secondary avs-refresh-data-btn" id="t-refresh-data" title="${t('offline.refreshTip')}" style="display:none">⤓ ${t('offline.refreshBtn')}</button>
         <button class="bb-btn bb-btn-primary avs-publish-btn" id="t-publish">${t('pub.go')}</button>
-        <button class="avs-iconbtn avs-republish-btn" id="t-republish" title="${t('pub.republish')}" hidden>↻</button>
+        <button class="avs-iconbtn avs-republish-btn" id="t-republish" title="${t('pub.republish')}" hidden>${uiIconSvg('refresh')}</button>
         <button class="avs-iconbtn avs-langbtn" id="t-lang" title="${t('tb.language')}">${getLocale() === 'de' ? 'EN' : 'DE'}</button>
         <button class="avs-iconbtn" id="t-palette" title="${kbd('mod+k')}">${kbd('mod+k')}</button>
         <button class="avs-conn" id="t-conn"></button>
-        <button class="avs-iconbtn" id="t-overflow" title="${t('menu.more')}">⋯</button>
+        <button class="avs-iconbtn" id="t-overflow" title="${t('menu.more')}">${uiIconSvg('more')}</button>
       </div>
     </header>
     <div class="avs-variant-banner" id="avs-variant-banner" style="display:none;"></div>
@@ -106,8 +117,22 @@ function mountShell() {
 
   root.querySelectorAll('#avs-viewswitch button').forEach(b =>
     b.addEventListener('click', () => switchView(b.dataset.view)));
+  // Three buttons that swap what fills the page are a tablist — see
+  // ui/tablist.js for why the class toggle alone was not enough.
+  viewTabs = wireTablist(root.querySelector('#avs-viewswitch'), {
+    itemSelector: 'button',
+    idOf: b => b.dataset.view,
+    onPick: v => switchView(v),
+    panelOf: v => root.querySelector(`.avs-view[data-view="${v}"]`),
+    label: t('view.switcher'),
+  });
   document.getElementById('t-undo').addEventListener('click', doUndo);
   document.getElementById('t-redo').addEventListener('click', doRedo);
+  // Both buttons were permanently enabled and silently did nothing at the ends
+  // of the history — the store has answered canUndo()/canRedo() all along, but
+  // nothing asked. The store emits 'history' whenever the stack moves.
+  on('history', syncHistoryButtons);
+  syncHistoryButtons();
   document.getElementById('t-publish').addEventListener('click', tryPublish);
   // "Daten": open the Datenquellen overview — lists every provided-offline widget
   // with its last-refreshed stamp and a single "refresh all" action (fetches each
@@ -141,6 +166,10 @@ function mountShell() {
     const btn = document.getElementById('t-republish');
     if (btn) btn.hidden = !state.meta?.lastPublish;
   });
+  // Both publish controls follow the in-flight flag: disabled, and the primary
+  // one says what it is doing rather than looking idle for the whole upload.
+  subscribe('meta.publishingTo', reflectPublishing);
+  reflectPublishing();
   document.getElementById('t-preview').addEventListener('click', openPreview);
   document.getElementById('t-palette').addEventListener('click', openPalette);
   document.getElementById('t-lang').addEventListener('click', toggleLang);
@@ -168,6 +197,7 @@ function mountShell() {
 function switchView(v) {
   state.ui.activeView = v;
   document.querySelectorAll('#avs-viewswitch button').forEach(b => b.classList.toggle('avs-on', b.dataset.view === v));
+  viewTabs?.setActive(v);
   document.querySelectorAll('.avs-view').forEach(el => { el.style.display = el.dataset.view === v ? '' : 'none'; });
   if (v === 'displays' && !displaysMounted) { mountDisplays(document.getElementById('view-displays')); displaysMounted = true; }
   if (v === 'admin') {
@@ -240,6 +270,20 @@ async function openConnModal() {
     // Cancelled: kill any in-flight poll the user has lost interest in.
     _sessionFlowAbort?.abort(); _sessionFlowAbort = null;
   }
+}
+
+// Reflect the in-flight publish on the toolbar. Reads the same store field
+// doPublish writes, so the button and the flow cannot disagree.
+function reflectPublishing() {
+  const busy = !!state.meta?.publishingTo;
+  const pub = document.getElementById('t-publish');
+  const re = document.getElementById('t-republish');
+  if (pub) {
+    pub.disabled = busy;
+    pub.textContent = busy ? t('pub.publishingShort') : t('pub.go');
+    pub.setAttribute('aria-busy', busy ? 'true' : 'false');
+  }
+  if (re) re.disabled = busy;
 }
 
 function tryPublish() {
@@ -319,10 +363,15 @@ async function connect() {
       if (slug) {
         const { slots } = await import('./api.js');
         // ListDataSlotsResponse: { slots, total, … }; item slug per DataSlotListItem.
-        const r = await slots.list();
+        // The slot list is paged (server default 50, max 200). Ask for the
+        // maximum, and when the envelope still reports more slots than we got,
+        // fall back to a direct GET — otherwise an account with a long slot
+        // list would silently stop loading its org brand kit.
+        const r = await slots.list({ limit: 200 });
         const items = Array.isArray(r) ? r : (r?.slots ?? r?.items ?? []);
         const exists = items.some(s => (s?.slug ?? s?.slotId ?? s?.id) === slug);
-        if (exists) state.admin.brandKitOrg = await slots.getValue(slug).catch(() => null);
+        const truncated = Number.isFinite(r?.total) && r.total > items.length;
+        if (exists || truncated) state.admin.brandKitOrg = await slots.getValue(slug).catch(() => null);
       }
     } catch {}
     toast(t('conn.welcome', { email: me?.email ?? 'user' }), { kind: 'success' });
@@ -345,7 +394,7 @@ function reflectOrgChip() {
   if (orgs.length < 2) { chip.style.display = 'none'; return; }
   const active = orgs.find(o => orgIdOf(o) === state.fleet.activeOrgId) ?? orgs[0];
   chip.style.display = '';
-  chip.innerHTML = `🏢 ${esc(active?.name ?? '—')} ▾`;
+  chip.innerHTML = `${uiIconSvg('building', 14)}<span>${esc(active?.name ?? '—')}</span>${uiIconSvg('chevron-down', 12)}`;
   chip.title = t('org.switch');
   chip.onclick = openOrgPicker;
 }
@@ -366,7 +415,10 @@ async function openOrgPicker() {
   box.innerHTML = orgs.map(o => {
     const id = orgIdOf(o);
     const active = id === state.fleet.activeOrgId;
-    return `<button class="avs-menu-item${active ? ' avs-on' : ''}" data-id="${esc(id)}">🏢 ${esc(o.name ?? '—')}</button>`;
+    // An org whose id we cannot read is listed but not selectable — better a
+    // disabled row than a button that sets activeOrgId to an empty string.
+    return `<button class="avs-menu-item${active ? ' avs-on' : ''}" ${id ? `data-id="${esc(id)}"` : 'disabled'}>${
+      uiIconSvg('building', 14)}<span>${esc(o.name ?? '—')}</span></button>`;
   }).join('');
   const p = openModal({ title: t('org.switch'), body: box, actions: [{ label: t('common.close') }] });
   box.querySelectorAll('[data-id]').forEach(b => b.addEventListener('click', () => {
@@ -402,12 +454,17 @@ function reflectConnectionUi() {
     const planBadge = plan
       ? `<span class="avs-plan-badge avs-plan-${esc(plan)}">${esc(plan)}</span>`
       : '';
-    chip.innerHTML = `<span class="avs-dot avs-on"></span>${esc(email)}${planBadge}`;
+    chip.innerHTML = `<span class="avs-dot avs-on"></span><span class="avs-conn-label">${esc(email)}</span>${planBadge}`;
   } else if (c.status === 'connecting') {
-    chip.innerHTML = `<span class="avs-dot"></span>${t('conn.connecting')}`;
+    chip.innerHTML = `<span class="avs-dot"></span><span class="avs-conn-label">${t('conn.connecting')}</span>`;
   } else {
-    chip.innerHTML = `<span class="avs-dot avs-off"></span>${t('conn.notConnected')}`;
+    chip.innerHTML = `<span class="avs-dot avs-off"></span><span class="avs-conn-label">${t('conn.notConnected')}</span>`;
   }
+  // The chip is also the widest optional thing in the header. Its label lives
+  // in its own span so a narrow window can drop the words and keep the dot and
+  // the click target — see the header's media query in studio.css. The title
+  // then carries what the label no longer shows.
+  chip.title = chip.textContent.trim();
 }
 
 async function maybeAutoConnect() {
@@ -507,27 +564,28 @@ async function openOverflow() {
   const box = document.createElement('div');
   box.className = 'avs-menu';
   const items = [
-    { k: 'new', label: '🆕 ' + t('menu.newPlaylist') },
-    { k: 'cloud-open', label: '☁️ ' + t('menu.openCloud') },
-    { k: 'import', label: '⬆️ ' + t('menu.import') },
-    { k: 'export', label: '⬇️ ' + t('menu.export') },
-    { k: 'brandkit', label: '🎨 ' + t('brandkit.playlistMenu') },
-    { k: 'slots', label: '🗄️ ' + t('menu.dataSlots') },
-    { k: 'apis', label: '🔌 ' + t('menu.publicApis') },
-    { k: 'theme', label: '🌓 ' + t('menu.theme') },
-    { k: 'shortcuts', label: '⌨️ ' + t('menu.shortcuts') },
-    { k: 'about', label: 'ℹ️ ' + t('menu.about') },
-    { k: 'reset-live', label: '🛡️ ' + t('privacy.resetAll') },
+    { k: 'new',         icon: 'file-plus', label: t('menu.newPlaylist') },
+    { k: 'cloud-open',  icon: 'cloud',     label: t('menu.openCloud') },
+    { k: 'import',      icon: 'upload',    label: t('menu.import') },
+    { k: 'export',      icon: 'download',  label: t('menu.export') },
+    { k: 'brandkit',    icon: 'brandkit',  label: t('brandkit.playlistMenu') },
+    { k: 'slots',       icon: 'database',  label: t('menu.dataSlots') },
+    { k: 'apis',        icon: 'plug',      label: t('menu.publicApis') },
+    { k: 'theme',       icon: 'theme',     label: t('menu.theme') },
+    { k: 'shortcuts',   icon: 'keyboard',  label: t('menu.shortcuts') },
+    { k: 'about',       icon: 'info',      label: t('menu.about') },
+    { k: 'reset-live',  icon: 'shield',    label: t('privacy.resetAll') },
   ];
   // Operator legal links (Impressum / Datenschutz) only on a configured public
   // host — null on forks / self-hosted copies / localhost (see legal-links.js).
   const legal = legalLinks();
   const legalHtml = legal
     ? `<div class="avs-menu-sep" role="separator"></div>`
-      + (legal.impressum ? `<a class="avs-menu-item" href="${esc(legal.impressum)}" target="_blank" rel="noopener noreferrer">📄 ${t('menu.impressum')} ↗</a>` : '')
-      + (legal.datenschutz ? `<a class="avs-menu-item" href="${esc(legal.datenschutz)}" target="_blank" rel="noopener noreferrer">🔒 ${t('menu.privacy')} ↗</a>` : '')
+      + (legal.impressum ? `<a class="avs-menu-item" href="${esc(legal.impressum)}" target="_blank" rel="noopener noreferrer">${uiIconSvg('audit')}<span>${esc(t('menu.impressum'))}</span>${uiIconSvg('external-link', 12)}</a>` : '')
+      + (legal.datenschutz ? `<a class="avs-menu-item" href="${esc(legal.datenschutz)}" target="_blank" rel="noopener noreferrer">${uiIconSvg('lock')}<span>${esc(t('menu.privacy'))}</span>${uiIconSvg('external-link', 12)}</a>` : '')
     : '';
-  box.innerHTML = items.map(i => `<button class="avs-menu-item" data-k="${i.k}">${i.label}</button>`).join('') + legalHtml;
+  box.innerHTML = items.map(i =>
+    `<button class="avs-menu-item" data-k="${i.k}">${uiIconSvg(i.icon)}<span>${esc(i.label)}</span></button>`).join('') + legalHtml;
   const p = openModal({ title: t('menu.more'), body: box, actions: [{ label: t('common.close') }] });
   box.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => {
     document.querySelector('.bb-modal-close')?.click?.();
@@ -642,6 +700,10 @@ function showShortcuts() {
     ['J', t('sc.nextSlide')],
     ['K', t('sc.prevSlide')],
     ['Esc', t('sc.deselect')],
+    ['Tab', t('sc.focusWidget')],
+    ['← ↑ → ↓', t('sc.nudge')],
+    [kbd('shift') + ' + ← ↑ → ↓', t('sc.nudgeCoarse')],
+    [kbd('alt') + ' + ← ↑ → ↓', t('sc.resize')],
   ];
   const box = document.createElement('div');
   box.className = 'avs-shortcuts';
@@ -651,23 +713,29 @@ function showShortcuts() {
 
 // ---------- Commands & shortcuts ----------
 function registerAllCommands() {
-  registerCommand({ label: t('pub.go'), icon: '🚀', run: () => openPublishPicker() });
-  registerCommand({ label: t('preview.go'), icon: '▶', run: () => openPreview() });
-  registerCommand({ label: t('menu.newPlaylist'), icon: '🆕', run: () => handleMenu('new') });
-  registerCommand({ label: 'Undo', icon: '↶', run: doUndo });
-  registerCommand({ label: 'Redo', icon: '↷', run: doRedo });
-  registerCommand({ label: t('menu.theme'), icon: '🌓', run: () => cycleTheme() });
-  registerCommand({ label: t('menu.shortcuts'), icon: '⌨️', run: () => showShortcuts() });
-  registerCommand({ label: t('privacy.resetAll'), icon: '🛡️', keywords: 'privacy dsgvo gdpr live preview ip vorschau datenschutz', run: () => doResetLivePreviews() });
-  registerCommand({ label: t('menu.dataSlots'), icon: '🗄️', run: () => slotInspector.open() });
-  registerCommand({ label: t('menu.publicApis'), icon: '🔌', run: () => publicApiBrowser.open(s => addWidget(s.type ?? 'live-json', s.content ?? {})) });
-  registerCommand({ label: t('cmd.smartSplit'), icon: '✂️', run: () => promptSmartSplit() });
-  registerCommand({ label: t('menu.export'), icon: '⬇️', run: () => exportPlaylist() });
-  registerCommand({ label: t('menu.import'), icon: '⬆️', run: () => importPlaylist({ ensureSlide, render: canvasRender }) });
-  registerCommand({ label: t('menu.openCloud'), icon: '☁️', keywords: 'cloud agentview load open', run: () => handleMenu('cloud-open') });
-  registerCommand({ label: t('view.displays'), icon: '📺', run: () => switchView('displays') });
-  registerCommand({ label: t('view.editor'), icon: '🎬', run: () => switchView('editor') });
-  for (const d of DESIGNS) registerCommand({ label: t('cmd.applyDesign', { label: d.label }), icon: d.icon, keywords: 'design layout', run: () => applyActiveDesign(d.id) });
+  registerCommand({ label: t('pub.go'), icon: uiIconSvg('rocket'), run: () => openPublishPicker() });
+  registerCommand({ label: t('preview.go'), icon: uiIconSvg('play'), run: () => openPreview() });
+  registerCommand({ label: t('menu.newPlaylist'), icon: uiIconSvg('file-plus'), run: () => handleMenu('new') });
+  // t('tb.undo') / t('tb.redo'), not the literals 'Undo' / 'Redo': these two were
+  // the only untranslated commands in the palette, so a German user got two
+  // English rows between "Veroeffentlichen" and "Design anwenden". Both keys
+  // already existed and are used by the toolbar buttons.
+  registerCommand({ label: t('tb.undo'), icon: uiIconSvg('undo'), run: doUndo });
+  registerCommand({ label: t('tb.redo'), icon: uiIconSvg('redo'), run: doRedo });
+  registerCommand({ label: t('menu.theme'), icon: uiIconSvg('theme'), run: () => cycleTheme() });
+  registerCommand({ label: t('menu.shortcuts'), icon: uiIconSvg('keyboard'), run: () => showShortcuts() });
+  registerCommand({ label: t('privacy.resetAll'), icon: uiIconSvg('shield'), keywords: 'privacy dsgvo gdpr live preview ip vorschau datenschutz', run: () => doResetLivePreviews() });
+  registerCommand({ label: t('menu.dataSlots'), icon: uiIconSvg('database'), run: () => slotInspector.open() });
+  registerCommand({ label: t('menu.publicApis'), icon: uiIconSvg('plug'), run: () => publicApiBrowser.open(s => addWidget(s.type ?? 'live-json', s.content ?? {})) });
+  registerCommand({ label: t('cmd.smartSplit'), icon: uiIconSvg('scissors'), run: () => promptSmartSplit() });
+  registerCommand({ label: t('menu.export'), icon: uiIconSvg('download'), run: () => exportPlaylist() });
+  registerCommand({ label: t('menu.import'), icon: uiIconSvg('upload'), run: () => importPlaylist({ ensureSlide, render: canvasRender }) });
+  registerCommand({ label: t('menu.openCloud'), icon: uiIconSvg('cloud'), keywords: 'cloud agentview load open', run: () => handleMenu('cloud-open') });
+  registerCommand({ label: t('view.displays'), icon: uiIconSvg('tv'), run: () => switchView('displays') });
+  registerCommand({ label: t('view.editor'), icon: uiIconSvg('film'), run: () => switchView('editor') });
+  // The design's icon is drawn from its own rects (shared/designs.js) — no
+  // hand-picked glyph to keep in sync with the layout it stands for.
+  for (const d of DESIGNS) registerCommand({ label: t('cmd.applyDesign', { label: d.label }), icon: designIconSvg(d), keywords: 'design layout', run: () => applyActiveDesign(d.id) });
   for (const p of listPlugins()) registerCommand({
     label: t('cmd.addWidget', { label: p.label }), icon: widgetIcon(p.type, p.icon, 16), keywords: p.type + ' ' + (p.group ?? ''),
     run: () => addWidget(p.type),
@@ -713,7 +781,7 @@ function refreshVariantBanner() {
   if (!el) return;
   if (!isEditingVariant()) { el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = '';
-  el.innerHTML = `<span class="avs-variant-banner-label">✏️ ${esc(variantBannerLabel())}</span>
+  el.innerHTML = `<span class="avs-variant-banner-label">${uiIconSvg('pencil', 13)} ${esc(variantBannerLabel())}</span>
     <button class="bb-btn" id="variant-back">${t('variant.backToDefault')}</button>`;
   el.querySelector('#variant-back').addEventListener('click', () => {
     exitVariantEdit();
@@ -763,6 +831,16 @@ document.addEventListener('avs:orgs-changed', reflectOrgChip);
 function doUndo() { if (undo()) { ensureSlide(); state.ui.selectedWidgetId = null; canvasRender(); } }
 function doRedo() { if (redo()) { ensureSlide(); state.ui.selectedWidgetId = null; canvasRender(); } }
 
+// Disabled at the ends of the stack, so the toolbar tells the truth about what
+// is left to undo. Titles keep the shortcut; the reason is not shown (the
+// history has one per entry — a candidate for a proper history panel later).
+function syncHistoryButtons() {
+  const u = document.getElementById('t-undo');
+  const r = document.getElementById('t-redo');
+  if (u) u.disabled = !canUndo();
+  if (r) r.disabled = !canRedo();
+}
+
 // ---------- AI prompts ----------
 async function promptSmartSplit() {
   const box = document.createElement('div');
@@ -789,13 +867,33 @@ function applyThemePref() {
 
 // ---------- Import / export ----------
 // ---------- Save chip ----------
+// The chip is the only place the editor says anything about saving, so it has
+// to be able to say "no". It used to read a clock that was stamped whether or
+// not the write succeeded — see persist() in store.js.
 setInterval(() => {
   const el = document.getElementById('avs-save');
-  if (el && state.meta.autoSaveAt) {
+  if (!el) return;
+  if (state.meta.saveError) {
+    el.textContent = t('save.failed.chip');
+    el.title = t(state.meta.saveError === 'quota' ? 'save.failed.quota' : 'save.failed.other');
+    el.classList.add('avs-savechip-bad');
+    return;
+  }
+  el.classList.remove('avs-savechip-bad');
+  el.title = '';
+  if (state.meta.autoSaveAt) {
     const diff = Date.now() - state.meta.autoSaveAt;
     el.textContent = diff < 5000 ? t('toast.saved') : (diff < 60000 ? Math.floor(diff / 1000) + 's' : Math.floor(diff / 60000) + 'm');
   }
 }, 1000);
+
+// Once per episode, not once per keystroke: the store only emits on a change.
+// A full local store cannot be fixed by trying again, so the message names the
+// way out — take the work out of the browser and into a file.
+on('save-state', kind => {
+  if (kind) toast(t(kind === 'quota' ? 'save.failed.quota' : 'save.failed.other'), { kind: 'error', ttl: 12000 });
+  else toast(t('save.recovered'), { kind: 'success' });
+});
 
 // ---------- SSE ----------
 sse.onEvent(evt => {
@@ -836,6 +934,3 @@ sse.onEvent(evt => {
   if (evt.type === 'display_offline') toast(`⚫ ${name}: offline`, { kind: 'warn', ttl: 5000 });
 });
 
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}

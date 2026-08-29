@@ -6,8 +6,10 @@ import { offlineLiveOpts } from '../offline-data.js';
 import { remoteJsonFields } from '../remote-json-fields.js';
 import { STATUS_COLORS } from '../status-colors.js';
 import { textScaleField } from '../text-scale.js';
-import { localeField } from '../locale-field.js';
+import { localeField, safeLocale } from '../locale-field.js';
 import { escapeHtml } from '../utils/escape.js';
+import { refreshIntervalMs } from '../refresh-field.js';
+import { remoteJsonNetwork } from '../plugin-network.js';
 
 const C = 2 * Math.PI * 42; // ring circumference (r=42 in a 100×100 viewBox)
 // Gauge: a 220° arc with the 140° gap centred at the bottom — the classic
@@ -62,7 +64,10 @@ export default register({
   // Live mode (source:'url') makes this a fetching widget — the flag opts it
   // into the same DSGVO machinery as kpi-cards/chart/data-table (editor
   // click-to-load placeholder, IP note, on-error fallback, offline slots).
-  network: true,
+  // Inline data never leaves this machine, and gating it meant you could not
+  // see your own numbers while editing without granting a "live preview"
+  // that was never live — see shared/plugin-network.js.
+  network: remoteJsonNetwork,
   schemaVersion: 1,
   defaults: () => ({ ...colorOverrideDefaults(),
     label: 'Fundraising goal',
@@ -182,7 +187,7 @@ export default register({
     const ARC = style === 'gauge' ? C * GAUGE_SWEEP : C;
     const ROT = style === 'gauge' ? GAUGE_ROT : -90;
     // Audience language, not player OS ('' falls through to the device default).
-    const fmtNum = n => Number(n).toLocaleString(c.locale || undefined);
+    const fmtNum = n => Number(n).toLocaleString(safeLocale(c.locale));
 
     const align = c.align ?? 'center';
     const justify = align === 'top' ? 'flex-start' : align === 'bottom' ? 'flex-end' : 'center';
@@ -326,7 +331,7 @@ export default register({
       const stop = liveSource({
         url: c.dataUrl,
         signal: ctx?.signal,
-        intervalMs: refreshSec > 0 ? Math.max(5000, refreshSec * 1000) : 0,
+        intervalMs: refreshIntervalMs(refreshSec),
         fetchInit: { cache: 'no-store' },
         maxErrors: 0,
         backoff: false,

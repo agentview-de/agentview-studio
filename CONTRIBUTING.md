@@ -51,17 +51,32 @@ The **app** needs no npm. There are two ways to run the suites:
 
   Exit code `0` = pass, `1` = fail.
 
-- **Full (source of truth):** open [`test/index.html`](test/index.html) in a
-  browser. It runs every suite — including the DOM-only ones the Node runner
-  skips (HTML escaping/sanitising and the plugin/schema round-trips). The canvas
-  z-order/hit-testing integration suite has its own page,
-  [`test/canvas-zorder.test.html`](test/canvas-zorder.test.html), because it
-  needs the real editor stylesheet.
+- **Full (source of truth):** the browser suites. `npm run test:browser`
+  drives **all four pages** headlessly; opening one in a browser runs just that
+  page, which is the fast way to work on it:
+
+  | Page | What it holds |
+  |---|---|
+  | [`test/index.html`](test/index.html) | every suite the Node runner has, plus the DOM-only ones it skips (HTML escaping/sanitising, the plugin/schema round-trips) |
+  | [`test/canvas-zorder.test.html`](test/canvas-zorder.test.html) | canvas z-order and hit-testing — needs the real editor stylesheet |
+  | [`test/publish-e2e.test.html`](test/publish-e2e.test.html) | builds the real publish bundle and boots it in an iframe |
+  | [`test/plugin-resilience.test.html`](test/plugin-resilience.test.html) | all 34 plugins against hostile input, and every widget's inspector form built and torn down |
+
+  The last two are on their own pages because they are slow and because they
+  produce console output of their own (a missing vendor library, demo assets
+  that 404 under `/test/`) — `run-browser.mjs` declares per page which output is
+  expected, so the console stays a signal everywhere else.
 
 When you add a pure-function suite, register it in **both** the `suites` list in
 [`test/run-node.mjs`](test/run-node.mjs) and the one in
 [`test/index.html`](test/index.html). DOM-bound suites go in the browser
 harnesses only.
+
+**Regression tests earn their name the hard way:** run the new test once against
+the *reverted* fix and watch it fail. Three tests in this repo were green in
+both states before that check caught them — a sweep that never mounted what it
+was measuring, one that waited past the window it was testing, and one that put
+its payload in a field the code does not read.
 
 You can also sanity-check the module graph (orphans / broken imports) without
 running anything:
@@ -81,8 +96,9 @@ npm ci                                       # install the dev toolchain
 npm run lint                                 # ESLint flat config (eslint.config.js)
 npm test                                     # == node test/run-node.mjs
 npx playwright install --with-deps chromium  # one-time, for the browser runner
-npm run test:browser                         # drives the browser suites headlessly in CI
-npm run check                                # lint + headless tests in one shot
+npm run test:browser                         # drives all four browser pages headlessly in CI
+npm run i18n                                 # every t() key present in both dictionaries
+npm run check                                # lint + i18n + headless tests in one shot
 ```
 
 The ESLint config is deliberately low-noise: it catches a real bug class (dead

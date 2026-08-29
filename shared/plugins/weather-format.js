@@ -5,6 +5,8 @@
 // the "updated N ago" freshness label. All side-effect-free.
 
 // WMO weather-code → [emoji, description]. From the Open-Meteo WMO codes list.
+import { safeLocale } from '../locale-field.js';
+
 export const WMO = {
   0: ['☀️', 'Clear sky'], 1: ['🌤️', 'Mainly clear'], 2: ['⛅', 'Partly cloudy'], 3: ['☁️', 'Overcast'],
   45: ['🌫️', 'Fog'], 48: ['🌫️', 'Rime fog'],
@@ -75,7 +77,7 @@ export function formatTime(iso, opts) {
   if (Number.isNaN(d.getTime())) return '';
   const o = { hour: '2-digit', minute: '2-digit' };
   if (opts && typeof opts.hour12 === 'boolean') o.hour12 = opts.hour12;
-  return d.toLocaleTimeString(opts?.locale || undefined, o);
+  return d.toLocaleTimeString(safeLocale(opts?.locale), o);
 }
 export function formatHour(iso, opts) {
   if (!iso) return '';
@@ -83,7 +85,7 @@ export function formatHour(iso, opts) {
   if (Number.isNaN(d.getTime())) return '';
   const o = { hour: '2-digit', minute: '2-digit' };
   if (opts && typeof opts.hour12 === 'boolean') o.hour12 = opts.hour12;
-  return d.toLocaleTimeString(opts?.locale || undefined, o);
+  return d.toLocaleTimeString(safeLocale(opts?.locale), o);
 }
 
 // Severe-weather WMO codes (heavy rain/snow, violent showers, thunderstorms) —

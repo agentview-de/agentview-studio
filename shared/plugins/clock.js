@@ -3,7 +3,7 @@ import { themeColorSection, colorOverrideDefaults, applyColorOverrides } from '.
 import { composeDispose } from '../plugin-contract.js';
 import { escapeHtml } from '../utils/escape.js';
 import { textScaleField } from '../text-scale.js';
-import { localeField } from '../locale-field.js';
+import { localeField, safeLocale } from '../locale-field.js';
 import { defaultTz } from '../utils/default-tz.js';
 
 const TIME_MODES = ['time', 'time-seconds', 'date-time'];
@@ -138,7 +138,7 @@ export default register({
   render(slide, container) {
     const c = slide.content ?? {};
     const tz = c.timezone || defaultTz();
-    const loc = c.locale || undefined;
+    const loc = safeLocale(c.locale);
     const display = c.display ?? 'date-time';
     const timeMode = TIME_MODES.includes(display);
     const bigTime = display === 'time' || display === 'time-seconds' || display === 'date-time';

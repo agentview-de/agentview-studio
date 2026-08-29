@@ -6,6 +6,7 @@
 
 import { normalizeBackground, gradientCss } from '../../shared/background.js';
 import { t } from '../i18n.js';
+import { escapeHtml as esc } from '../../shared/utils/escape.js';
 
 export function mountBackgroundEditor(host, { get, onChange, assetPicker, themeBg } = {}) {
   let bg = normalizeBackground(get?.());
@@ -139,8 +140,4 @@ export function mountBackgroundEditor(host, { get, onChange, assetPicker, themeB
 
   render();
   return { getValue: () => normalizeBackground(bg) };
-}
-
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

@@ -1,0 +1,22 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>preview stub</title>
+<!--
+  A stand-in for the player, so the preview suite's iframe resolves.
+
+  admin/preview-flow.js frames `display.html?slot=…` — a RELATIVE url, which is
+  correct: display.html sits next to index.html wherever the Studio is served
+  from. The test page lives one directory down, so the same url resolves to
+  /test/display.html, and every preview test added a 404 to the console.
+
+  The runner treats an undeclared console error as a finding (see the `expect`
+  fields in run-browser.mjs). Declaring "Failed to load resource" for this whole
+  page would have blinded the busiest suite in the repo to every future resource
+  failure, and the message carries no url to match on more narrowly. A four-line
+  stub costs nothing and keeps the console a signal.
+
+  The preview suite asserts on the overlay and on the url it hands the frame —
+  what the frame then renders is the player's own business, and publish-e2e
+  boots the real one.
+-->
+<body style="margin:0;background:#0a0a10"></body>

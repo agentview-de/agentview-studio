@@ -5,13 +5,35 @@
 // via Intl offers this ONE field instead of silently following the device.
 //
 // The stored value is a BCP-47 tag or '' (= browser/device default). Render
-// side: pass `c.locale || undefined` as the first argument to every Intl.*
-// call / toLocale*String — `||`, never `??`, so the empty string falls through
-// to the device default instead of throwing on an invalid tag.
+// side: pass `safeLocale(c.locale)` as the first argument to every Intl.* call
+// / toLocale*String — never the raw value, and never `??` (the empty string has
+// to fall through to the device default).
 
 // Option labels are native-language endonyms ('Deutsch', 'Français') so a
 // user recognises their own language regardless of the Studio UI language —
 // they are deliberately NOT translated via the overlay.
+// The render-side gate for a stored tag.
+//
+// The field below is a select, but a playlist is JSON: an import, a hand edit,
+// or an export from a system that writes POSIX names ("de_DE") can put a tag in
+// here that Intl REFUSES. `new Intl.DateTimeFormat('de_DE')` does not fall back
+// to the device — it throws RangeError, and the widget's whole render goes down
+// with it, on a screen nobody is standing in front of. One gate, so a typo in
+// an optional field costs the audience's language and nothing else.
+//
+// Cached: clock-like widgets re-render every second, and a rejected tag would
+// otherwise pay for a thrown exception every time.
+const CHECKED = new Map();
+export function safeLocale(tag) {
+  const t = typeof tag === 'string' ? tag.trim() : '';
+  if (!t) return undefined;
+  if (CHECKED.has(t)) return CHECKED.get(t);
+  let ok;
+  try { Intl.DateTimeFormat.supportedLocalesOf(t); ok = t; } catch { ok = undefined; }
+  CHECKED.set(t, ok);
+  return ok;
+}
+
 export const LOCALE_OPTIONS = [
   { value: '',      label: 'Browser default' },
   { value: 'de',    label: 'Deutsch' },

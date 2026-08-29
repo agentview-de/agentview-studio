@@ -9,7 +9,7 @@
 // widgets are byte-for-byte unchanged.
 
 import { describe, test, expect } from './runner.js';
-import { resizeRotated, rotationFromPointer } from '../admin/canvas/widget-frame.js';
+import { resizeRotated, rotationFromPointer, clampRect, alignRect } from '../admin/canvas/widget-frame.js';
 
 const SW = 1600, SH = 900; // stage on-screen px (square device pixels)
 
@@ -86,5 +86,93 @@ describe('geo · rotationFromPointer', () => {
     expect(at(7, 15)).toBe(0);
     expect(at(10, 15)).toBe(15);
     expect(at(46, 15)).toBe(45);
+  });
+});
+
+// clampRect is the one gate every rect in the editor passes through, and a
+// component that was not a number sailed straight past it: Math.min(100,
+// undefined) is NaN, and NaN spreads sideways — a rect of `{ x: 10, y: 10 }`
+// came back with its VALID x and y destroyed too. On screen that is
+// `left: NaN%`, which CSS ignores: the widget sits at the origin, cannot be
+// dragged, and gives no hint why.
+describe('clampRect · a rect that is not quite a rect', () => {
+  test('REGRESSION: a missing size does not destroy the position', () => {
+    const r = clampRect({ x: 10, y: 10 });
+    for (const k of ['x', 'y', 'w', 'h']) expect(Number.isFinite(r[k])).toBe(true);
+    // Full-bleed, which is the schema's own fallback: visible, and obviously
+    // in need of attention. A 3% speck would be worse — you cannot find it.
+    expect(r).toEqual({ x: 0, y: 0, w: 100, h: 100 });
+  });
+
+  test('REGRESSION: text where a number belongs falls back, it does not spread', () => {
+    const r = clampRect({ x: 'abc', y: 10, w: 50, h: 20 });
+    expect(r).toEqual({ x: 0, y: 10, w: 50, h: 20 });
+  });
+
+  test('a well-formed rect is untouched', () => {
+    expect(clampRect({ x: 10, y: 10, w: 50, h: 20 })).toEqual({ x: 10, y: 10, w: 50, h: 20 });
+  });
+
+  test('the existing coercions are unchanged', () => {
+    // null has always meant 0 here, and Infinity has always clamped to the
+    // edge rather than falling back — neither is a mistake to "fix".
+    expect(clampRect({ x: null, y: null, w: null, h: null })).toEqual({ x: 0, y: 0, w: 3, h: 3 });
+    expect(clampRect({ x: Infinity, y: 0, w: 50, h: 20 })).toEqual({ x: 50, y: 0, w: 50, h: 20 });
+  });
+
+  test('every component comes back finite whatever went in', () => {
+    const junk = [undefined, null, NaN, 'x', {}, [], Infinity, -Infinity, '12'];
+    for (const v of junk) {
+      for (const k of ['x', 'y', 'w', 'h']) {
+        const r = clampRect({ x: 10, y: 10, w: 50, h: 20, [k]: v });
+        for (const kk of ['x', 'y', 'w', 'h']) expect(Number.isFinite(r[kk])).toBe(true);
+      }
+    }
+  });
+});
+
+// Aligning a widget to the slide — the commonest operation in any slide editor
+// and the one this one did not have. The layout presets next door replace the
+// whole rect, position AND size, which is a different job; the only way to
+// centre something without resizing it was to work out (100 − w) / 2 and type
+// it into the X field.
+describe('alignRect · move to an edge, keep the size', () => {
+  const r = { x: 12, y: 7, w: 40, h: 30 };
+
+  test('the six edges land where their names say', () => {
+    expect(alignRect(r, 'left')).toEqual({ x: 0, y: 7, w: 40, h: 30 });
+    expect(alignRect(r, 'hcenter')).toEqual({ x: 30, y: 7, w: 40, h: 30 });
+    expect(alignRect(r, 'right')).toEqual({ x: 60, y: 7, w: 40, h: 30 });
+    expect(alignRect(r, 'top')).toEqual({ x: 12, y: 0, w: 40, h: 30 });
+    expect(alignRect(r, 'vmiddle')).toEqual({ x: 12, y: 35, w: 40, h: 30 });
+    expect(alignRect(r, 'bottom')).toEqual({ x: 12, y: 70, w: 40, h: 30 });
+  });
+
+  test('REGRESSION: the size never changes — that is the whole point', () => {
+    for (const edge of ['left', 'hcenter', 'right', 'top', 'vmiddle', 'bottom']) {
+      const out = alignRect(r, edge);
+      expect(out.w).toBe(r.w);
+      expect(out.h).toBe(r.h);
+    }
+  });
+
+  test('a full-width widget is already centred and stays put', () => {
+    expect(alignRect({ x: 5, y: 5, w: 100, h: 20 }, 'hcenter')).toEqual({ x: 0, y: 5, w: 100, h: 20 });
+    expect(alignRect({ x: 5, y: 5, w: 100, h: 20 }, 'right')).toEqual({ x: 0, y: 5, w: 100, h: 20 });
+  });
+
+  test('an unknown edge changes nothing but still returns a clean rect', () => {
+    expect(alignRect(r, 'sideways')).toEqual(r);
+    expect(alignRect(r, undefined)).toEqual(r);
+  });
+
+  test('it inherits clampRect, so a malformed rect cannot escape through it', () => {
+    const out = alignRect({ x: 'a', y: 5 }, 'hcenter');
+    for (const k of ['x', 'y', 'w', 'h']) expect(Number.isFinite(out[k])).toBe(true);
+  });
+
+  test('aligning twice to the same edge is idempotent', () => {
+    const once = alignRect(r, 'bottom');
+    expect(alignRect(once, 'bottom')).toEqual(once);
   });
 });

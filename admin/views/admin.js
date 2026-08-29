@@ -7,6 +7,7 @@
 
 import { state, subscribe } from '../store.js';
 import { t } from '../i18n.js';
+import { uiIconSvg } from '../../shared/data/ui-icons.js';
 import { emptyState, esc } from './admin/shell.js';
 import { renderConnectGate } from '../ui/connect-gate.js';
 import { mountApprovals } from './admin/approvals.js';
@@ -18,17 +19,22 @@ import { mountLicenses } from './admin/licenses.js';
 import { mountConnectivity } from './admin/connectivity.js';
 import { mountBrandKit } from './admin/brandkit.js';
 import { mountVersions } from './admin/versions.js';
+import { wireTablist } from '../ui/tablist.js';
 
+let adminTabs = null;
+
+// The icon is looked up from UI_ICONS by the tab id, so there is no second list
+// to keep in sync — a new tab gets its icon by adding one entry to ui-icons.js.
 const TABS = [
-  { id: 'approvals',    label: () => t('admin.approvals'),    icon: '🟡' },
-  { id: 'audit',        label: () => t('admin.audit'),        icon: '📋' },
-  { id: 'webhooks',     label: () => t('admin.webhooks'),     icon: '🪝' },
-  { id: 'apikeys',      label: () => t('admin.apikeys'),      icon: '🔑' },
-  { id: 'members',      label: () => t('admin.members'),      icon: '👥' },
-  { id: 'licenses',     label: () => t('admin.licenses'),     icon: '⭐' },
-  { id: 'connectivity', label: () => t('admin.connectivity'), icon: '🌐' },
-  { id: 'brandkit',     label: () => t('admin.brandkit'),     icon: '🎨' },
-  { id: 'versions',     label: () => t('admin.versions'),     icon: '🕒' },
+  { id: 'approvals',    label: () => t('admin.approvals') },
+  { id: 'audit',        label: () => t('admin.audit') },
+  { id: 'webhooks',     label: () => t('admin.webhooks') },
+  { id: 'apikeys',      label: () => t('admin.apikeys') },
+  { id: 'members',      label: () => t('admin.members') },
+  { id: 'licenses',     label: () => t('admin.licenses') },
+  { id: 'connectivity', label: () => t('admin.connectivity') },
+  { id: 'brandkit',     label: () => t('admin.brandkit') },
+  { id: 'versions',     label: () => t('admin.versions') },
 ];
 
 // id → the Tab's mount(body) function (each behind the Tab-Shell).
@@ -53,7 +59,7 @@ export function mountAdmin(host) {
       <nav class="avs-admin-nav" id="avs-admin-nav">
         ${TABS.map(tab => `
           <button class="avs-admin-tab" data-tab="${tab.id}">
-            <span class="avs-admin-tab-icon">${tab.icon}</span>
+            <span class="avs-admin-tab-icon">${uiIconSvg(tab.id)}</span>
             <span class="avs-admin-tab-label">${tab.label()}</span>
           </button>`).join('')}
       </nav>
@@ -61,6 +67,15 @@ export function mountAdmin(host) {
     </div>`;
   host.querySelectorAll('.avs-admin-tab').forEach(b => {
     b.addEventListener('click', () => switchTab(b.dataset.tab));
+  });
+  // Nine tabs in front of one panel: one tab stop, arrow keys between them,
+  // and the current one announced. See ui/tablist.js.
+  adminTabs = wireTablist(host.querySelector('#avs-admin-nav'), {
+    itemSelector: '.avs-admin-tab',
+    idOf: b => b.dataset.tab,
+    onPick: id => switchTab(id),
+    panelOf: () => host.querySelector('#avs-admin-body'),
+    label: t('view.admin'),
   });
   // Swap the gate <-> the active tab when the connection state changes. The nav
   // stays visible while disconnected so the showcase still reveals the console.
@@ -82,6 +97,7 @@ let inFlightTab = null;
 function switchTab(id) {
   state.ui.adminTab = id;
   rootEl.querySelectorAll('.avs-admin-tab').forEach(b => b.classList.toggle('avs-on', b.dataset.tab === id));
+  adminTabs?.setActive(id);
   const body = rootEl.querySelector('#avs-admin-body');
   if (state.connection.status !== 'connected') {
     renderConnectGate(body, { title: t('cg.adminTitle'), desc: t('cg.adminDesc') });

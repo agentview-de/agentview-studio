@@ -5,12 +5,37 @@
   --bb-bg-1: #0d0d14;
   --bb-bg-2: #14141c;
   --bb-bg-3: #1c1c27;
+  /* Four ink steps, and the fourth exists because the third was doing two jobs.
+     --bb-ink-faint carried BOTH decoration (drag handles, chevrons, the × between
+     width and height) and quiet TEXT (form help, hints, empty states, column
+     headers). At 3.35:1 against --bb-bg-3 the decoration is fine — WCAG asks 3:1
+     of non-text — but 11px help text needs 4.5:1 and never had it.
+     Raising --bb-ink-faint was not the answer: measured against all four
+     surfaces, nothing clears 4.5:1 while still reading as faint; it collapses
+     into --bb-ink-muted. So the roles split instead.
+       ink        content                     14.97:1 (worst surface)
+       ink-muted  labels                       6.75:1
+       ink-quiet  text that is quiet but read  4.63:1   ← new
+       ink-faint  decoration only              3.35:1 */
   --bb-ink: #f1f1f4;
   --bb-ink-muted: #a3a3ad;
+  --bb-ink-quiet: #858592;
   --bb-ink-faint: #6e6e7a;
   --bb-border: rgba(255,255,255,0.08);
   --bb-border-strong: rgba(255,255,255,0.16);
   --bb-accent: #8b5cf6;
+  /* The accent has two jobs and one hex cannot do both: as a TINT/BORDER/text on a
+     dark surface #8b5cf6 is right (4.57:1 on --bb-bg-1), but as a FILL behind white
+     label text it only reaches 4.23:1 — under AA for anything below 24px. Every
+     white-on-accent surface (primary button, widget label, size badge) uses
+     --bb-accent-strong instead: 5.33:1 with #fff, same hue, both themes. */
+  --bb-accent-strong: #7c4ddb;
+  /* The third job: accent AS TEXT (links, active-state labels, the ↺ reset).
+     On the dark surface #8b5cf6 already clears AA at 4.57:1, so this is the same
+     value here and the dark theme is unchanged — only the light theme needs a
+     darker step (see below), which is exactly why it is a token and not a
+     literal. */
+  --bb-accent-ink: #8b5cf6;
   --bb-accent-2: #06b6d4;
   --bb-success: #10b981;
   --bb-warn: #f59e0b;
@@ -25,6 +50,34 @@
   --bb-r-md: 10px;
   --bb-r-lg: 16px;
   --bb-r-xl: 24px;
+
+  /* Type scale. NOT invented — these are the eight sizes the admin CSS was
+     already using, in the proportion it was already using them: 10–14px carry
+     83 % of all font-size declarations on their own, 16/18/20 the next 8 %.
+     Writing them down is what turns "the size we happened to type" into "the
+     size one step up", and makes the next 11.5px visible as the accident it is.
+     Sizes above 20px stay literal on purpose: 21, 22, 24, 30, 32, 40 and 54px
+     are one-offs in modals and empty states, not steps anyone should reach for. */
+  --bb-text-2xs: 10px;   /* group labels, uppercase micro-copy */
+  --bb-text-xs:  11px;   /* field labels, help text, badges */
+  --bb-text-sm:  12px;   /* secondary text, chips, most of the chrome */
+  --bb-text-md:  13px;   /* controls: buttons, tabs, menu rows */
+  --bb-text-lg:  14px;   /* body text — the document default */
+  --bb-text-xl:  16px;   /* panel titles */
+  --bb-text-2xl: 18px;   /* section headings */
+  --bb-text-3xl: 20px;   /* modal titles */
+
+  /* Spacing scale, same story: 2/4/6/8/10/12 cover 91 % of every gap in the
+     admin CSS, 16 and 20 the rest of the real ones. The odd numbers that used
+     to sit between them (3, 5, 7, 9px) were typing, not intent. */
+  --bb-sp-1:  2px;
+  --bb-sp-2:  4px;
+  --bb-sp-3:  6px;
+  --bb-sp-4:  8px;
+  --bb-sp-5: 10px;
+  --bb-sp-6: 12px;
+  --bb-sp-8: 16px;
+  --bb-sp-10: 20px;
 
   --bb-shadow-1: 0 1px 2px rgba(0,0,0,.4), 0 0 0 1px var(--bb-border) inset;
   --bb-shadow-2: 0 12px 32px rgba(0,0,0,.5), 0 0 0 1px var(--bb-border) inset;
@@ -71,7 +124,10 @@ html[data-theme="light"] {
   --bb-bg-3: #e5e5ec;
   --bb-ink: #15151c;
   --bb-ink-muted: #4a4a55;
-  --bb-ink-faint: #8a8a96;
+  /* Same split as the dark theme: quiet TEXT clears 4.5:1 on every surface,
+     decoration stays quieter. #8a8a96 was 2.72:1 against --bb-bg-3 before. */
+  --bb-ink-quiet: #63636f;  /* 4.73:1 worst surface */
+  --bb-ink-faint: #73737f;  /* decoration only */
   --bb-border: rgba(0,0,0,0.08);
   --bb-border-strong: rgba(0,0,0,0.16);
   --bb-shadow-1: 0 1px 2px rgba(0,0,0,.06), 0 0 0 1px var(--bb-border) inset;
@@ -79,5 +135,23 @@ html[data-theme="light"] {
   --bb-glass-bg: rgba(255,255,255,0.72);
   --bb-glass-border: rgba(0,0,0,0.08);
   --bb-canvas-bg: #e9e9ef;
+
+  /* The semantic colours are NOT theme-neutral. Tuned for a near-black surface,
+     they collapse on white — the dark values score 2.15:1 (warn) to 2.56:1
+     (success) against --bb-bg-1, and both are used as TEXT (.bb-field-msg,
+     .bb-bcast-status), not just as dots. These steps are the same hues darkened
+     until each clears 4.5:1 on white, so a form error stays readable in either
+     theme. --bb-accent-soft / --bb-accent-line / --bb-fill-* are NOT listed here
+     on purpose: they are color-mix()-derived and follow whatever their source
+     token is, which is exactly why they never needed a light-mode patch. */
+  --bb-accent-ink: #7c3aed;  /* 5.70:1 on #fff — #8b5cf6 is only 4.23 as text */
+  --bb-accent-2: #0e7490;  /* 5.36:1 on #fff (was 2.43) */
+  --bb-success:  #047857;  /* 5.48:1 on #fff (was 2.54) */
+  --bb-warn:     #b45309;  /* 5.02:1 on #fff (was 2.15) */
+  --bb-danger:   #b91c1c;  /* 6.47:1 on #fff (was 3.76) */
+  /* --bb-shadow-glow needs no light variant: its spread is accent-tinted, not
+     black, so it follows the theme on its own. --bb-shadow-pop does not — its
+     rgba(0,0,0,.55) reads as a grey smear on white instead of a lifted edge. */
+  --bb-shadow-pop: 0 10px 26px -10px rgba(0,0,0,.18), 0 0 0 1px var(--bb-border-strong) inset;
   color-scheme: light;
 }

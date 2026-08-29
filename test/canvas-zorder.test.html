@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>agentView Studio · Canvas z-order tests</title>
+  <title>agentView Studio · Editor CSS integration</title>
 
   <!-- DOM + CSS integration suite: needs the REAL editor stylesheet, because the
        slide-bg floor (z-index) and the stage's stacking context (isolation) are
@@ -37,7 +37,7 @@
   </style>
 </head>
 <body>
-  <h1>agentView Studio — canvas z-order &amp; hit-testing</h1>
+  <h1>agentView Studio — what only the real stylesheet can answer</h1>
   <div id="test-results">Loading…</div>
   <div id="boot-error" hidden></div>
 
@@ -46,6 +46,7 @@
     (async () => {
       try {
         await import('./canvas-zorder.test.js');
+        await import('./rail-css.test.js');
         const summary = await runAll('#test-results');
         document.title = (summary.fail === 0 ? '✓ ' : '✗ ') + document.title;
       } catch (e) {

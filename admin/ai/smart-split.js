@@ -9,9 +9,13 @@ export function splitText(text, { defaultTheme = 'dark-minimal', durationPerSlid
     return [createSlideWithWidget('markdown', { body: text, theme: defaultTheme }, { duration: durationPerSlide })];
   }
   return blocks.map(b => {
-    const m = b.match(/^#{1,3}\s+(.+)/);
-    const title = m?.[1] ?? '';
-    const body = b.replace(/^#{1,3}\s+.+\n*/, '');
-    return createSlideWithWidget('markdown', { body, theme: defaultTheme }, { title, duration: durationPerSlide });
+    const title = b.match(/^#{1,3}\s+(.+)/)?.[1]?.trim() ?? '';
+    // The heading STAYS in the body. `opts.title` only names the card in the
+    // slide rail — createSlideWithWidget is explicit that it never paints a
+    // heading — so stripping it took the headline off the screen while the rail
+    // still showed it: every card correctly named, every slide missing its own
+    // title. A section that was nothing BUT a heading became a blank slide.
+    // Markdown renders '#' as a heading; that is what the widget is for.
+    return createSlideWithWidget('markdown', { body: b, theme: defaultTheme }, { title, duration: durationPerSlide });
   });
 }

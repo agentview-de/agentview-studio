@@ -6,9 +6,10 @@ import { escapeHtml } from '../utils/escape.js';
 import { cssUrl } from '../safe-url.js';
 import { fetchFeedItems } from '../feeds.js';
 import { isStored, dataModeField } from '../offline-data.js';
-import { refreshSecField } from '../refresh-field.js';
-import { localeField } from '../locale-field.js';
+import { refreshSecField, refreshIntervalMs } from '../refresh-field.js';
+import { localeField, safeLocale } from '../locale-field.js';
 import { mediaFitField, backgroundSizeValue } from '../media-fit.js';
+import { dataModeNetwork } from '../plugin-network.js';
 
 // Map one <item>/<entry> node to a photo card. Shared by the live fetch and
 // offline provisioning so both store/show identical data.
@@ -82,12 +83,12 @@ function ensureNewsLayoutStyles() {
 }
 
 // "2 hrs ago" for the optional per-card date line. Locale follows the
-// audience-language field (`c.locale || undefined` so '' falls through to the
+// audience-language field (`safeLocale(c.locale)` so '' falls through to the
 // device default).
 function relTime(ms, locale) {
   const diffSec = Math.round((ms - Date.now()) / 1000); // negative = past
   const abs = Math.abs(diffSec);
-  const rtf = new Intl.RelativeTimeFormat(locale || undefined, { numeric: 'auto' });
+  const rtf = new Intl.RelativeTimeFormat(safeLocale(locale), { numeric: 'auto' });
   if (abs < 3600) return rtf.format(Math.round(diffSec / 60), 'minute');
   if (abs < 86400) return rtf.format(Math.round(diffSec / 3600), 'hour');
   return rtf.format(Math.round(diffSec / 86400), 'day');
@@ -106,7 +107,8 @@ export default register({
   label: 'News with Photos',
   group: 'live',
   icon: '🗞️',
-  network: true,
+  // 'stored' reads data the Studio fetched earlier; only 'live' calls out.
+  network: dataModeNetwork,
   usage: {
     tier: 'private-only',
     note: 'Headlines and images come from third-party news feeds; check the terms of each publisher before commercial display.',
@@ -327,7 +329,7 @@ export default register({
         refreshTimer = setInterval(() => {
           if (ctrl.signal.aborted) return;
           loadLive(false);
-        }, Math.max(5000, refreshSec * 1000));
+        }, refreshIntervalMs(refreshSec));
       }
     }
 

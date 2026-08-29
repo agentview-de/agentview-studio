@@ -8,6 +8,10 @@ import { makeDropZone } from './drag-drop.js';
 import { t, tx } from '../i18n.js';
 import { isSafeImgUrl } from '../../shared/safe-url.js';
 import { escapeHtml, escapeAttr } from '../../shared/utils/escape.js';
+import { newestOnly } from '../../shared/async-refresh.js';
+import { fmtBytes } from '../format-bytes.js';
+import { pickFiles } from '../file-io.js';
+import { confirmModal } from './modal.js';
 
 // Canonical agentView field is `mimeType` (Screen.Central.Contracts.AssetItem);
 // older payloads or other shops use `mime` / `contentType` / `type`. Centralise
@@ -63,9 +67,46 @@ function unwrapList(raw) {
   return [];
 }
 
-export async function refresh() {
+// MIME categories the server filters on (list_assets `type`). '' = no filter.
+const ASSET_TYPES = ['', 'image', 'video', 'audio', 'font', 'document', 'data'];
+
+// Cards the operator has ticked for bulk deletion, and whether the panel is in
+// selection mode at all. Selection is deliberately modal: outside it a click
+// copies the asset URL (the common action), inside it a click selects.
+let _selectMode = false;
+const _selected = new Set();
+
+function assetId(a) {
+  return a?.assetId ?? a?.id ?? '';
+}
+
+// `filter` is the panel's server-side filter and doubles as the rendered state
+// of the search/type controls — so a refresh from anywhere else (connect, the
+// asset picker) resets both the list and the visible controls together, instead
+// of leaving a stale search box above an unfiltered grid.
+// One request per (debounced) keystroke, and the shorter query matches more
+// rows — so it is the likelier one to be slow, and its late answer used to
+// overwrite the results of the longer one: "logo-2024" in the box, the hits for
+// "logo" below it, nothing to hint at the mismatch. Only the newest answer may
+// land; a superseded one is dropped, error toast included.
+const newToken = newestOnly();
+
+// The default is the filter that is ALREADY on screen, not an empty one.
+// It used to be empty, and every upload went through here without an argument:
+// search for "logo", drop a file in, and the search was silently gone and the
+// grid back to everything. Deleting got this right (`refresh(state.library.filter)`)
+// and uploading did not — in the same file. Callers that genuinely want the
+// whole library ask for it in as many words.
+export async function refresh(filter = state.library.filter ?? { search: '', type: '' }) {
+  const isCurrent = newToken();
+  state.library.filter = { search: filter.search ?? '', type: filter.type ?? '' };
   try {
-    const raw = await api.list();
+    // listAll, not list: asking for one maximum-size page was complete right
+    // up to the library that holds one asset more than a page — and then the
+    // grid showed a prefix with nothing to say so. Paging costs a second
+    // request only when there IS a second page.
+    const raw = await api.listAll(state.library.filter);
+    if (!isCurrent()) return;
     const list = unwrapList(raw);
     state.library.assets = list;
     if (list.length === 0 && raw && typeof raw === 'object' && Object.keys(raw).length > 0) {
@@ -73,6 +114,7 @@ export async function refresh() {
     }
     try { state.library.quota = await api.quota(); } catch {}
   } catch (e) {
+    if (!isCurrent()) return;
     toast(`${tx('Library refresh failed')}: ${e.message}`, { kind: 'warn' });
     console.error('[bb] asset list failed', e);
   }
@@ -81,12 +123,28 @@ export async function refresh() {
 export function renderPanel(host) {
   const render = () => {
     const items = state.library.assets ?? [];
+    const filter = state.library.filter ?? { search: '', type: '' };
+    // Drop selections that are no longer on screen (deleted, or filtered away)
+    // so the Delete button can never act on something the operator cannot see.
+    const visible = new Set(items.map(assetId));
+    for (const id of [..._selected]) if (!visible.has(id)) _selected.delete(id);
     host.innerHTML = `
       <div class="bb-lib-toolbar">
         <button class="bb-btn bb-btn-secondary" data-act="refresh" title="${escapeAttr(tx('Refresh'))}">🔄</button>
         <button class="bb-btn bb-btn-primary" data-act="upload" title="${escapeAttr(tx('Upload from disk'))}">⬆ ${tx('Upload')}</button>
         <span class="bb-lib-count">${items.length} ${tx('assets')}</span>
       </div>
+      <div class="bb-lib-toolbar">
+        <input type="search" id="lib-search" class="bb-lib-search" placeholder="${escapeAttr(tx('Search assets…'))}" value="${escapeAttr(filter.search)}">
+        <select id="lib-type">
+          ${ASSET_TYPES.map(v => `<option value="${v}" ${filter.type === v ? 'selected' : ''}>${escapeHtml(v || tx('All types'))}</option>`).join('')}
+        </select>
+        <button class="bb-btn ${_selectMode ? 'bb-on' : 'bb-btn-secondary'}" data-act="select">${tx('Select')}</button>
+        ${_selectMode
+          ? `<button class="bb-btn bb-btn-danger" data-act="delete" ${_selected.size ? '' : 'disabled'}>${tx('Delete')} (${_selected.size})</button>`
+          : ''}
+      </div>
+      <div class="bb-lib-progress" hidden></div>
       <div class="bb-lib-quota">
         ${state.library.quota ? formatQuota(state.library.quota) : `<span style="font-size:11px;color:var(--bb-ink-faint);">${tx('Quota')}: —</span>`}
       </div>
@@ -96,20 +154,47 @@ export function renderPanel(host) {
       </div>
       <div class="bb-lib-grid">
         ${items.length === 0
-          ? `<div class="bb-empty-state"><div class="bb-empty-illus">📦</div><div class="bb-empty-title">${tx('No assets yet')}</div><div class="bb-empty-desc">${tx('Click <b>Upload</b> above, drop files in the box, or drop directly onto an image / video / PDF slide form.')}</div></div>`
+          ? (filter.search || filter.type
+              ? `<div class="bb-empty-state"><div class="bb-empty-illus">🔍</div><div class="bb-empty-title">${tx('No matching assets')}</div></div>`
+              : `<div class="bb-empty-state"><div class="bb-empty-illus">📦</div><div class="bb-empty-title">${tx('No assets yet')}</div><div class="bb-empty-desc">${tx('Click <b>Upload</b> above, drop files in the box, or drop directly onto an image / video / PDF slide form.')}</div></div>`)
           : items.map(a => assetCard(a)).join('')}
       </div>
     `;
-    host.querySelector('[data-act="refresh"]').addEventListener('click', () => refresh());
+    const applyFilter = () => refresh({
+      search: host.querySelector('#lib-search').value.trim(),
+      type: host.querySelector('#lib-type').value,
+    });
+    host.querySelector('[data-act="refresh"]').addEventListener('click', () => applyFilter());
+    renderProgress();
     host.querySelector('[data-act="upload"]').addEventListener('click', () => openUploadPicker());
+    host.querySelector('#lib-type').addEventListener('change', applyFilter);
+    let searchTimer = null;
+    host.querySelector('#lib-search').addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(applyFilter, 300);
+    });
+    host.querySelector('[data-act="select"]').addEventListener('click', () => {
+      _selectMode = !_selectMode;
+      if (!_selectMode) _selected.clear();
+      render();
+    });
+    host.querySelector('[data-act="delete"]')?.addEventListener('click', () => deleteSelected());
     const dz = host.querySelector('#lib-dropzone');
     makeDropZone(dz, async ({ files }) => {
       if (!files.length) return;
       await uploadMany(files);
     });
-    // Allow clicking an asset card to copy its URL.
+    // Outside selection mode a card click copies its URL; inside it toggles the
+    // card's selection instead.
     host.querySelectorAll('.bb-asset-card').forEach(card => {
       card.addEventListener('click', () => {
+        if (_selectMode) {
+          const id = card.dataset.assetId;
+          if (!id) return;
+          if (_selected.has(id)) _selected.delete(id); else _selected.add(id);
+          render();
+          return;
+        }
         const url = card.dataset.url;
         if (!url) return;
         navigator.clipboard.writeText(url).then(() => toast(tx('URL copied to clipboard'), { kind: 'success' }));
@@ -122,27 +207,81 @@ export function renderPanel(host) {
   render();
 }
 
-function openUploadPicker() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.multiple = true;
-  input.addEventListener('change', async () => {
-    const files = [...(input.files ?? [])];
-    if (!files.length) return;
-    await uploadMany(files);
+// Bulk delete is irreversible and an asset may still be referenced by a live
+// display, so it always asks first and names the count.
+async function deleteSelected() {
+  const ids = [..._selected];
+  if (!ids.length) return;
+  // One interpolated sentence, not three translated fragments glued together —
+  // word order is not the same in every language.
+  const ok = await confirmModal({
+    message: t(ids.length === 1 ? 'assets.confirmDeleteOne' : 'assets.confirmDeleteMany', { n: ids.length }),
+    confirmLabel: t('common.delete'),
   });
-  input.click();
+  if (!ok) return;
+  try {
+    await api.remove(ids);
+    _selected.clear();
+    _selectMode = false;
+    toast(`${tx('Deleted')} ${ids.length}`, { kind: 'success' });
+  } catch (e) {
+    toast(e.message, { kind: 'error' });
+  }
+  await refresh(state.library.filter);
+}
+
+async function openUploadPicker() {
+  // Through the shared picker: an input that is never put INTO the document
+  // does not fire `change` everywhere, and leaks the node when it does — the
+  // same trap admin/file-io.js was written to close.
+  const files = await pickFiles({ multiple: true });
+  if (files.length) await uploadMany(files);
 }
 
 async function uploadMany(files) {
   let ok = 0, failed = 0;
-  for (const f of files) {
-    const url = await uploadAndGetUrl(f);
-    if (url) ok++; else failed++;
+  // Thirty images over a slow link is a long time to look at a screen that
+  // says nothing. One line, updated as they land, and the button held shut so
+  // a second drop cannot interleave with the first.
+  _uploading = { done: 0, total: files.length };
+  renderProgress();
+  try {
+    for (const f of files) {
+      const url = await uploadAndGetUrl(f, { refresh: false });
+      if (url) ok++; else failed++;
+      _uploading.done++;
+      renderProgress();
+    }
+  } finally {
+    _uploading = null;
+    renderProgress();
   }
-  if (ok) toast(`${tx('Uploaded')} ${ok} ${ok === 1 ? tx('file') : tx('files')}`, { kind: 'success' });
-  if (failed) toast(`${failed} ${tx('upload(s) failed')}`, { kind: 'warn' });
-  refresh();
+  if (ok) toast(t(ok === 1 ? 'assets.uploadedOne' : 'assets.uploadedMany', { n: ok }), { kind: 'success' });
+  if (failed) toast(t('assets.uploadFailed', { n: failed }), { kind: 'warn' });
+  // One list call for the whole batch, and it keeps the filter you were using.
+  await refresh();
+}
+
+// Where the count is drawn, and the guard that keeps a second batch out.
+//
+// There is one upload batch at a time, so the state is module-level — but the
+// PANEL is not: renderPanel can be called for a second host (the picker modal,
+// a re-render) and remembering only the newest one left the older panel showing
+// a stale button. Worse in a test harness, where a remembered host outlives the
+// panel it belonged to. So: reflect into every panel that is currently on the
+// page, and ask the document rather than a variable.
+let _uploading = null;
+function renderProgress() {
+  const busy = !!_uploading;
+  for (const btn of document.querySelectorAll('.bb-lib-head [data-act="upload"], [data-act="upload"]')) {
+    btn.disabled = busy;
+  }
+  for (const line of document.querySelectorAll('.bb-lib-progress')) {
+    line.textContent = busy
+      ? t('assets.uploading', { done: _uploading.done, total: _uploading.total })
+      : '';
+    line.hidden = !busy;
+  }
 }
 
 // Render the thumbnail area of an asset card. Uses an <img> element instead
@@ -193,12 +332,17 @@ function assetCard(a) {
   // never as the visible label (UUID cards are confusing).
   const name = a.name ?? a.filename ?? '(unnamed)';
   const mime = assetMime(a);
-  const bytes = a.size ?? a.bytes ?? 0;
+  // No `?? 0`: a size the server did not report is not a zero-byte file, and
+  // fmtBytes now tells those apart ('—' vs '0 B').
+  const bytes = a.size ?? a.bytes;
+  const id = assetId(a);
+  const picked = _selectMode && _selected.has(id);
   return `
-    <div class="bb-asset-card" data-url="${escapeAttr(url)}" title="${escapeAttr(name)} (click to copy URL)">
+    <div class="bb-asset-card${picked ? ' bb-on' : ''}" data-url="${escapeAttr(url)}" data-asset-id="${escapeAttr(id)}" title="${escapeAttr(name)} (click to copy URL)">
+      ${_selectMode ? `<input type="checkbox" class="bb-asset-check" ${picked ? 'checked' : ''} tabindex="-1" aria-hidden="true">` : ''}
       ${thumbHtml({ url, mime, name })}
       <div class="bb-asset-name">${escapeHtml(name)}</div>
-      <div class="bb-asset-meta">${formatBytes(bytes)}</div>
+      <div class="bb-asset-meta">${fmtBytes(bytes)}</div>
     </div>
   `;
 }
@@ -212,13 +356,6 @@ function extLabel(mime, name) {
   return m2?.[1] ?? 'file';
 }
 
-function formatBytes(b) {
-  if (!b) return '—';
-  const u = ['B','KB','MB','GB'];
-  let i = 0;
-  while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
-  return b.toFixed(1) + ' ' + u[i];
-}
 
 function formatQuota(q) {
   // Per swagger Screen.Central.Contracts.AssetQuota:
@@ -227,12 +364,14 @@ function formatQuota(q) {
   const total = q.limitBytes ?? q.totalBytes ?? q.total ?? q.limit ?? 0;
   const pct = total ? Math.round((used / total) * 100) : 0;
   return `<div class="bb-quota-bar"><div class="bb-quota-fill" style="width:${pct}%"></div></div>
-          <div class="bb-quota-text">${formatBytes(used)} / ${formatBytes(total)} (${pct}%)</div>`;
+          <div class="bb-quota-text">${fmtBytes(used)} / ${fmtBytes(total)} (${pct}%)</div>`;
 }
 
 // Modal asset picker (returns selected URL or undefined)
 export async function pickAsset(filterMime) {
-  await refresh();
+  // The whole library on purpose: the picker does its own MIME filtering, and
+  // the panel's search must not narrow what it offers.
+  await refresh({ search: '', type: '' });
   const items = (state.library.assets ?? []).filter(a => assetMatchesAccept(a, filterMime));
   const host = document.createElement('div');
   host.innerHTML = `
@@ -261,16 +400,11 @@ export async function pickAsset(filterMime) {
         const btn = e.target.closest('.bb-asset-pick');
         if (btn) close(btn.dataset.url);
       });
-      host.querySelector('#picker-upload').addEventListener('click', () => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        if (filterMime) input.accept = filterMime;
-        input.addEventListener('change', async () => {
-          const f = input.files?.[0]; if (!f) return;
-          const url = await uploadAndGetUrl(f);
-          if (url) close(url);
-        });
-        input.click();
+      host.querySelector('#picker-upload').addEventListener('click', async () => {
+        const [f] = await pickFiles({ accept: filterMime || '' });
+        if (!f) return;
+        const url = await uploadAndGetUrl(f);
+        if (url) close(url);
       });
     },
   });
@@ -278,7 +412,8 @@ export async function pickAsset(filterMime) {
 
 // Multi-select picker → returns an array of selected URLs (or [] if cancelled).
 export async function pickAssets(filterMime) {
-  await refresh();
+  // As above: this picker filters by MIME itself.
+  await refresh({ search: '', type: '' });
   const items = (state.library.assets ?? []).filter(a => assetMatchesAccept(a, filterMime));
   const selected = new Set();
   const host = document.createElement('div');
@@ -314,7 +449,7 @@ export async function pickAssets(filterMime) {
   return v === '__ADD__' ? [...selected] : [];
 }
 
-export async function uploadAndGetUrl(file) {
+export async function uploadAndGetUrl(file, { refresh: withRefresh = true } = {}) {
   try {
     // v3: auto-optimise images above 4K before upload. Saves asset quota
     // (typically 60-80% smaller) without visibly changing playback quality —
@@ -323,7 +458,10 @@ export async function uploadAndGetUrl(file) {
     const r = await api.upload(optimised);
     const a = r?.assets?.[0];
     const url = a?.url || a?.publicUrl || r?.url || r?.publicUrl || r?.downloadUrl || r?.assetUrl;
-    refresh();
+    // `{ refresh: false }` when a batch is running: this used to re-list the
+    // whole library after EVERY file, so dropping thirty images cost thirty-one
+    // list calls racing each other, and re-rendered the grid mid-upload.
+    if (withRefresh) refresh();
     return url;
   } catch (e) {
     // agentView v2.1.91 returns 415 with empty body when Content-Type isn't

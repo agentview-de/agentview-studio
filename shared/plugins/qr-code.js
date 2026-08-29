@@ -4,6 +4,7 @@ import { textScaleField } from '../text-scale.js';
 import { composeDispose } from '../plugin-contract.js';
 import { escapeHtml, escapeAttr } from '../utils/escape.js';
 import qrcode from '../vendor/qrcode.js';
+import { isRemoteUrl } from '../plugin-network.js';
 
 // Structured QR builder: the customer fills template-specific fields and we
 // assemble the correct payload string, they never have to know the WIFI:/vCard
@@ -222,6 +223,7 @@ function detailLines(c) {
 
 export default register({
   type: 'qr-code',
+  network: c => isRemoteUrl(c?.logoUrl),
   label: 'QR Code',
   group: 'data',
   icon: '⬛',

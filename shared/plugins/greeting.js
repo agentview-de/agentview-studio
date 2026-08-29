@@ -3,7 +3,7 @@ import { themeColorSection, colorOverrideDefaults, applyColorOverrides } from '.
 import { composeDispose } from '../plugin-contract.js';
 import { escapeHtml } from '../utils/escape.js';
 import { textScaleField } from '../text-scale.js';
-import { localeField } from '../locale-field.js';
+import { localeField, safeLocale } from '../locale-field.js';
 import { defaultTz } from '../utils/default-tz.js';
 
 // Time-of-day aware welcome message. Common in hotel lobbies, office
@@ -160,11 +160,10 @@ export default register({
   render(slide, container) {
     const c = slide.content ?? {};
     const tz = c.timezone || defaultTz();
-    // Invalid stored locale tag → device default (same defensive pattern as
-    // partOfDay's timezone fallback).
-    let loc;
-    try { new Intl.DateTimeFormat(c.locale || undefined); loc = c.locale || undefined; }
-    catch { loc = undefined; }
+    // Invalid stored locale tag → device default. This widget grew its own
+    // try/catch for that before the gate existed; safeLocale owns it now, for
+    // all 14 widgets that format anything.
+    const loc = safeLocale(c.locale);
     const showDate = c.showDate !== false;
     const showTime = !!c.showTime;
     const metaVisible = showDate || showTime;

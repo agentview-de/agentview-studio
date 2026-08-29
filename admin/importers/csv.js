@@ -1,5 +1,6 @@
 import { createSlideWithWidget } from '../../shared/slide-schema.js';
-import { barChartContent, labelValuePairs, stripExt } from './_helpers.js';
+import { barChartContent, labelValuePairs, looksLikeHeader, parseNumberColumn, sniffCsvSep, splitCsvLine, stripExt } from './_helpers.js';
+import { tx } from '../i18n.js';
 
 export const id = 'csv';
 export const label = 'CSV';
@@ -14,17 +15,27 @@ export function sniff(file) {
 export function parseCsv(text) {
   const lines = text.split(/\r?\n/).filter(Boolean);
   if (lines.length === 0) return { labels: [], values: [] };
-  const sep = lines[0].includes('\t') ? '\t' : (lines[0].includes(';') ? ';' : ',');
-  const rows = lines.map(l => l.split(sep).map(s => s.trim()));
-  // Heuristic: first row are headers, first col is label, second col is numeric value
-  const headers = rows[0];
-  const out = { labels: [], values: [] };
-  for (let i = 1; i < rows.length; i++) {
-    out.labels.push(rows[i][0]);
-    const v = parseFloat(rows[i][1]);
-    if (Number.isFinite(v)) out.values.push(v);
-  }
-  return { headers, ...out };
+  const sep = sniffCsvSep(lines);
+  const rows = lines.map(l => splitCsvLine(l, sep));
+  // First col is the label, second col the value. Whether row 0 NAMES those
+  // columns or already holds data is a question, not an assumption — see
+  // looksLikeHeader in _helpers.js for what it cost to assume.
+  const hasHeader = looksLikeHeader(rows);
+  const headers = hasHeader ? rows[0] : null;
+  const body = rows.slice(hasHeader ? 1 : 0);
+  // One value per label, ALWAYS. A non-numeric cell used to push a label and
+  // no value, so from the first "n/a" on every remaining label was zipped with
+  // the NEXT row's number: right names, wrong figures, no warning. 0 is what
+  // labelValuePairs and the JSON importer already use for a bad cell.
+  //
+  // The whole value column is read at once so the decimal convention is
+  // decided once — see parseNumberColumn. A ';' file is ';'-separated because
+  // the comma was already spoken for, which is the hint when a column is
+  // genuinely ambiguous.
+  const labels = body.map(r => r[0]);
+  const values = parseNumberColumn(body.map(r => r[1]), { commaDecimal: sep === ';' })
+    .map(v => (Number.isFinite(v) ? v : 0));
+  return { headers, labels, values };
 }
 
 export async function convert(file) {
@@ -33,6 +44,6 @@ export async function convert(file) {
   return {
     slides: [createSlideWithWidget('chart',
       barChartContent(labelValuePairs(data.labels, data.values)),
-      { title: stripExt(file.name, 'Chart'), duration: 12 })],
+      { title: stripExt(file.name, tx('Chart')), duration: 12 })],
   };
 }

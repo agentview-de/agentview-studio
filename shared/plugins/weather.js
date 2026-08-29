@@ -3,7 +3,7 @@ import { themeColorSection, colorOverrideDefaults, applyColorOverrides } from '.
 import { composeDispose, childSignal } from '../plugin-contract.js';
 import { escapeHtml } from '../utils/escape.js';
 import { isStored, dataModeField } from '../offline-data.js';
-import { refreshSecField } from '../refresh-field.js';
+import { refreshSecField, refreshIntervalMs } from '../refresh-field.js';
 import { localeField } from '../locale-field.js';
 import { textScaleField } from '../text-scale.js';
 import { WEATHER_SVG_DEFS, wmoToIconId } from '../data/weather-svg-icons.js';
@@ -12,6 +12,7 @@ import {
   compassName, windDesc, humidityDesc, feelsLikeDesc, dayLength, designSupports, relativeAge,
   isSevereWmo, uvDesc,
 } from './weather-format.js';
+import { dataModeNetwork } from '../plugin-network.js';
 
 // ── Open-Meteo response cache ───────────────────────────────────────────────
 // Editing a weather widget rebuilds it on every toggle / theme / design click
@@ -91,7 +92,8 @@ export default register({
   label: 'Live Weather',
   group: 'live',
   icon: '🌤️',
-  network: true,
+  // 'stored' reads data the Studio fetched earlier; only 'live' calls out.
+  network: dataModeNetwork,
   usage: {
     tier: 'byo-key',
     attribution: 'Weather data by Open-Meteo.com',
@@ -865,7 +867,7 @@ export default register({
     // floor (the 5-minute response cache rate-limits actual network calls
     // anyway). Offline mode reads a pre-fetched slot, nothing to poll.
     const refreshSec = stored ? 0 : Math.max(0, Number(c.refreshSec) || 0);
-    const timer = refreshSec > 0 ? setInterval(loadAndPaint, Math.max(5000, refreshSec * 1000)) : 0;
+    const timer = refreshSec > 0 ? setInterval(loadAndPaint, refreshIntervalMs(refreshSec)) : 0;
 
     return composeDispose(() => { if (timer) clearInterval(timer); ctrl.abort(); root.remove(); });
   },

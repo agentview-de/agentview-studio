@@ -14,9 +14,12 @@ import { state, commit, persist } from './store.js';
 import { openModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { t } from './i18n.js';
-import { migratePlaylist, applyWidgetMigrations, SCHEMA_VERSION } from '../shared/slide-schema.js';
+import { migratePlaylist, applyWidgetMigrations, createSlide, SCHEMA_VERSION } from '../shared/slide-schema.js';
+import { isPlaylistShaped } from '../shared/playlist-response.js';
 import { get as getPlugin } from '../shared/plugins/registry.js';
 import { escapeHtml } from '../shared/utils/escape.js';
+import { fmtDateTime } from './format-date.js';
+import { fmtBytes } from './format-bytes.js';
 
 // All published playlists land under this prefix (see publish-flow.js → slugFor).
 const SLUG_PREFIX = 'avs-';
@@ -28,28 +31,13 @@ function unwrapList(raw) {
   return raw?.slots ?? raw?.items ?? raw?.data ?? [];
 }
 
-function fmtBytes(b) {
-  if (!b) return '—';
-  const u = ['B', 'KB', 'MB', 'GB']; let i = 0;
-  while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
-  return b.toFixed(b >= 10 || i === 0 ? 0 : 1) + ' ' + u[i];
-}
-
-function fmtDate(s) {
-  if (!s) return '—';
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return '—';
-  // Locale-aware short form — matches the rest of the admin UI.
-  return d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-
 function row(s) {
   // Per swagger DataSlotListItem: slotId, slug, sizeBytes, readUrl, label?, updatedAt?, …
   // Fall back across the names we've seen on the wire — `label` is what
   // publish-flow.js sets to `playlist.name`, so it's the friendly display name.
   const slug = s.slug ?? s.slotId ?? s.id ?? '';
   const name = s.label ?? s.name ?? slug.replace(SLUG_PREFIX, '');
-  const size = s.sizeBytes ?? s.bytes ?? 0;
+  const size = s.sizeBytes ?? s.bytes;
   const updated = s.updatedAt ?? s.modifiedAt ?? s.lastModified ?? null;
   return `<li class="bb-cloud-row" data-slug="${escapeHtml(slug)}">
     <div class="bb-cloud-row-main">
@@ -58,19 +46,11 @@ function row(s) {
         <span>${escapeHtml(slug)}</span>
         <span>·</span>
         <span>${fmtBytes(size)}</span>
-        ${updated ? `<span>·</span><span title="${escapeHtml(updated)}">${escapeHtml(fmtDate(updated))}</span>` : ''}
+        ${updated ? `<span>·</span><span title="${escapeHtml(updated)}">${escapeHtml(fmtDateTime(updated))}</span>` : ''}
       </div>
     </div>
     <button class="bb-btn bb-btn-primary" data-act="open">${escapeHtml(t('cloud.open'))}</button>
   </li>`;
-}
-
-function looksLikePlaylist(v) {
-  // The publish bundler always stores a shape like createPlaylist() — but the
-  // value could also be hand-edited via the data-slot inspector or be a legacy
-  // shape. Be liberal: anything with a slides array passes; migratePlaylist()
-  // handles the rest (legacy v1, missing defaults, missing ids, etc.).
-  return v && typeof v === 'object' && Array.isArray(v.slides);
 }
 
 // Check forward-compatibility BEFORE we apply the playlist. The migration
@@ -116,7 +96,12 @@ export async function loadInto(slug, label) {
     toast(t('cloud.loadFailed', { msg: e.message }), { kind: 'error' });
     return false;
   }
-  if (!looksLikePlaylist(value)) {
+  // The SAME front door the player and the file import use. This module grew
+  // its own copy of the check, and the copy was stricter in one place: a bare
+  // array of slides is a legitimate v1 payload that migratePlaylist() wraps,
+  // and it loads from a file — but loading the identical bytes out of a data
+  // slot answered "not a playlist".
+  if (!isPlaylistShaped(value)) {
     toast(t('cloud.notAPlaylist'), { kind: 'error' });
     return false;
   }
@@ -142,8 +127,14 @@ export async function loadInto(slug, label) {
     toast(t('cloud.forwardWidgets', { types: [...report.forwardWidgets].join(', ') }), { kind: 'warn', ttl: 9000 });
   }
 
+  // The same guarantee the file import gets from ensureSlide(): a playlist with
+  // no slides would leave the editor with nothing to select and nothing to
+  // draw. Mutate BEFORE handing it to the store, so the reactive copy is the
+  // one that ships. (An empty playlist is rare but reachable — a slot can be
+  // hand-edited in the data-slot inspector.)
+  if (!pl.slides.length) pl.slides.push(createSlide({ duration: pl.defaults?.duration ?? 10 }));
   state.playlist = pl;
-  state.ui.activeSlideId = pl.slides[0]?.id ?? null;
+  state.ui.activeSlideId = pl.slides[0].id;
   state.ui.selectedWidgetId = null;
   commit('load-from-cloud');
   persist();
@@ -159,7 +150,8 @@ export async function open() {
 
   let list = [];
   try {
-    list = unwrapList(await slotsApi.list()).filter(s => {
+    // listAll, not list: one page is not the account. See slots.listAll().
+    list = unwrapList(await slotsApi.listAll()).filter(s => {
       const slug = s.slug ?? s.slotId ?? s.id ?? '';
       return slug.startsWith(SLUG_PREFIX);
     });

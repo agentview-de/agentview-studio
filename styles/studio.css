@@ -14,29 +14,24 @@ body {
 #app { display: flex; flex-direction: column; height: 100vh; }
 button { font-family: inherit; }
 
-/* Restraint: flatten the brand gradient to a single calm accent. */
-.bb-btn-primary {
-  background: var(--bb-accent) !important;
-  color: #fff !important;
-  border: none !important;
-  box-shadow: 0 1px 2px rgba(0,0,0,.25) !important;
-}
-.bb-btn-primary:hover { filter: brightness(1.08); }
-
 .avs-iconbtn {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 32px; height: 32px; padding: 0 8px;
   background: transparent; color: var(--bb-ink-muted);
   border: 1px solid transparent; border-radius: var(--bb-r-sm);
-  cursor: pointer; font-size: 14px; transition: var(--bb-trans-fast);
+  cursor: pointer; font-size: var(--bb-text-lg); transition: var(--bb-trans-fast);
 }
-.avs-iconbtn:hover { background: color-mix(in srgb, var(--bb-ink) 8%, transparent); color: var(--bb-ink); }
+.avs-iconbtn:hover:not(:disabled) { background: color-mix(in srgb, var(--bb-ink) 8%, transparent); color: var(--bb-ink); }
+/* Undo/redo sit at the ends of the history most of the time; a disabled icon
+   button has to read as unavailable rather than as a hover target. Matches the
+   .4 the menu items already use. */
+.avs-iconbtn:disabled { opacity: .4; cursor: default; }
 /* The agentView logo doubles as the link to the agentView web dashboard
    (opens in a new tab) — keeps the action row uncluttered. The ↗ hints at the
    external jump on hover/focus without taking permanent space. */
 .avs-brandlink { display: inline-flex; align-items: center; text-decoration: none; }
 .avs-brandlink::after {
-  content: "↗"; margin-left: 2px; font-size: 11px; line-height: 1;
+  content: "↗"; margin-left: 2px; font-size: var(--bb-text-xs); line-height: 1;
   color: var(--bb-ink-muted); opacity: 0; transition: var(--bb-trans-fast);
 }
 .avs-brandlink:hover::after, .avs-brandlink:focus-visible::after { opacity: .7; }
@@ -44,9 +39,9 @@ button { font-family: inherit; }
 
 /* Dashboard link inside the connected-account modal (under the email/plan). */
 .avs-account-dash {
-  display: inline-flex; align-items: center; gap: 4px; margin-top: 12px;
+  display: inline-flex; align-items: center; gap: var(--bb-sp-2); margin-top: 12px;
   padding: 6px 12px; border: 1px solid var(--bb-border); border-radius: var(--bb-r-sm);
-  color: var(--bb-ink); text-decoration: none; font-size: 13px; font-weight: 500;
+  color: var(--bb-ink); text-decoration: none; font-size: var(--bb-text-md); font-weight: 500;
   transition: var(--bb-trans-fast);
 }
 .avs-account-dash:hover { background: var(--bb-bg-3); }
@@ -69,8 +64,11 @@ button { font-family: inherit; }
   border-radius: var(--bb-r-md); color: var(--bb-ink-muted);
 }
 .avs-lpp-icon  { font-size: clamp(20px, 16cqmin, 96px); line-height: 1; opacity: .8; }
+/* The placeholder icon is emitted at width/height 1em so the line icon scales
+   with the container-query font-size above, exactly like the emoji it replaced. */
+.avs-lpp-icon svg { display: block; margin: 0 auto; }
 .avs-lpp-title { font-size: clamp(13px, 6cqmin, 36px); font-weight: 600; line-height: 1.2; color: var(--bb-ink); }
-.avs-lpp-body  { font-size: clamp(11px, 4cqmin, 24px); line-height: 1.4; max-width: 94%; color: var(--bb-ink-faint); }
+.avs-lpp-body  { font-size: clamp(11px, 4cqmin, 24px); line-height: 1.4; max-width: 94%; color: var(--bb-ink-quiet); }
 .avs-lpp-btn   {
   pointer-events: auto; cursor: pointer; margin-top: clamp(2px, 1.5cqmin, 12px);
   font-size: clamp(12px, 5cqmin, 26px);
@@ -81,7 +79,7 @@ button { font-family: inherit; }
 @container (max-height: 76px)  { .avs-lpp-body { display: none; } }
 @container (max-width: 150px)  { .avs-lpp-body { display: none; } }
 .avs-chip {
-  padding: 3px 9px; border-radius: 999px; font-size: 12px; cursor: pointer;
+  padding: 3px 9px; border-radius: 999px; font-size: var(--bb-text-sm); cursor: pointer;
   background: color-mix(in srgb, var(--bb-ink) 8%, transparent);
   color: var(--bb-ink-muted); border: 1px solid var(--bb-border);
 }
@@ -89,32 +87,39 @@ button { font-family: inherit; }
 
 /* ---------- Topbar (glass chrome) ---------- */
 .avs-topbar {
-  display: flex; align-items: center; gap: 16px;
-  height: 54px; padding: 0 16px; flex: 0 0 auto;
+  /* Nothing in this row may be clipped away. It is `nowrap` by nature, `body`
+     has `overflow-x: hidden`, and below about 1040px the right-hand end — the
+     connection chip and the ⋯ menu — simply left the window. That menu holds
+     Import and Export, so the escape hatch for "your browser storage is full"
+     was itself unreachable on a 1024px window, or at 125% browser zoom on a
+     1280px one. Wrapping is the safety net; the media query below keeps one
+     row for as long as it honestly can. */
+  display: flex; align-items: center; gap: var(--bb-sp-8); flex-wrap: wrap;
+  min-height: 54px; padding: 0 16px; flex: 0 0 auto;
   background: var(--bb-glass-bg);
   backdrop-filter: blur(var(--bb-glass-blur)) saturate(1.4);
   -webkit-backdrop-filter: blur(var(--bb-glass-blur)) saturate(1.4);
   border-bottom: 1px solid var(--bb-glass-border);
   z-index: 50;
 }
-.avs-brand { display: flex; align-items: center; gap: 9px; }
+.avs-brand { display: flex; align-items: center; gap: var(--bb-sp-5); }
 .avs-logo-img { height: 28px; width: auto; display: block; }
 .avs-logo { font-weight: 800; letter-spacing: -.02em; font-size: 17px; }
-.avs-brand-tag { font-size: 14px; font-weight: 600; letter-spacing: -.01em; color: var(--bb-ink); }
+.avs-brand-tag { font-size: var(--bb-text-lg); font-weight: 600; letter-spacing: -.01em; color: var(--bb-ink); }
 
 .avs-viewswitch {
-  display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px;
+  display: inline-flex; padding: 3px; gap: var(--bb-sp-1); border-radius: 999px;
   background: color-mix(in srgb, var(--bb-ink) 7%, transparent);
   border: 1px solid var(--bb-border);
 }
 .avs-viewswitch button {
   border: 0; background: transparent; color: var(--bb-ink-muted);
-  padding: 5px 16px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 500;
+  padding: 5px 16px; border-radius: 999px; cursor: pointer; font-size: var(--bb-text-md); font-weight: 500;
   transition: var(--bb-trans-fast);
 }
 .avs-viewswitch button.avs-on { background: var(--bb-bg-3); color: var(--bb-ink); box-shadow: var(--bb-shadow-1); }
 
-.avs-top-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.avs-top-actions { margin-left: auto; display: flex; align-items: center; gap: var(--bb-sp-3); }
 /* One consistent header action system. Every control in the row is exactly 32px
    tall and shares the same corner radius, so the toolbar reads as one family:
    the icon buttons (.avs-iconbtn) are a uniform square; the two action pills —
@@ -125,20 +130,39 @@ button { font-family: inherit; }
 .avs-top-actions .avs-iconbtn { border-radius: var(--bb-r-md); }
 .avs-top-actions .bb-btn {
   height: 32px; padding: 0 14px; border-radius: var(--bb-r-md);
-  font-size: 13px; font-weight: 600;
+  font-size: var(--bb-text-md); font-weight: 600;
 }
 .avs-top-actions .avs-publish-btn { padding: 0 16px; }
 .avs-top-actions .avs-conn { height: 32px; padding: 0 12px; border-radius: var(--bb-r-md); }
 .avs-top-actions .avs-orgchip { height: 32px; padding: 0 10px; border-radius: var(--bb-r-md); }
-.avs-savechip { font-size: 11px; color: var(--bb-ink-faint); min-width: 26px; text-align: right; }
+.avs-savechip { font-size: var(--bb-text-xs); color: var(--bb-ink-quiet); min-width: 26px; text-align: right; }
+/* A save that is not happening must not look like the quiet "3s" of one that
+   is. Colour alone would be the only signal, so the chip changes its WORDS
+   too ('Nicht gespeichert') and carries the reason in its title. */
+.avs-savechip-bad {
+  color: var(--bb-danger, #ef4444); font-weight: 600; cursor: help;
+}
+
+/* Narrow window (or a zoomed-in one): the informational TEXT goes first, every
+   CONTROL stays. The connection chip keeps its status dot and its click target
+   and carries its words in the title instead. */
+@media (max-width: 1150px) {
+  .avs-conn-label, .avs-plan-badge { display: none; }
+  .avs-top-actions .avs-conn { padding: 0 9px; }
+  .avs-topbar { gap: var(--bb-sp-4); }
+}
 .avs-conn {
-  display: inline-flex; align-items: center; gap: 7px; max-width: 200px;
-  padding: 6px 12px; border-radius: 999px; cursor: pointer; font-size: 12px;
+  display: inline-flex; align-items: center; gap: var(--bb-sp-4); max-width: 200px;
+  padding: 6px 12px; border-radius: 999px; cursor: pointer; font-size: var(--bb-text-sm);
   background: color-mix(in srgb, var(--bb-ink) 6%, transparent);
   border: 1px solid var(--bb-border); color: var(--bb-ink-muted);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.avs-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--bb-ink-faint); flex: 0 0 auto; }
+/* inline-block so the dot also works inside running text (the drawer's status
+   line), not just as a flex item in the connection chip — an inline element
+   would drop the width/height. Flex items blockify it anyway, so the existing
+   uses are unaffected. */
+.avs-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--bb-ink-faint); flex: 0 0 auto; }
 .avs-dot.avs-on { background: var(--bb-success); box-shadow: 0 0 8px var(--bb-success); }
 .avs-dot.avs-off { background: var(--bb-ink-faint); }
 
@@ -147,7 +171,27 @@ button { font-family: inherit; }
 .avs-view { height: 100%; }
 
 /* ---------- Editor 3-column ---------- */
-.avs-editor { display: grid; grid-template-columns: 252px 1fr 332px; height: 100%; min-height: 0; }
+.avs-editor { display: grid; grid-template-columns: 252px 1fr 332px; height: 100%; min-height: 0; position: relative; }
+/* The right column is 332px of three. On a 1024px window that leaves the canvas
+   about 440px — not enough to see the slide you are designing. Collapsing it
+   gives the canvas the room back; the handle stays put so the way back is
+   always in the same place. */
+.avs-editor.avs-right-collapsed { grid-template-columns: 252px 1fr 0; }
+.avs-editor.avs-right-collapsed .avs-col-right { display: none; }
+.avs-col-toggle {
+  /* At the SEAM, not at the window edge: it reads as "close this panel" and,
+     once closed, stays exactly where you left it. */
+  position: absolute; top: 50%; right: 332px; transform: translateY(-50%);
+  width: 14px; height: 54px; padding: 0; z-index: 4;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--bb-border); border-right: 0;
+  border-radius: var(--bb-r-sm) 0 0 var(--bb-r-sm);
+  background: var(--bb-bg-2); color: var(--bb-ink-quiet);
+  font-size: 12px; line-height: 1; cursor: pointer;
+}
+.avs-editor.avs-right-collapsed .avs-col-toggle { right: 0; }
+.avs-col-toggle:hover { color: var(--bb-ink); background: var(--bb-bg-3, var(--bb-bg-2)); }
+.avs-col-toggle:focus-visible { outline: 2px solid var(--bb-accent); outline-offset: 1px; }
 .avs-col { min-height: 0; height: 100%; overflow: hidden; }
 .avs-col-rail, .avs-col-right {
   background: var(--bb-glass-bg);
@@ -161,17 +205,30 @@ button { font-family: inherit; }
 /* ---------- Slide rail ---------- */
 .avs-rail { display: flex; flex-direction: column; height: 100%; }
 .avs-rail-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 14px 8px; }
-.avs-rail-title { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--bb-ink-faint); font-weight: 600; }
-.avs-rail-list { flex: 1; overflow-y: auto; padding: 6px 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+.avs-rail-title { font-size: var(--bb-text-sm); text-transform: uppercase; letter-spacing: .08em; color: var(--bb-ink-quiet); font-weight: 600; }
+/* The filter row only exists once a playlist is long enough to get lost in
+   (see FILTER_MIN in slide-rail.js), so it costs nothing on a short one. */
+/* Shown only when the server reports more displays than the list holds —
+   a partial fleet must look partial, not merely small. */
+.avs-disp-partial { margin-left: 10px; font-size: var(--bb-text-xs); color: var(--bb-warn); font-weight: 600; }
+.avs-rail-filterbar { display: flex; align-items: center; gap: var(--bb-sp-4); padding: 0 14px 8px; }
+.avs-rail-filter { flex: 1; min-width: 0; font-size: var(--bb-text-sm); }
+.avs-rail-filter-count { font-size: var(--bb-text-xs); color: var(--bb-ink-quiet); white-space: nowrap; }
+.avs-rail-filter-count.avs-rail-filter-empty { color: var(--bb-warn); }
+.avs-rail-list { flex: 1; overflow-y: auto; padding: 6px 12px 16px; display: flex; flex-direction: column; gap: var(--bb-sp-4); }
 .avs-slide-card {
-  position: relative; display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start;
+  position: relative; display: grid; grid-template-columns: 22px 1fr; gap: var(--bb-sp-4); align-items: start;
   padding: 8px; border-radius: var(--bb-r-md); cursor: pointer;
   border: 1px solid transparent; transition: var(--bb-trans-fast);
 }
+/* The card sets display:grid, which BEATS the user-agent's [hidden] rule —
+   without this the filter marks cards hidden and every one of them stays on
+   screen. */
+.avs-slide-card[hidden] { display: none; }
 .avs-slide-card:hover { background: color-mix(in srgb, var(--bb-ink) 5%, transparent); }
 .avs-slide-card.avs-on { border-color: var(--bb-accent); background: color-mix(in srgb, var(--bb-accent) 10%, transparent); }
 .avs-slide-card.bb-dragging { opacity: .4; }
-.avs-slide-index { font-size: 11px; color: var(--bb-ink-faint); text-align: center; padding-top: 2px; }
+.avs-slide-index { font-size: var(--bb-text-xs); color: var(--bb-ink-quiet); text-align: center; padding-top: 2px; }
 .avs-rail-thumb {
   grid-column: 2; position: relative; aspect-ratio: 16/9; width: 100%;
   border-radius: var(--bb-r-sm); overflow: hidden; background: var(--bb-bg-2);
@@ -179,13 +236,13 @@ button { font-family: inherit; }
 }
 .avs-thumb-block {
   position: absolute; display: flex; align-items: center; justify-content: center;
-  font-size: 11px; background: color-mix(in srgb, var(--bb-ink) 10%, transparent);
+  font-size: var(--bb-text-xs); background: color-mix(in srgb, var(--bb-ink) 10%, transparent);
   border: .5px solid var(--bb-border); overflow: hidden;
 }
-.avs-slide-meta { grid-column: 2; display: flex; align-items: center; gap: 6px; margin-top: 5px; }
-.avs-slide-name { font-size: 12px; color: var(--bb-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-.avs-slide-sched { font-size: 11px; }
-.avs-slide-actions { position: absolute; top: 6px; right: 6px; display: none; gap: 2px; }
+.avs-slide-meta { grid-column: 2; display: flex; align-items: center; gap: var(--bb-sp-3); margin-top: 5px; }
+.avs-slide-name { font-size: var(--bb-text-sm); color: var(--bb-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.avs-slide-sched { font-size: var(--bb-text-xs); }
+.avs-slide-actions { position: absolute; top: 6px; right: 6px; display: none; gap: var(--bb-sp-1); }
 .avs-slide-card:hover .avs-slide-actions { display: flex; }
 
 /* ---------- Canvas ---------- */
@@ -195,10 +252,10 @@ button { font-family: inherit; }
   display: flex; align-items: center; gap: 14px; padding: 8px 14px; flex: 0 0 auto;
   border-bottom: 1px solid var(--bb-border); background: color-mix(in srgb, var(--bb-bg-1) 60%, transparent);
 }
-.avs-zoom-cluster { display: flex; align-items: center; gap: 4px; }
-.avs-zoom-label { min-width: 52px; text-align: center; background: transparent; border: 1px solid var(--bb-border); color: var(--bb-ink-muted); border-radius: var(--bb-r-sm); padding: 4px 6px; cursor: pointer; font-size: 12px; transition: background var(--bb-trans-fast), border-color var(--bb-trans-fast), color var(--bb-trans-fast); }
+.avs-zoom-cluster { display: flex; align-items: center; gap: var(--bb-sp-2); }
+.avs-zoom-label { min-width: 52px; text-align: center; background: transparent; border: 1px solid var(--bb-border); color: var(--bb-ink-muted); border-radius: var(--bb-r-sm); padding: 4px 6px; cursor: pointer; font-size: var(--bb-text-sm); transition: background var(--bb-trans-fast), border-color var(--bb-trans-fast), color var(--bb-trans-fast); }
 .avs-zoom-label:hover { background: var(--bb-fill-soft); border-color: var(--bb-border-strong); color: var(--bb-ink); }
-.avs-canvas-hint { font-size: 11px; color: var(--bb-ink-faint); }
+.avs-canvas-hint { font-size: var(--bb-text-xs); color: var(--bb-ink-quiet); }
 .avs-canvas-scroller { flex: 1; position: relative; overflow: hidden; }
 .avs-stage-wrap { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
 .avs-stage {
@@ -214,16 +271,16 @@ button { font-family: inherit; }
 }
 
 /* Slide-settings: canvas size controls */
-.avs-size-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.avs-size-presets { display: flex; flex-wrap: wrap; gap: var(--bb-sp-3); margin: 4px 0 8px; }
 .avs-size-preset {
-  padding: 4px 10px; font-size: 12px; cursor: pointer;
+  padding: 4px 10px; font-size: var(--bb-text-sm); cursor: pointer;
   background: var(--bb-bg-2); color: var(--bb-ink-muted);
   border: 1px solid var(--bb-border); border-radius: var(--bb-r-sm);
 }
 .avs-size-preset:hover { color: var(--bb-ink); }
 .avs-size-preset.bb-on { background: color-mix(in srgb, var(--bb-accent) 18%, transparent); border-color: var(--bb-accent); color: var(--bb-ink); }
-.avs-size-fields { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; }
-.avs-size-fields > label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--bb-ink-muted); }
+.avs-size-fields { display: flex; align-items: end; gap: var(--bb-sp-4); flex-wrap: wrap; }
+.avs-size-fields > label { display: flex; flex-direction: column; gap: var(--bb-sp-1); font-size: var(--bb-text-xs); color: var(--bb-ink-muted); }
 .avs-size-fields input[type="number"] { width: 84px; }
 .avs-size-fields .avs-size-fit { flex: 1; min-width: 140px; }
 .avs-size-x { align-self: center; padding-bottom: 6px; color: var(--bb-ink-faint); }
@@ -237,13 +294,27 @@ button { font-family: inherit; }
   transition: outline-color var(--bb-trans-fast);
 }
 .avs-widget-frame:hover { outline-color: color-mix(in srgb, var(--bb-accent) 50%, transparent); }
+/* Tabbing to a frame selects it, so the selected outline already marks where you
+   are — but a keyboard user needs it to be unmistakable, and the frame is a
+   focusable element in its own right now. The global :focus-visible ring would
+   sit at outline-offset 2px and fight the frame's own outline, so the frame
+   draws its own ring inside instead. */
+.avs-widget-frame:focus { outline: none; }
+.avs-widget-frame:focus-visible {
+  outline: 2px solid var(--bb-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--bb-accent) 30%, transparent);
+}
 .avs-frame-selected { outline: 2px solid var(--bb-accent); z-index: 1000 !important; }
 .avs-widget-content { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .avs-widget-label {
   position: absolute; top: 0; left: 0; transform: translateY(-100%);
-  font-size: 10px; background: var(--bb-accent); color: #fff; padding: 1px 6px;
+  display: inline-flex; align-items: center; gap: var(--bb-sp-2);
+  font-size: var(--bb-text-2xs); background: var(--bb-accent-strong); color: #fff; padding: 1px 6px;
   border-radius: 4px 4px 0 0; white-space: nowrap; opacity: 0; transition: var(--bb-trans-fast); pointer-events: none;
 }
+/* The chip carries the widget type's line icon, so it needs a fixed 11px box —
+   an SVG with no intrinsic size would otherwise stretch the 10px chip. */
+.avs-widget-label svg { width: 11px; height: 11px; display: block; flex: 0 0 auto; }
 .avs-widget-frame:hover .avs-widget-label, .avs-frame-selected .avs-widget-label { opacity: 1; }
 
 .avs-handle { position: absolute; width: 11px; height: 11px; background: #fff; border: 1.5px solid var(--bb-accent); border-radius: 2px; display: none; z-index: 1001; }
@@ -293,64 +364,73 @@ button { font-family: inherit; }
   transition: background var(--bb-trans-fast), border-color var(--bb-trans-fast);
 }
 .avs-ss-trigger:hover { background: var(--bb-bg-3); border-color: var(--bb-border-strong); }
-.avs-ss-trigger-icon { grid-row: 1 / span 2; align-self: center; font-size: 16px; }
-.avs-ss-trigger-label { font-size: 12px; font-weight: 600; }
+.avs-ss-trigger-icon { grid-row: 1 / span 2; align-self: center; font-size: var(--bb-text-xl); }
+.avs-ss-trigger-label { font-size: var(--bb-text-sm); font-weight: 600; }
 .avs-ss-trigger-sub {
-  font-size: 11px; color: var(--bb-ink-muted);
+  font-size: var(--bb-text-xs); color: var(--bb-ink-muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
 }
-.avs-ss-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.avs-ss-grid label, .avs-geo-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--bb-ink-faint); }
+.avs-ss-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--bb-sp-4); }
+.avs-ss-grid label, .avs-geo-grid label { display: flex; flex-direction: column; gap: var(--bb-sp-2); font-size: var(--bb-text-xs); color: var(--bb-ink-quiet); }
 .avs-ss-grid select, .avs-ss-grid input, .avs-geo-grid input {
   background: var(--bb-bg-2); border: 1px solid var(--bb-border); color: var(--bb-ink);
-  border-radius: var(--bb-r-sm); padding: 6px 8px; font-size: 12px;
+  border-radius: var(--bb-r-sm); padding: 6px 8px; font-size: var(--bb-text-sm);
 }
 /* Slide-settings modal body — keeps form-groups stacked with reasonable gaps. */
 .avs-slide-modal { display: flex; flex-direction: column; gap: 14px; }
-.avs-slide-modal .avs-ss-grid { gap: 8px; }
-.avs-slide-modal #sm-name { padding: 8px 10px; font-size: 14px; font-weight: 600; }
+.avs-slide-modal .avs-ss-grid { gap: var(--bb-sp-4); }
+.avs-slide-modal #sm-name { padding: 8px 10px; font-size: var(--bb-text-lg); font-weight: 600; }
 .avs-slide-modal #sm-name, .avs-slide-modal #sm-dur {
   width: 100%; background: var(--bb-bg-2); border: 1px solid var(--bb-border);
   color: var(--bb-ink); border-radius: var(--bb-r-sm);
 }
-.avs-ss-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.avs-ss-actions { display: flex; gap: var(--bb-sp-4); flex-wrap: wrap; }
 .avs-ss-actions .bb-btn { flex: 1; }
 
 .avs-inspector, .avs-library { display: flex; flex-direction: column; height: 100%; }
-.avs-inspector-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--bb-border); }
-.avs-inspector-title { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.avs-inspector-actions { display: flex; gap: 2px; flex: 0 0 auto; }
+.avs-inspector-head { display: flex; align-items: center; gap: var(--bb-sp-4); padding: 10px 12px; border-bottom: 1px solid var(--bb-border); }
+.avs-inspector-title { font-size: var(--bb-text-md); font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.avs-inspector-actions { display: flex; gap: var(--bb-sp-1); flex: 0 0 auto; }
 /* "← Library" affordance — explicit way out of the per-widget inspector,
    mirrors the implicit "click empty stage" deselect that's not always
    discoverable when the widget fills the slide or the canvas is small. */
 .avs-inspector-back {
-  display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: var(--bb-sp-2);
   height: 26px; padding: 0 8px 0 6px;
   background: transparent; border: 1px solid transparent; border-radius: var(--bb-r-sm);
-  color: var(--bb-ink-muted); font-size: 12px; line-height: 1;
+  color: var(--bb-ink-muted); font-size: var(--bb-text-sm); line-height: 1;
   cursor: pointer; flex: 0 0 auto;
   transition: background .12s, color .12s, border-color .12s;
 }
 .avs-inspector-back:hover { background: color-mix(in srgb, var(--bb-ink) 8%, transparent); color: var(--bb-ink); border-color: var(--bb-border); }
-.avs-inspector-back-arrow { font-size: 14px; line-height: 1; }
+.avs-inspector-back-arrow { font-size: var(--bb-text-lg); line-height: 1; }
 .avs-inspector-back-label { font-weight: 500; }
 .avs-inspector-body { padding: 0 14px 16px; overflow-y: auto; }
-.avs-inspector-empty { padding: 28px 16px; color: var(--bb-ink-faint); font-size: 13px; text-align: center; }
+.avs-inspector-empty { padding: 28px 16px; color: var(--bb-ink-quiet); font-size: var(--bb-text-md); text-align: center; }
 /* 6 equal columns so all six inputs (X Y W H Z R) share one row — with 5
    columns the R input used to wrap alone onto a second row. */
-.avs-geo-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 6px 0 8px; }
+.avs-geo-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--bb-sp-3); margin: 6px 0 8px; }
 .avs-geo-grid input { width: 100%; min-width: 0; padding: 6px 5px; }
 /* Tiny muted unit suffix next to the single-letter geo labels (%, °). */
-.avs-geo-unit { opacity: .65; margin-left: 2px; font-size: 10px; }
+.avs-geo-unit { opacity: .65; margin-left: 2px; font-size: var(--bb-text-2xs); }
 /* Position & size lives in a collapsible section (collapsed by default) — the
    numeric grid is rarely needed since most layout is done by dragging. */
 .avs-geo-body { padding: 8px 2px 10px; }
 .avs-geo-body .avs-geo-grid { margin: 0 0 8px; }
-.avs-geo-body .avs-geo-presets { margin: 0; }
+.avs-geo-body .avs-geo-presets { margin: 0 0 10px; }
+.avs-geo-body .avs-geo-presets:last-child { margin-bottom: 0; }
+/* Two rows of mini-slides sit here and they do DIFFERENT things: the first
+   moves the widget and keeps its size, the second replaces the whole rect.
+   Unlabelled they read as one block of sixteen buttons, and the difference
+   lives only in a tooltip. */
+.avs-geo-rowlabel {
+  font-size: var(--bb-text-xs); color: var(--bb-ink-quiet);
+  margin: 0 0 4px; padding-left: 2px;
+}
 /* Layout preset row — each button is a mini slide with the target region
    filled, so the layout is recognisable at a glance (no cryptic glyphs). */
 .avs-geo-presets {
-  display: flex; flex-wrap: wrap; gap: 5px;
+  display: flex; flex-wrap: wrap; gap: var(--bb-sp-3);
   margin: 0 0 14px;
   padding: 7px;
   background: var(--bb-bg-2); border: 1px solid var(--bb-border);
@@ -377,30 +457,30 @@ button { font-family: inherit; }
 /* Compact, collapsible inspector notes (live-preview / data-privacy, BYO-key /
    private-only). A one-line summary by default; the detail folds away so it
    doesn't shove the widget's own settings down the panel. */
-.avs-note { font-size: 11px; line-height: 1.5; border-radius: var(--bb-r-md); margin: 0 0 10px; padding: 6px 10px; }
+.avs-note { font-size: var(--bb-text-xs); line-height: 1.5; border-radius: var(--bb-r-md); margin: 0 0 10px; padding: 6px 10px; }
 .avs-note > summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .avs-note > summary::-webkit-details-marker { display: none; }
 .avs-note > summary::before {
-  content: '▸'; color: var(--bb-ink-faint); font-size: 10px; flex: 0 0 auto;
+  content: '▸'; color: var(--bb-ink-faint); font-size: var(--bb-text-2xs); flex: 0 0 auto;
   transition: transform var(--bb-trans-fast);
 }
 .avs-note[open] > summary::before { transform: rotate(90deg); }
 /* Title keeps to one line; if the action button doesn't fit beside it, the
    button wraps to its own line instead of fracturing the title. */
 .avs-note-title { font-weight: 600; flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.avs-note-action { flex: 0 0 auto; padding: 3px 8px; font-size: 11px; }
+.avs-note-action { flex: 0 0 auto; padding: 3px 8px; font-size: var(--bb-text-xs); }
 .avs-note-detail { margin: 6px 0 0; opacity: .9; }
 
 /* ---------- Library ---------- */
-.avs-lib-tabs { display: flex; gap: 2px; padding: 0 12px 10px; flex-wrap: wrap; }
-.avs-lib-tab { border: 0; background: transparent; color: var(--bb-ink-faint); padding: 5px 10px; border-radius: var(--bb-r-sm); cursor: pointer; font-size: 12px; font-weight: 500; transition: background var(--bb-trans-fast), color var(--bb-trans-fast); }
+.avs-lib-tabs { display: flex; gap: var(--bb-sp-1); padding: 0 12px 10px; flex-wrap: wrap; }
+.avs-lib-tab { border: 0; background: transparent; color: var(--bb-ink-quiet); padding: 5px 10px; border-radius: var(--bb-r-sm); cursor: pointer; font-size: var(--bb-text-sm); font-weight: 500; transition: background var(--bb-trans-fast), color var(--bb-trans-fast); }
 .avs-lib-tab:not(.avs-on):hover { background: var(--bb-fill-soft); color: var(--bb-ink); }
 .avs-lib-tab.avs-on { background: var(--bb-accent-soft); color: var(--bb-ink); }
 .avs-lib-body { padding: 0 12px 16px; overflow-y: auto; }
-.avs-lib-group-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--bb-ink-faint); margin: 12px 0 6px; }
-.avs-widget-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.avs-lib-group-label { font-size: var(--bb-text-xs); text-transform: uppercase; letter-spacing: .08em; color: var(--bb-ink-quiet); margin: 12px 0 6px; }
+.avs-widget-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--bb-sp-3); }
 .avs-widget-tile {
-  display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 12px 6px;
+  display: flex; flex-direction: column; align-items: center; gap: var(--bb-sp-3); padding: 12px 6px;
   background: var(--bb-bg-2); border: 1px solid var(--bb-border); border-radius: var(--bb-r-md);
   color: var(--bb-ink-muted); cursor: pointer; transition: var(--bb-trans-fast);
 }
@@ -412,67 +492,77 @@ button { font-family: inherit; }
 .avs-widget-tile { cursor: grab; }
 .avs-widget-tile:active { cursor: grabbing; }
 .avs-widget-tile.avs-widget-tile-dragging { opacity: .45; transform: scale(.95); }
-.avs-widget-ic { font-size: 20px; }
-.avs-widget-lab { font-size: 11px; text-align: center; }
+.avs-widget-ic { font-size: var(--bb-text-3xl); }
+.avs-widget-lab { font-size: var(--bb-text-xs); text-align: center; }
 /* Canvas drop-target highlight while a widget tile is being dragged over. */
 .avs-stage.avs-stage-dragover {
   outline: 2px dashed var(--bb-accent);
   outline-offset: -4px;
   background-color: color-mix(in srgb, var(--bb-accent) 6%, transparent);
 }
-.avs-design-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
-.avs-design-card { display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--bb-bg-2); border: 1px solid var(--bb-border); border-radius: var(--bb-r-md); cursor: pointer; }
+.avs-design-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--bb-sp-4); margin-top: 8px; }
+.avs-design-card { display: flex; flex-direction: column; gap: var(--bb-sp-3); padding: 8px; background: var(--bb-bg-2); border: 1px solid var(--bb-border); border-radius: var(--bb-r-md); cursor: pointer; }
 .avs-design-card:hover { border-color: var(--bb-accent); }
 .avs-design-card.bb-sel { border-color: var(--bb-accent); background: color-mix(in srgb, var(--bb-accent) 12%, var(--bb-bg-2)); }
 .avs-design-thumb { position: relative; aspect-ratio: 16/9; background: var(--bb-bg-0); border-radius: var(--bb-r-sm); overflow: hidden; }
 .avs-design-thumb span { position: absolute; background: color-mix(in srgb, var(--bb-accent) 35%, transparent); border: .5px solid var(--bb-bg-2); }
-.avs-design-label { font-size: 11px; color: var(--bb-ink-muted); text-align: center; }
+.avs-design-label { font-size: var(--bb-text-xs); color: var(--bb-ink-muted); text-align: center; }
 
 /* ---------- Displays dashboard ---------- */
 .avs-displays { height: 100%; overflow-y: auto; padding: 22px 26px 40px; }
 .avs-disp-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
 .avs-disp-title { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
-.avs-disp-tools { display: flex; gap: 8px; }
+.avs-disp-tools { display: flex; gap: var(--bb-sp-4); }
 .avs-group { margin-bottom: 26px; }
 .avs-group-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.avs-group-name { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; }
-.avs-group-chip { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, var(--bb-accent) 16%, transparent); color: var(--bb-ink-muted); }
-.avs-group-count { font-size: 12px; color: var(--bb-ink-faint); background: var(--bb-bg-2); border-radius: 999px; padding: 1px 8px; }
-.avs-group-actions { display: flex; align-items: center; gap: 6px; }
+.avs-group-name { display: flex; align-items: center; gap: var(--bb-sp-5); font-size: 15px; font-weight: 600; }
+.avs-group-chip { font-size: var(--bb-text-2xs); text-transform: uppercase; letter-spacing: .08em; padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, var(--bb-accent) 16%, transparent); color: var(--bb-ink-muted); }
+.avs-group-count { font-size: var(--bb-text-sm); color: var(--bb-ink-quiet); background: var(--bb-bg-2); border-radius: 999px; padding: 1px 8px; }
+.avs-group-actions { display: flex; align-items: center; gap: var(--bb-sp-3); }
 .avs-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(252px, 1fr)); gap: 14px; }
 .avs-display-card {
   background: var(--bb-glass-bg); backdrop-filter: blur(var(--bb-glass-blur));
   border: 1px solid var(--bb-glass-border); border-radius: var(--bb-r-lg);
-  padding: 16px; box-shadow: var(--bb-shadow-2); display: flex; flex-direction: column; gap: 12px;
+  padding: 16px; box-shadow: var(--bb-shadow-2); display: flex; flex-direction: column; gap: var(--bb-sp-6);
   transition: transform var(--bb-trans-fast), border-color var(--bb-trans-fast);
 }
 .avs-display-card:hover { transform: translateY(-2px); border-color: var(--bb-accent-line); }
 @media (prefers-reduced-motion: reduce) { .avs-display-card:hover { transform: none; } }
-.avs-dc-top { display: flex; align-items: center; gap: 10px; }
+.avs-dc-top { display: flex; align-items: center; gap: var(--bb-sp-5); }
 .avs-dc-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
 .avs-dc-dot.avs-on { background: var(--bb-success); box-shadow: 0 0 10px var(--bb-success); }
 .avs-dc-dot.avs-off { background: var(--bb-ink-faint); }
-.avs-dc-name { font-size: 14px; font-weight: 600; }
-.avs-dc-sub { font-size: 11px; color: var(--bb-ink-faint); }
-.avs-dc-running { font-size: 12px; color: var(--bb-ink-muted); padding: 8px 10px; background: var(--bb-bg-2); border-radius: var(--bb-r-sm); }
+.avs-dc-name { font-size: var(--bb-text-lg); font-weight: 600; }
+.avs-dc-sub { font-size: var(--bb-text-xs); color: var(--bb-ink-quiet); }
+.avs-dc-running { font-size: var(--bb-text-sm); color: var(--bb-ink-muted); padding: 8px 10px; background: var(--bb-bg-2); border-radius: var(--bb-r-sm); }
 .avs-dc-running b { color: var(--bb-ink); font-weight: 600; }
-.avs-dc-idle { color: var(--bb-ink-faint); }
-.avs-dc-group select { width: 100%; background: var(--bb-bg-2); border: 1px solid var(--bb-border); color: var(--bb-ink-muted); border-radius: var(--bb-r-sm); padding: 6px 8px; font-size: 12px; transition: border-color var(--bb-trans-fast), box-shadow var(--bb-trans-fast); }
+.avs-dc-idle { color: var(--bb-ink-quiet); }
+.avs-dc-group select { width: 100%; background: var(--bb-bg-2); border: 1px solid var(--bb-border); color: var(--bb-ink-muted); border-radius: var(--bb-r-sm); padding: 6px 8px; font-size: var(--bb-text-sm); transition: border-color var(--bb-trans-fast), box-shadow var(--bb-trans-fast); }
 .avs-dc-group select:hover { border-color: var(--bb-border-strong); }
 .avs-dc-group select:focus-visible { outline: none; border-color: var(--bb-accent-line); box-shadow: var(--bb-focus-ring); }
-.avs-dc-actions { display: flex; align-items: center; gap: 6px; }
+.avs-dc-actions { display: flex; align-items: center; gap: var(--bb-sp-3); }
 .avs-dc-actions .bb-btn { flex: 1; }
 
 /* ---------- Publish picker + overflow menu ---------- */
 .avs-publish-picker { display: flex; flex-direction: column; gap: 14px; min-width: 320px; }
 .avs-pub-modes { width: 100%; }
-.avs-pub-target label { display: block; font-size: 12px; color: var(--bb-ink-faint); margin-bottom: 6px; }
+.avs-pub-target label { display: block; font-size: var(--bb-text-sm); color: var(--bb-ink-quiet); margin-bottom: 6px; }
 .avs-pub-target select { width: 100%; background: var(--bb-bg-2); border: 1px solid var(--bb-border); color: var(--bb-ink); border-radius: var(--bb-r-sm); padding: 8px 10px; }
-.avs-pub-checks { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }
-.avs-check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-.avs-menu { display: flex; flex-direction: column; gap: 2px; min-width: 240px; }
-.avs-menu-item { display: block; text-align: left; text-decoration: none; background: transparent; border: 0; color: var(--bb-ink); padding: 10px 12px; border-radius: var(--bb-r-sm); cursor: pointer; font-size: 13px; }
+.avs-pub-checks { display: flex; flex-direction: column; gap: var(--bb-sp-3); max-height: 240px; overflow-y: auto; }
+.avs-check { display: flex; align-items: center; gap: var(--bb-sp-4); font-size: var(--bb-text-md); }
+.avs-menu { display: flex; flex-direction: column; gap: var(--bb-sp-1); min-width: 240px; }
+/* flex, not block: every row is now icon + label (+ an optional trailing
+   external-link mark on the legal links), and the label must stay on one line
+   beside a fixed-width icon column rather than wrapping under it. */
+.avs-menu-item { display: flex; align-items: center; gap: var(--bb-sp-5); width: 100%; text-align: left; text-decoration: none; background: transparent; border: 0; color: var(--bb-ink); padding: 10px 12px; border-radius: var(--bb-r-sm); cursor: pointer; font-size: var(--bb-text-md); }
 .avs-menu-item:hover { background: color-mix(in srgb, var(--bb-ink) 8%, transparent); }
+.avs-menu-item > span { flex: 1; min-width: 0; }
+.avs-menu-item > svg { flex: 0 0 auto; color: var(--bb-ink-muted); }
+.avs-menu-item > svg:last-child { color: var(--bb-ink-faint); }
+.avs-menu-item:hover > svg { color: var(--bb-ink); }
+.avs-menu-item[disabled] { opacity: .45; cursor: default; }
+.avs-menu-item[disabled]:hover { background: transparent; }
+.avs-orgchip svg { flex: 0 0 auto; color: var(--bb-ink-muted); }
 
 /* Floating right-click context menu */
 .avs-context-menu {
@@ -481,10 +571,10 @@ button { font-family: inherit; }
   border-radius: var(--bb-r-md); box-shadow: var(--bb-shadow-pop); padding: 5px;
   animation: bb-pop-in var(--bb-trans-fast) both;
 }
-.avs-context-menu .avs-menu-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; }
+.avs-context-menu .avs-menu-item { display: flex; align-items: center; gap: var(--bb-sp-5); width: 100%; padding: 8px 10px; }
 .avs-context-menu .avs-menu-item:disabled { opacity: .4; cursor: default; }
 .avs-context-menu .avs-menu-item:disabled:hover { background: transparent; }
-.avs-menu-ic { display: inline-flex; width: 18px; justify-content: center; font-size: 13px; flex: 0 0 auto; }
+.avs-menu-ic { display: inline-flex; width: 18px; justify-content: center; font-size: var(--bb-text-md); flex: 0 0 auto; }
 .avs-menu-sep { height: 1px; background: var(--bb-border); margin: 5px 6px; }
 
 /* First-run welcome modal */
@@ -492,19 +582,25 @@ button { font-family: inherit; }
 .avs-pub-newdisp { margin-top: 10px; }
 
 /* Connect gate (Displays / Verwaltung while not connected) */
-.avs-connect-gate { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 10px; max-width: 460px; margin: 48px auto; padding: 48px 24px; }
+.avs-connect-gate { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: var(--bb-sp-5); max-width: 460px; margin: 48px auto; padding: 48px 24px; }
 .avs-connect-gate .avs-brand-logo { height: 84px; margin: 0 0 6px; }
-.avs-cg-title { font-size: 20px; font-weight: 650; }
-.avs-cg-desc { margin: 0; font-size: 14px; line-height: 1.55; color: var(--bb-ink-dim, #94a3b8); }
+/* 700, not 650: Inter ships 400/500/600/700/800, so 650 was silently rounded —
+   the declared weight was never the painted one. */
+.avs-cg-title { font-size: var(--bb-text-3xl); font-weight: 700; }
+/* --bb-ink-dim was never defined anywhere, so both of these fell through to the
+   hardcoded #94a3b8 — fine on the dark surface (7.55:1), but 2.56:1 on white,
+   and this is the first screen a new user sees. --bb-ink-muted is the same role
+   and switches with the theme (7.74:1 / 8.74:1). */
+.avs-cg-desc { margin: 0; font-size: var(--bb-text-lg); line-height: 1.55; color: var(--bb-ink-muted); }
 .avs-connect-gate .avs-cg-btn { margin-top: 10px; }
 .avs-welcome-langrow { display: flex; justify-content: flex-end; margin: -6px -2px 2px; }
-.avs-welcome-lang { background: transparent; border: 1px solid var(--bb-border); color: var(--bb-ink); border-radius: var(--bb-r-sm); font-size: 11px; font-weight: 600; letter-spacing: .03em; padding: 3px 8px; cursor: pointer; }
+.avs-welcome-lang { background: transparent; border: 1px solid var(--bb-border); color: var(--bb-ink); border-radius: var(--bb-r-sm); font-size: var(--bb-text-xs); font-weight: 600; letter-spacing: .03em; padding: 3px 8px; cursor: pointer; }
 .avs-welcome-lang:hover { background: color-mix(in srgb, var(--bb-ink) 8%, transparent); }
-.avs-langbtn { font-weight: 600; font-size: 12px; letter-spacing: .03em; }
+.avs-langbtn { font-weight: 600; font-size: var(--bb-text-sm); letter-spacing: .03em; }
 .avs-welcome-lead { margin: 0 0 12px; font-size: 15px; line-height: 1.5; }
-.avs-welcome-points { margin: 0 0 14px; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
-.avs-welcome-foot { margin: 0; font-size: 12px; color: var(--bb-ink-dim, #94a3b8); line-height: 1.5; }
-.avs-welcome-foot a { color: var(--bb-accent, #8b5cf6); text-decoration: none; }
+.avs-welcome-points { margin: 0 0 14px; padding-left: 18px; display: flex; flex-direction: column; gap: var(--bb-sp-4); font-size: var(--bb-text-md); line-height: 1.45; }
+.avs-welcome-foot { margin: 0; font-size: var(--bb-text-sm); color: var(--bb-ink-muted); line-height: 1.5; }
+.avs-welcome-foot a { color: var(--bb-accent-ink); text-decoration: none; }
 .avs-welcome-foot a:hover { text-decoration: underline; }
 
 /* ---------- Background layers + editor ---------- */
@@ -518,7 +614,7 @@ button { font-family: inherit; }
 .avs-widget-bg { position: absolute; inset: 0; pointer-events: none; }
 
 .avs-inspector-section { border-top: 1px solid var(--bb-border); margin-top: 12px; padding-top: 12px; }
-.avs-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--bb-ink-faint); margin-bottom: 8px; }
+.avs-section-title { font-size: var(--bb-text-xs); text-transform: uppercase; letter-spacing: .08em; color: var(--bb-ink-quiet); margin-bottom: 8px; }
 /* Below-form inspector blocks (onError / Background / Animation / Bindings)
    now reuse the bb-form-section fold from components.css. Keep the border-top
    separation but shrink the top padding — the fold head brings its own 6px. */
@@ -528,23 +624,23 @@ button { font-family: inherit; }
    grid, loop select. Selects reuse the inspector field look. */
 .avs-anim-section select {
   width: 100%; background: var(--bb-bg-2); border: 1px solid var(--bb-border);
-  color: var(--bb-ink); border-radius: var(--bb-r-sm); padding: 6px 8px; font-size: 12px;
+  color: var(--bb-ink); border-radius: var(--bb-r-sm); padding: 6px 8px; font-size: var(--bb-text-sm);
 }
-.avs-anim-row { display: flex; gap: 6px; align-items: center; }
+.avs-anim-row { display: flex; gap: var(--bb-sp-3); align-items: center; }
 .avs-anim-row select { flex: 1; }
 .avs-anim-timing { margin: 8px 0; }
 .avs-anim-timing.avs-disabled { opacity: .45; pointer-events: none; }
 
-.avs-bg-editor { display: flex; flex-direction: column; gap: 10px; }
+.avs-bg-editor { display: flex; flex-direction: column; gap: var(--bb-sp-5); }
 .avs-bg-types { width: 100%; flex-wrap: wrap; }
 .avs-bg-types .bb-bezel-btn { flex: 1; min-width: 60px; }
 .avs-bg-theme-chip { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background-size: cover; background-position: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.3); }
 .avs-bg-help { margin: 2px 0 0; }
-.avs-bg-body { display: flex; flex-direction: column; gap: 8px; }
+.avs-bg-body { display: flex; flex-direction: column; gap: var(--bb-sp-4); }
 .avs-bg-preview { height: 40px; border-radius: var(--bb-r-md); border: 1px solid var(--bb-border-strong); box-shadow: var(--bb-shadow-1); }
-.avs-bg-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--bb-ink-muted); }
+.avs-bg-row { display: flex; align-items: center; gap: var(--bb-sp-4); font-size: var(--bb-text-sm); color: var(--bb-ink-muted); }
 .avs-bg-row > span:first-child { min-width: 62px; }
-.avs-bg-row input[type="text"], .avs-bg-row select { flex: 1; background: var(--bb-bg-2); border: 1px solid var(--bb-border); color: var(--bb-ink); border-radius: var(--bb-r-sm); padding: 5px 8px; font-size: 12px; }
+.avs-bg-row input[type="text"], .avs-bg-row select { flex: 1; background: var(--bb-bg-2); border: 1px solid var(--bb-border); color: var(--bb-ink); border-radius: var(--bb-r-sm); padding: 5px 8px; font-size: var(--bb-text-sm); }
 .avs-bg-row input[type="range"] { flex: 1; accent-color: var(--bb-accent); }
 /* Color pickers as filled swatches (Chrome renders them as a thin line otherwise) */
 input[type="color"] { height: 30px; padding: 0; border: 1px solid var(--bb-border); border-radius: var(--bb-r-sm); background: none; cursor: pointer; }
@@ -554,13 +650,13 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 .bb-form-color input[type="color"] { width: 64px; align-self: flex-start; }
 .avs-bg-row input[type="color"] { width: 46px; flex: 0 0 auto; }
 .avs-bg-stop input[type="color"] { flex: 1 1 auto; min-width: 0; }
-.avs-bg-row input[type="number"] { width: 62px; background: var(--bb-bg-2); border: 1px solid var(--bb-border); color: var(--bb-ink); border-radius: var(--bb-r-sm); padding: 5px 6px; font-size: 12px; }
-.avs-bg-val { font-size: 11px; color: var(--bb-ink-faint); min-width: 40px; text-align: right; }
-.avs-bg-sublabel { font-size: 11px; color: var(--bb-ink-faint); margin: 4px 0; }
-.avs-bg-stops { display: flex; flex-direction: column; gap: 6px; }
-.avs-bg-stop { display: flex; align-items: center; gap: 6px; }
+.avs-bg-row input[type="number"] { width: 62px; background: var(--bb-bg-2); border: 1px solid var(--bb-border); color: var(--bb-ink); border-radius: var(--bb-r-sm); padding: 5px 6px; font-size: var(--bb-text-sm); }
+.avs-bg-val { font-size: var(--bb-text-xs); color: var(--bb-ink-quiet); min-width: 40px; text-align: right; }
+.avs-bg-sublabel { font-size: var(--bb-text-xs); color: var(--bb-ink-quiet); margin: 4px 0; }
+.avs-bg-stops { display: flex; flex-direction: column; gap: var(--bb-sp-3); }
+.avs-bg-stop { display: flex; align-items: center; gap: var(--bb-sp-3); }
 .avs-bg-stop input[type="number"] { width: 54px; flex: 0 0 auto; }
-.avs-bg-addstop { align-self: flex-start; padding: 4px 10px; font-size: 12px; }
+.avs-bg-addstop { align-self: flex-start; padding: 4px 10px; font-size: var(--bb-text-sm); }
 
 /* ---------- Preview overlay (fullscreen player in iframe) ---------- */
 .avs-preview-overlay {
@@ -589,7 +685,7 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
   background: rgba(0,0,0,.5); color: #fff;
   border: 1px solid rgba(255,255,255,.18);
   border-radius: 50%; cursor: pointer;
-  font-size: 16px; line-height: 1;
+  font-size: var(--bb-text-xl); line-height: 1;
   opacity: 0;
   transition: opacity 150ms ease, background 150ms ease;
   z-index: 9001;
@@ -602,7 +698,7 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
   position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
   background: rgba(0,0,0,.5); color: rgba(255,255,255,.85);
   padding: 6px 14px; border-radius: 999px;
-  font-size: 12px; letter-spacing: .04em;
+  font-size: var(--bb-text-sm); letter-spacing: .04em;
   pointer-events: none;
   z-index: 9001;
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
@@ -622,11 +718,11 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 
 /* Org chip in topbar */
 .avs-orgchip {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; gap: var(--bb-sp-3);
   padding: 4px 10px; border-radius: 6px;
   background: var(--bb-bg-2);
   border: 1px solid var(--bb-border);
-  font-size: 12px; cursor: pointer; color: var(--bb-ink);
+  font-size: var(--bb-text-sm); cursor: pointer; color: var(--bb-ink);
 }
 .avs-orgchip:hover { background: var(--bb-fill-softer); }
 
@@ -636,7 +732,7 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
   gap: 0;
 }
 .avs-admin-nav {
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; flex-direction: column; gap: var(--bb-sp-1);
   border-right: 1px solid var(--bb-border);
   padding: 16px 10px;
   background: var(--bb-bg-2);
@@ -644,11 +740,11 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 }
 .avs-admin-tab {
   position: relative;
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: var(--bb-sp-5);
   padding: 9px 12px;
   background: transparent; border: 0; border-radius: var(--bb-r-sm);
   color: var(--bb-ink-muted); cursor: pointer; text-align: left;
-  font-size: 13.5px; font-weight: 500; letter-spacing: -.01em;
+  font-size: var(--bb-text-lg); font-weight: 500; letter-spacing: -.01em;
   transition: background var(--bb-trans-fast), color var(--bb-trans-fast);
 }
 .avs-admin-tab:hover { background: var(--bb-fill-soft); color: var(--bb-ink); }
@@ -658,13 +754,16 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
   content: ""; position: absolute; left: 3px; top: 8px; bottom: 8px;
   width: 3px; border-radius: 2px; background: var(--bb-accent);
 }
-.avs-admin-tab-icon { font-size: 15px; width: 18px; text-align: center; flex: 0 0 auto; }
+.avs-admin-tab-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; flex: 0 0 auto; }
+/* currentColor, so the icon dims and lights with its label instead of staying a
+   fixed-colour emoji through hover and the active state. */
+.avs-admin-tab-icon svg { width: 16px; height: 16px; display: block; }
 .avs-admin-tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .avs-admin-body {
   padding: 28px 36px; overflow-y: auto;
 }
 .avs-admin-section-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--bb-sp-8);
   margin-bottom: 22px; padding-bottom: 16px;
   border-bottom: 1px solid var(--bb-border);
 }
@@ -672,22 +771,22 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
   margin: 0; font-family: var(--bb-display); font-size: 21px; font-weight: 600;
   letter-spacing: -.02em;
 }
-.avs-admin-section-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.avs-admin-section-actions { display: flex; gap: var(--bb-sp-4); flex-shrink: 0; }
 .avs-admin-empty {
   padding: 56px 20px; text-align: center;
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  display: flex; flex-direction: column; align-items: center; gap: var(--bb-sp-5);
   max-width: 480px; margin: 24px auto;
 }
 .avs-admin-empty-icon { font-size: 40px; opacity: .5; }
 .avs-admin-empty > div:not(.avs-admin-empty-icon) {
-  font-size: 13.5px; line-height: 1.55; color: var(--bb-ink-muted);
+  font-size: var(--bb-text-lg); line-height: 1.55; color: var(--bb-ink-muted);
 }
 .avs-admin-error {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: var(--bb-sp-5);
   padding: 14px 16px; margin-top: 4px;
   background: color-mix(in srgb, var(--bb-danger) 10%, transparent);
   border: 1px solid color-mix(in srgb, var(--bb-danger) 32%, transparent);
-  border-radius: var(--bb-r-md); color: var(--bb-danger); font-size: 13px;
+  border-radius: var(--bb-r-md); color: var(--bb-danger); font-size: var(--bb-text-md);
 }
 .avs-admin-error::before { content: "⚠"; font-size: 15px; flex: 0 0 auto; }
 .avs-admin-loading {
@@ -702,21 +801,21 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 @keyframes avs-admin-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .avs-admin-loading::after { animation: none; } }
 .avs-admin-table {
-  width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 13px;
+  width: 100%; border-collapse: collapse; margin-top: 4px; font-size: var(--bb-text-md);
 }
 .avs-admin-table th, .avs-admin-table td {
   padding: 11px 14px; text-align: left; vertical-align: middle;
   border-bottom: 1px solid var(--bb-border);
 }
 .avs-admin-table thead th {
-  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--bb-ink-faint); font-weight: 600;
+  font-size: var(--bb-text-xs); text-transform: uppercase; letter-spacing: .06em;
+  color: var(--bb-ink-quiet); font-weight: 600;
   border-bottom: 1px solid var(--bb-border-strong);
 }
 .avs-admin-table tbody tr { transition: background var(--bb-trans-fast); }
 .avs-admin-table tbody tr:hover { background: var(--bb-fill-soft); }
 .avs-admin-table tbody tr:last-child td { border-bottom: 0; }
-.avs-admin-table code { font-size: 11.5px; color: var(--bb-ink-muted); }
+.avs-admin-table code { font-size: var(--bb-text-sm); color: var(--bb-ink-muted); }
 .avs-admin-cards {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 14px;
@@ -732,15 +831,15 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
   margin: 0 0 8px; font-family: var(--bb-display); font-size: 15px; font-weight: 600;
   letter-spacing: -.01em;
 }
-.avs-admin-card-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.avs-admin-card-actions { display: flex; gap: var(--bb-sp-4); margin-top: 14px; flex-wrap: wrap; }
 .avs-admin-filter {
-  display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; align-items: center;
+  display: flex; gap: var(--bb-sp-4); margin-bottom: 18px; flex-wrap: wrap; align-items: center;
 }
 .avs-admin-filter input, .avs-admin-filter select {
   padding: 7px 11px; border-radius: var(--bb-r-sm);
   background: var(--bb-bg-2);
   border: 1px solid var(--bb-border);
-  color: var(--bb-ink); font-size: 13px;
+  color: var(--bb-ink); font-size: var(--bb-text-md);
   transition: border-color var(--bb-trans-fast), box-shadow var(--bb-trans-fast);
 }
 .avs-admin-filter input:focus-visible, .avs-admin-filter select:focus-visible {
@@ -748,7 +847,7 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 }
 .avs-codeblock {
   background: var(--bb-fill-soft); padding: 12px; border-radius: 4px;
-  font-family: var(--bb-mono, monospace); font-size: 12px;
+  font-family: var(--bb-mono, monospace); font-size: var(--bb-text-sm);
   user-select: all; word-break: break-all; white-space: pre-wrap;
   position: relative; cursor: copy;
   transition: background 120ms ease;
@@ -756,14 +855,14 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 .avs-codeblock:hover { background: var(--bb-fill-softer); }
 .avs-codeblock::after {
   content: '📋'; position: absolute; right: 8px; top: 6px;
-  font-size: 11px; opacity: .55; pointer-events: none;
+  font-size: var(--bb-text-xs); opacity: .55; pointer-events: none;
   transition: opacity 120ms ease;
 }
 .avs-codeblock:hover::after { opacity: 1; }
 .avs-codeblock.avs-copied { background: color-mix(in srgb, var(--bb-success) 18%, transparent); }
 .avs-codeblock.avs-copied::after { content: '✓ kopiert'; opacity: 1; color: var(--bb-success); }
 .avs-license-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--bb-sp-6);
   margin-bottom: 24px;
 }
 .avs-stat {
@@ -778,31 +877,38 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 }
 .avs-stat span {
   display: block; margin-top: 4px;
-  font-size: 11px; color: var(--bb-ink-muted);
+  font-size: var(--bb-text-xs); color: var(--bb-ink-muted);
   text-transform: uppercase; letter-spacing: .05em; font-weight: 600;
 }
 .avs-brandkit-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--bb-sp-6);
 }
 .avs-brandkit-grid label {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 12px; border-radius: 6px;
   background: var(--bb-bg-2);
   border: 1px solid var(--bb-border);
-  font-size: 13px;
+  font-size: var(--bb-text-md);
 }
 .avs-brandkit-grid input[type="color"] {
   width: 40px; height: 28px; border: 0; background: transparent; cursor: pointer;
 }
-.avs-bk-row { display: inline-flex; align-items: center; gap: 8px; }
-.avs-bk-row code { font-size: 11px; opacity: .75; min-width: 60px; }
+.avs-bk-row { display: inline-flex; align-items: center; gap: var(--bb-sp-4); }
+.avs-bk-row code { font-size: var(--bb-text-xs); opacity: .75; min-width: 60px; }
 
 .avs-dc-deviceicon {
-  font-size: 18px; line-height: 1; opacity: .85;
+  display: inline-flex; align-items: center;
+  color: var(--bb-ink-muted);
   margin-left: 2px;
 }
-.avs-flex-row { display: flex; gap: 8px; align-items: center; }
-.avs-muted { opacity: .55; font-size: 12px; }
+/* Inline status flags in the card's sub-line (locked, touch). They ride the
+   surrounding 11px text, so they sit on the baseline rather than on the cap
+   height — otherwise a 11px icon between two dot separators looks lifted. */
+.avs-dc-flag { display: inline-flex; vertical-align: -1px; color: var(--bb-ink-faint); }
+.avs-dc-running svg { vertical-align: -1px; margin-right: 2px; }
+.avs-iconbtn svg { width: 16px; height: 16px; display: block; }
+.avs-flex-row { display: flex; gap: var(--bb-sp-4); align-items: center; }
+.avs-muted { opacity: .55; font-size: var(--bb-text-sm); }
 
 /* ---------- Per-Display Drawer ---------- */
 .avs-drawer-backdrop {
@@ -839,7 +945,7 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 }
 .avs-drawer-tab {
   padding: 10px 14px; background: none; border: 0; cursor: pointer;
-  color: inherit; opacity: .6; font-size: 13px; white-space: nowrap;
+  color: inherit; opacity: .6; font-size: var(--bb-text-md); white-space: nowrap;
   border-bottom: 2px solid transparent;
 }
 .avs-drawer-tab:hover { opacity: .9; }
@@ -848,32 +954,50 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 }
 .avs-drawer-body { padding: 18px 20px; overflow-y: auto; flex: 1; }
 .avs-drawer-body h4 {
-  margin: 16px 0 8px; font-size: 13px; text-transform: uppercase;
+  margin: 16px 0 8px; font-size: var(--bb-text-md); text-transform: uppercase;
   opacity: .55; letter-spacing: .04em;
 }
 .avs-drawer-body h4:first-child { margin-top: 0; }
 .avs-capbadges {
-  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;
+  display: flex; flex-wrap: wrap; gap: var(--bb-sp-3); margin-top: 6px;
 }
 .avs-capbadge {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 4px 8px; border-radius: 12px; font-size: 11px;
+  display: inline-flex; align-items: center; gap: var(--bb-sp-2);
+  padding: 4px 8px; border-radius: 12px; font-size: var(--bb-text-xs);
   background: var(--bb-fill-soft);
   border: 1px solid var(--bb-border-strong);
 }
+.avs-capbadge svg { width: 12px; height: 12px; display: block; flex: 0 0 auto; }
+/* A capability the display explicitly reported as MISSING. Struck through and
+   dimmed, so "can't do this" reads differently from "can" at a glance instead
+   of being conveyed by absence — absence now means "never reported". */
+.avs-capbadge-no {
+  color: var(--bb-ink-faint);
+  text-decoration: line-through;
+  background: transparent;
+  border-style: dashed;
+}
+/* Shown INSTEAD of the badge row when there is nothing to report — a panel that
+   looks empty and a panel that looks populated must not be the same thing. */
+.avs-capnote {
+  display: flex; align-items: center; gap: var(--bb-sp-3);
+  margin: 6px 0 0; font-size: var(--bb-text-sm); color: var(--bb-ink-muted);
+}
+.avs-capnote svg { flex: 0 0 auto; }
+.avs-capnote-warn { color: var(--bb-warn); margin-top: 8px; }
 
 /* ---------- Count chip in displays toolbar ---------- */
 .avs-disp-count {
   display: inline-block; margin-left: 10px;
   padding: 2px 10px; border-radius: 10px;
-  font-size: 11px; font-weight: 500; letter-spacing: .02em;
+  font-size: var(--bb-text-xs); font-weight: 500; letter-spacing: .02em;
   background: var(--bb-fill-soft); color: var(--bb-ink);
   opacity: .75; vertical-align: middle;
 }
 
 /* ---------- Bulk-select in Displays dashboard ---------- */
 .avs-bulkbar {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: var(--bb-sp-6);
   padding: 10px 16px; margin: 12px 0;
   background: color-mix(in srgb, var(--bb-accent) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--bb-accent) 35%, transparent);
@@ -883,15 +1007,15 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
 }
 .avs-bulkbar-count { font-weight: 600; }
-.avs-bulkbar-actions { display: flex; gap: 8px; margin-left: auto; }
+.avs-bulkbar-actions { display: flex; gap: var(--bb-sp-4); margin-left: auto; }
 .avs-display-filter {
-  display: flex; gap: 8px; padding: 10px 0; align-items: center; flex-wrap: wrap;
+  display: flex; gap: var(--bb-sp-4); padding: 10px 0; align-items: center; flex-wrap: wrap;
 }
 .avs-display-filter input:not([type="checkbox"]), .avs-display-filter select {
   padding: 7px 11px; border-radius: var(--bb-r-sm);
   background: var(--bb-bg-2);
   border: 1px solid var(--bb-border);
-  color: var(--bb-ink); font-size: 13px; width: auto;
+  color: var(--bb-ink); font-size: var(--bb-text-md); width: auto;
   transition: border-color var(--bb-trans-fast), box-shadow var(--bb-trans-fast);
 }
 /* Search grows to fill; the status/lock selects stay at their natural width.
@@ -907,10 +1031,10 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 .avs-binding-toggle {
   background: none; border: 0; cursor: pointer;
   color: inherit; opacity: .5; padding: 2px 6px;
-  font-size: 14px; border-radius: 4px;
+  font-size: var(--bb-text-lg); border-radius: 4px;
 }
 .avs-binding-toggle:hover { opacity: 1; background: var(--bb-fill-soft); }
-.avs-binding-toggle.avs-bound { opacity: 1; color: var(--bb-accent); }
+.avs-binding-toggle.avs-bound { opacity: 1; color: var(--bb-accent-ink); }
 .avs-binding-editor {
   margin: 8px 0; padding: 10px;
   background: var(--bb-accent-soft);
@@ -921,38 +1045,38 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
   display: block; width: 100%; margin-top: 4px;
   padding: 5px 8px; border-radius: 3px;
   background: var(--bb-bg-2); border: 1px solid var(--bb-border);
-  color: inherit; font-size: 12px;
+  color: inherit; font-size: var(--bb-text-sm);
   font-family: var(--bb-mono, monospace);
 }
-.avs-binding-editor label { font-size: 11px; opacity: .7; margin-top: 6px; display: block; }
+.avs-binding-editor label { font-size: var(--bb-text-xs); opacity: .7; margin-top: 6px; display: block; }
 
 /* ---------- Variants editor ---------- */
 .avs-variants {
   margin-top: 12px; padding: 10px;
   border: 1px dashed var(--bb-border-strong); border-radius: 6px;
 }
-.avs-variants h5 { margin: 0 0 6px; font-size: 12px; opacity: .7; text-transform: uppercase; letter-spacing: .04em; }
+.avs-variants h5 { margin: 0 0 6px; font-size: var(--bb-text-sm); opacity: .7; text-transform: uppercase; letter-spacing: .04em; }
 .avs-variant-row {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: var(--bb-sp-4);
   padding: 6px 0; border-bottom: 1px solid var(--bb-border);
 }
 .avs-variant-row:last-child { border-bottom: 0; }
 
 /* ---------- Store-templates library tab ---------- */
 .avs-store-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--bb-sp-4);
   padding: 8px;
 }
 .avs-store-card {
   padding: 10px; border-radius: 6px;
   background: var(--bb-bg-2);
   border: 1px solid var(--bb-border);
-  display: flex; flex-direction: column; gap: 6px;
+  display: flex; flex-direction: column; gap: var(--bb-sp-3);
 }
-.avs-store-card h6 { margin: 0; font-size: 13px; }
-.avs-store-card-actions { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.avs-store-card h6 { margin: 0; font-size: var(--bb-text-md); }
+.avs-store-card-actions { display: flex; flex-direction: column; gap: var(--bb-sp-2); margin-top: 4px; }
 .avs-store-card-actions button {
-  flex: 1; font-size: 11px; padding: 4px 6px;
+  flex: 1; font-size: var(--bb-text-xs); padding: 4px 6px;
   background: var(--bb-bg-2);
   border: 1px solid var(--bb-border-strong); border-radius: 3px;
   color: inherit; cursor: pointer;
@@ -962,7 +1086,7 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 /* ---------- 3-column responsive admin ---------- */
 @media (max-width: 800px) {
   .avs-admin { grid-template-columns: 1fr; }
-  .avs-admin-nav { flex-direction: row; overflow-x: auto; gap: 4px; border-right: 0;
+  .avs-admin-nav { flex-direction: row; overflow-x: auto; gap: var(--bb-sp-2); border-right: 0;
                    border-bottom: 1px solid var(--bb-border); padding: 8px 10px; }
   .avs-admin-tab { white-space: nowrap; }
   .avs-admin-tab.avs-on::before { display: none; }
@@ -972,12 +1096,12 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 /* ---------- v3: Variant-edit banner above the views ---------- */
 .avs-variant-banner {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 16px; gap: 12px;
+  padding: 8px 16px; gap: var(--bb-sp-6);
   background: linear-gradient(90deg,
     color-mix(in srgb, var(--bb-warn) 26%, transparent),
     color-mix(in srgb, var(--bb-accent) 16%, transparent));
   border-bottom: 1px solid color-mix(in srgb, var(--bb-warn) 50%, transparent);
-  color: color-mix(in srgb, var(--bb-warn) 45%, var(--bb-ink)); font-size: 13px;
+  color: color-mix(in srgb, var(--bb-warn) 45%, var(--bb-ink)); font-size: var(--bb-text-md);
 }
 .avs-variant-banner-label { font-weight: 600; }
 
@@ -989,7 +1113,7 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
   border-radius: 6px;
 }
 .avs-variants-details > summary {
-  cursor: pointer; font-size: 13px; padding: 4px 0;
+  cursor: pointer; font-size: var(--bb-text-md); padding: 4px 0;
   user-select: none;
 }
 .avs-variants-details[open] > summary { margin-bottom: 8px; }
@@ -998,7 +1122,7 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
   padding: 1px 8px; border-radius: 8px;
   background: color-mix(in srgb, var(--bb-accent) 20%, transparent);
   color: color-mix(in srgb, var(--bb-accent) 55%, var(--bb-ink));
-  font-size: 11px; font-weight: 600;
+  font-size: var(--bb-text-xs); font-weight: 600;
 }
 
 /* ---------- Bulk-checkbox in display card ---------- */
@@ -1008,8 +1132,9 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 
 /* ---------- v3 Slide-Rail badges (lang/AB/brand/binding indicators) ---------- */
 .avs-slide-badge {
-  display: inline-block; margin-left: 2px;
-  font-size: 10px; opacity: .75; cursor: help;
+  display: inline-flex; align-items: center; margin-left: 2px;
+  font-size: var(--bb-text-2xs); opacity: .75; cursor: help;
+  vertical-align: -1px;
 }
 .avs-slide-card:hover .avs-slide-badge { opacity: 1; }
 
@@ -1022,7 +1147,7 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 .avs-plan-badge {
   display: inline-block; margin-left: 6px;
   padding: 1px 6px; border-radius: 8px;
-  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  font-size: var(--bb-text-2xs); font-weight: 600; text-transform: uppercase;
   letter-spacing: .04em; line-height: 1.4;
   background: var(--bb-fill-softer); color: inherit;
 }

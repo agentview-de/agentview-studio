@@ -273,3 +273,73 @@ describe('createWidget contentVersion', () => {
     expect('contentVersion' in createWidget('foo', { contentVersion: undefined })).toBeFalsy();
   });
 });
+
+// A slide's language and A/B variants carry widgets too, and the migrator only
+// ever walked the default array. So a playlist saved by an older Studio had its
+// default widgets upgraded on load while the German variant kept the old shape
+// — for good, because the version stamp was never written there either.
+//
+// The proof that this was an oversight rather than a decision sits four lines
+// above applyWidgetMigrations in the same file: liftLegacyIconRotation, the
+// other legacy fix-up, walks langs and abVariants explicitly.
+//
+// The symptom is the display, not the file. image's `overlay` changed from a
+// 0…1 fraction to a 0…100 percent in v2: an unmigrated variant asks for a
+// 0.4 % dark overlay where the default has 40 %, i.e. none at all, with white
+// text sitting on top of it.
+describe('migrate · variants are widgets too', () => {
+  const overlayPlugin = {
+    type: 'image', schemaVersion: 2,
+    migrate: (content, from) => (from < 2 ? { ...content, overlay: Math.round((Number(content.overlay) || 0) * 100) } : content),
+  };
+  const reg = fakeRegistry([overlayPlugin]);
+  const img = (id) => ({ id, type: 'image', z: 1, rect: { x: 0, y: 0, w: 100, h: 100 }, content: { overlay: 0.4 } });
+
+  function withVariants() {
+    const pl = createPlaylist('t');
+    const s = createSlide({ duration: 10 });
+    s.widgets = [img('w_default')];
+    s.langs = { de: { widgets: [img('w_de')] }, fr: { widgets: [img('w_fr')] } };
+    s.abVariants = [{ label: 'B', widgets: [img('w_ab')] }];
+    pl.slides = [s];
+    return pl;
+  }
+
+  test('REGRESSION: a widget inside a language variant is migrated and stamped', () => {
+    const pl = applyWidgetMigrations(withVariants(), reg);
+    const s = pl.slides[0];
+    for (const w of [s.widgets[0], s.langs.de.widgets[0], s.langs.fr.widgets[0], s.abVariants[0].widgets[0]]) {
+      expect(w.content.overlay).toBe(40);
+      expect(w.contentVersion).toBe(2);
+    }
+  });
+
+  test('REGRESSION: an already-current variant widget is left alone', () => {
+    const pl = withVariants();
+    pl.slides[0].langs.de.widgets[0].contentVersion = 2;
+    pl.slides[0].langs.de.widgets[0].content.overlay = 40;
+    applyWidgetMigrations(pl, reg);
+    // Not migrated twice — 40 would have become 4000.
+    expect(pl.slides[0].langs.de.widgets[0].content.overlay).toBe(40);
+    expect(pl.slides[0].widgets[0].content.overlay).toBe(40);
+  });
+
+  test('a slide without variants still migrates exactly as before', () => {
+    const pl = createPlaylist('t');
+    const s = createSlide({ duration: 10 });
+    s.widgets = [img('only')];
+    pl.slides = [s];
+    applyWidgetMigrations(pl, reg);
+    expect(pl.slides[0].widgets[0].content.overlay).toBe(40);
+    expect(pl.slides[0].widgets[0].contentVersion).toBe(2);
+  });
+
+  test('an empty variant slot does not throw', () => {
+    const pl = withVariants();
+    pl.slides[0].langs.leer = {};
+    pl.slides[0].abVariants.push({ label: 'C' });
+    pl.slides[0].abVariants.push(null);
+    applyWidgetMigrations(pl, reg);
+    expect(pl.slides[0].langs.de.widgets[0].contentVersion).toBe(2);
+  });
+});

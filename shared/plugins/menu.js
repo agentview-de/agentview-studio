@@ -5,6 +5,9 @@ import { composeDispose } from '../plugin-contract.js';
 import { currencySymbol } from '../data/currencies.js';
 import { isSafeImgUrl } from '../safe-url.js';
 import { escapeHtml, escapeAttr } from '../utils/escape.js';
+import { localeField, safeLocale } from '../locale-field.js';
+import { mediaPlaceholder } from '../media-placeholder.js';
+import { anyRemote } from '../plugin-network.js';
 
 // Known dietary / allergen tags, keys are lowercase comma tokens the user
 // types into the `tags` column. Each maps to a badge label + colour. Unknown
@@ -39,6 +42,9 @@ function badgeFor(token) {
 
 export default register({
   type: 'menu',
+  // Only when a row really points at a remote picture: a text menu board —
+  // which is most of them — must not sit behind a consent click.
+  network: c => !!c?.showImages && anyRemote((c?.rows ?? []).map(r => r?.image)),
   label: 'Menu / Pricelist',
   group: 'basic',
   icon: '📋',
@@ -78,6 +84,7 @@ export default register({
     sectionFilter: '',
     footnote: '',
     textScale: 100,
+    locale: '',
     theme: 'bistro-warm',
   }),
   schema: () => ({
@@ -125,6 +132,8 @@ export default register({
       { key: 'hideZeroDecimals', type: 'toggle', label: 'Hide “.00” on whole prices', tier: 'advanced',
         showIf: c => c.showPrices !== false,
         help: 'Shows whole amounts as “12” instead of “12.00”; amounts with cents (12.50) keep both decimals.' },
+      { ...localeField(), tier: 'advanced',
+        help: 'Decides how a price is written: 4,50 € in German, 4.50 € in English. A signage box often runs an OS locale that has nothing to do with the room it hangs in.' },
 
       { type: 'section', key: 'appearance', label: 'Appearance' },
       { key: 'columns', type: 'select', buttons: true, label: 'Columns', tier: 'advanced',
@@ -185,10 +194,17 @@ export default register({
     // Price → display string. Numbers honour the hide-zero-decimals toggle;
     // non-numeric strings (e.g. "market price") pass through untouched. NaN
     // passthrough and tabular-nums alignment stay intact.
+    // toFixed() always writes a DOT. A menu board in a German café showing
+    // "4.50 €" is simply the wrong number format for the room — and the room is
+    // what this widget exists for. `safeLocale(locale)` per the locale-field
+    // contract: '' falls through to the device default.
+    const loc = safeLocale(c.locale);
     const fmtPrice = (price) => {
       let amount;
       if (typeof price === 'number') {
-        amount = (hideZeroDec && Number.isInteger(price)) ? String(price) : price.toFixed(2);
+        amount = (hideZeroDec && Number.isInteger(price))
+          ? price.toLocaleString(loc, { maximumFractionDigits: 0 })
+          : price.toLocaleString(loc, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       } else {
         const s = String(price ?? '').trim();
         if (!s) return '';
@@ -212,6 +228,20 @@ export default register({
       if (!allow(s)) continue;
       if (!bySection.has(s)) { bySection.set(s, []); order.push(s); }
       bySection.get(s).push(r);
+    }
+
+    // Thirty of the thirty-four widgets say something when they have nothing
+    // to show; this one drew an empty box. Deleting the last row — or mistyping
+    // the section filter — left a blank rectangle on the canvas that is
+    // indistinguishable from a broken widget, and a blank panel on the wall.
+    if (!order.length) {
+      const why = rows.length
+        ? 'No menu items match the section filter.'
+        : 'Add menu items in the inspector.';
+      const empty = mediaPlaceholder({ icon: '🍽️', message: why });
+      root.appendChild(empty);
+      container.appendChild(root);
+      return composeDispose(() => root.remove());
     }
 
     const renderTags = (raw) => {

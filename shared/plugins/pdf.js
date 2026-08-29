@@ -2,7 +2,7 @@ import { register } from './registry.js';
 import { composeDispose } from '../plugin-contract.js';
 import { inlinedVendorUrl } from '../inline-vendor.js';
 import { mediaPlaceholder } from '../media-placeholder.js';
-import { refreshSecField } from '../refresh-field.js';
+import { refreshSecField, refreshIntervalMs } from '../refresh-field.js';
 
 // pdf.js is loaded as a vendored script in both shells; we read from window.pdfjsLib.
 
@@ -281,7 +281,7 @@ export default register({
             } catch (e) {
               console.warn('PDF refresh failed — keeping the current document', e);
             }
-          }, Math.max(5000, refreshSec * 1000));
+          }, refreshIntervalMs(refreshSec));
         }
       } catch (e) {
         fail(e);

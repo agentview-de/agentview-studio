@@ -25,6 +25,7 @@ import { pickAsset, pickAssets } from '../ui/asset-library.js';
 import { saveWidgetAsPreset } from '../ui/custom-widget-actions.js';
 import { escapeHtml } from '../../shared/utils/escape.js';
 import { t, tx } from '../i18n.js';
+import { usesNetwork } from '../../shared/plugin-network.js';
 
 const clone = v => (v == null ? v : JSON.parse(JSON.stringify(v)));
 
@@ -135,7 +136,7 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
     // Mirror the canvas privacy gate: a network widget that would fetch live
     // data does NOT auto-fetch in the designer. Offer one-click consent (the
     // inspector's IP-note model) so the design can still be previewed.
-    if (plugin?.network && !isStored(working) && !isLivePreview(widget.id)) {
+    if (usesNetwork(plugin, working) && !isStored(working) && !isLivePreview(widget.id)) {
       const note = document.createElement('div');
       note.className = 'avs-dz-note';
       const msg = document.createElement('div');
@@ -341,7 +342,7 @@ export function openDesigner(widget, { onApply, slideRatio } = {}) {
     const grid = document.createElement('div');
     grid.className = 'avs-dz-looks-grid';
     looksHost.appendChild(grid);
-    const gated = plugin?.network && !isStored(working) && !isLivePreview(widget.id);
+    const gated = usesNetwork(plugin, working) && !isStored(working) && !isLivePreview(widget.id);
     for (const look of looks) {
       const card = document.createElement('button');
       card.type = 'button';

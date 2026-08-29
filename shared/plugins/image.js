@@ -3,7 +3,7 @@ import { mediaFitField, backgroundSizeValue } from '../media-fit.js';
 import { composeDispose } from '../plugin-contract.js';
 import { cssUrl } from '../safe-url.js';
 import { mediaPlaceholder } from '../media-placeholder.js';
-import { refreshSecField } from '../refresh-field.js';
+import { refreshSecField, refreshIntervalMs } from '../refresh-field.js';
 import { mixedContentWarning } from '../web-embed-fields.js';
 
 // Ken Burns keyframes — same id + frames as image-gallery.js injects, so
@@ -188,7 +188,7 @@ export default register({
       const refreshSec = Math.max(0, Number(c.refreshSec) || 0);
       if (refreshSec > 0) {
         // 5-second player floor (see refreshSecField contract).
-        timer = setInterval(() => load(cacheBust(c.url)), Math.max(5000, refreshSec * 1000));
+        timer = setInterval(() => load(cacheBust(c.url)), refreshIntervalMs(refreshSec));
       }
     } else {
       root.appendChild(mediaPlaceholder({

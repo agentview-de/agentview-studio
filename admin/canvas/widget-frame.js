@@ -61,7 +61,12 @@ export function makeInteractive(frameEl, { getStageRect, getRect, getRotation, o
     e.stopPropagation();
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp, { once: true });
-    frameEl.setPointerCapture?.(e.pointerId);
+    // Capture keeps the drag alive when the pointer leaves the frame — an
+    // improvement, not a requirement, and the listeners above are already
+    // wired. It THROWS when the pointer id is no longer active (a release that
+    // beat us here, a synthetic event), and an uncaught NotFoundError out of a
+    // pointerdown handler helps nobody.
+    try { frameEl.setPointerCapture?.(e.pointerId); } catch { /* drag works without it */ }
   }
 
   function onMove(e) {
@@ -123,12 +128,20 @@ export function makeInteractive(frameEl, { getStageRect, getRect, getRotation, o
   };
 }
 
+// Every rect in the editor passes through here, including ones that came from
+// an imported or hand-edited playlist. A component that was not a number used
+// to sail straight through — Math.min(100, undefined) is NaN — and NaN spreads:
+// `{ x: 10, y: 10 }` with no size came out with its VALID x and y destroyed
+// too, and a widget positioned at `left: NaN%` sits at the origin and refuses
+// to be dragged. A missing size falls back to the schema's own full-bleed
+// rect: visible, and obviously in need of attention.
 export function clampRect(r) {
+  const num = (v, fallback) => { const n = +v; return Number.isNaN(n) ? fallback : n; };
   const out = { ...r };
-  out.w = Math.max(MIN, Math.min(100, out.w));
-  out.h = Math.max(MIN, Math.min(100, out.h));
-  out.x = Math.max(0, Math.min(100 - out.w, out.x));
-  out.y = Math.max(0, Math.min(100 - out.h, out.y));
+  out.w = Math.max(MIN, Math.min(100, num(out.w, 100)));
+  out.h = Math.max(MIN, Math.min(100, num(out.h, 100)));
+  out.x = Math.max(0, Math.min(100 - out.w, num(out.x, 0)));
+  out.y = Math.max(0, Math.min(100 - out.h, num(out.y, 0)));
   // round to 0.1% for tidy JSON
   for (const k of ['x', 'y', 'w', 'h']) out[k] = Math.round(out[k] * 10) / 10;
   return out;
@@ -176,4 +189,32 @@ export function rotationFromPointer(px, py, cx, cy, snapDeg = 0) {
   let deg = (Math.atan2(py - cy, px - cx) * 180) / Math.PI + 90;
   if (snapDeg) deg = Math.round(deg / snapDeg) * snapDeg;
   return ((deg % 360) + 360) % 360;
+}
+
+// Move a widget to an edge or centre of the slide WITHOUT resizing it.
+//
+// The layout presets next door replace the whole rect — position and size —
+// which is a different job. "Centre this on the slide" is the commonest
+// operation in any slide editor and the only way to do it here was to work out
+// (100 - w) / 2 and type it into the X field.
+//
+// Percent of the slide throughout, so alignment is resolution-independent: a
+// widget centred here is centred on a 4K wall and on a phone-shaped portrait
+// screen alike.
+//
+// @param {{x:number,y:number,w:number,h:number}} rect
+// @param {'left'|'hcenter'|'right'|'top'|'vmiddle'|'bottom'} edge
+// @returns {object} a new rect; unknown edges return the input unchanged
+export function alignRect(rect, edge) {
+  const r = clampRect(rect);
+  switch (edge) {
+    case 'left':    r.x = 0; break;
+    case 'hcenter': r.x = (100 - r.w) / 2; break;
+    case 'right':   r.x = 100 - r.w; break;
+    case 'top':     r.y = 0; break;
+    case 'vmiddle': r.y = (100 - r.h) / 2; break;
+    case 'bottom':  r.y = 100 - r.h; break;
+    default: return r;
+  }
+  return clampRect(r);
 }

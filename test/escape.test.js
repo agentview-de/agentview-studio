@@ -69,7 +69,12 @@ describe('escapeAttr', () => {
     for (const v of samples) expect(escapeAttr(v)).toBe(escapeHtml(v));
   });
 
+  // DOM-only — skipped under the node runner, exercised by the browser suite.
+  // Everything above is a pure string transform and now runs on every `npm test`:
+  // this helper became the single escape implementation for the whole app, so its
+  // tests should not live only in a suite that has to be opened by hand.
   test('renders safely inside a double-quoted attribute', () => {
+    if (typeof document === 'undefined') return;
     const user = `" onerror="alert(1)`;
     const attr = `<img alt="${escapeAttr(user)}">`;
     // The result should parse as a single img element with one alt attribute.

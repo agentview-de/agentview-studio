@@ -49,7 +49,13 @@ const FIXED_PORT = val('--port', null);
 const OPEN_BROWSER = !has('--no-browser');
 
 const PROXY_PREFIXES = ['/api/', '/data/', '/send', '/oauth/', '/.well-known/'];
-const isProxied = (p) => PROXY_PREFIXES.some((x) => p === x || p.startsWith(x));
+// A prefix matches a whole path SEGMENT, never half of one. `/send` has no
+// trailing slash (it is an endpoint, not a folder), and a plain startsWith made
+// it swallow every static path that merely begins with those four letters:
+// `/sendungen.html` went to the upstream API and came back a 502 instead of
+// being served from disk.
+const isProxied = (p) => PROXY_PREFIXES.some((x) =>
+  p === x || (x.endsWith('/') ? p.startsWith(x) : p.startsWith(x + '/')));
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset=utf-8',
@@ -120,6 +126,18 @@ async function serveStatic(req, res, urlPath) {
   // Path-traversal guard: resolved path must stay under ROOT.
   if (file !== ROOT.replace(/[\\/]$/, '') && !file.startsWith(ROOT)) {
     res.writeHead(403, { 'content-type': 'text/plain' }); res.end('forbidden'); return;
+  }
+  // A dev server for a static SPA has no business handing out the repository
+  // around it: `.git/config` can carry a remote URL with a token, and
+  // node_modules is a few thousand files nothing here ever loads. A
+  // cross-origin page cannot READ these today (static responses carry no CORS
+  // headers), so this removes surface rather than closing a hole — but it is
+  // surface with no reason to exist. 404, not 403: no need to confirm what is
+  // there. `/.well-known` is unaffected — it is proxied before we get here.
+  if (/(^|[\\/])(\.[^\\/]|node_modules([\\/]|$))/.test(rel)) {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('404 not found: ' + rel);
+    return;
   }
   let s;
   try { s = await stat(file); } catch {

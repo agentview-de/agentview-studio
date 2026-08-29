@@ -77,13 +77,25 @@ END:VEVENT`);
     expect(events[0].SUMMARY).toBe('Quarterly review');
   });
 
-  test('property parameters (TZID=…) are stripped from the key', () => {
+  test('property parameters are stripped from the key — and kept where they matter', () => {
     const events = parseIcs(ics`BEGIN:VEVENT
 DTSTART;TZID=Europe/Berlin:20260601T090000
 END:VEVENT`);
     // Key is reduced to DTSTART; the value keeps the raw timestamp.
     expect(events[0].DTSTART).toBe('20260601T090000');
     expect('DTSTART;TZID=Europe/Berlin' in events[0]).toBe(false);
+    // …but the zone is not thrown away: without it "09:00" means nothing to
+    // anyone standing somewhere else.
+    expect(events[0].params.DTSTART.TZID).toBe('Europe/Berlin');
+  });
+
+  test('a quoted parameter value and several parameters at once', () => {
+    const events = parseIcs(ics`BEGIN:VEVENT
+DTSTART;VALUE=DATE-TIME;TZID="Europe/Berlin":20260601T090000
+END:VEVENT`);
+    expect(events[0].DTSTART).toBe('20260601T090000');
+    expect(events[0].params.DTSTART.TZID).toBe('Europe/Berlin');
+    expect(events[0].params.DTSTART.VALUE).toBe('DATE-TIME');
   });
 
   test('lines outside a VEVENT block are ignored', () => {
@@ -216,5 +228,115 @@ SUMMARY:Ancient
 DTSTART:${fmt(longAgo)}
 END:VEVENT`;
     expect(upcomingEvents(text)).toEqual([]);
+  });
+});
+
+// A wall time plus the zone it belongs to.
+//
+// `DTSTART;TZID=Europe/Berlin:20260830T090000` is what Google and Outlook write
+// for every timed event. The zone used to be dropped and the wall time read as
+// the DISPLAY's local time — so a Berlin meeting on a New York screen sat there
+// saying 09:00, six hours late, and nothing said otherwise.
+//
+// Every assertion below is on the resulting INSTANT, so the suite means the
+// same thing on any machine.
+describe('ics · TZID is the difference between a wall time and an instant', () => {
+  const startOf = (text) => allEvents(text)[0].start;
+
+  test('REGRESSION: the same wall time in two zones is not the same instant', () => {
+    // The assertion that means the same thing on every machine. Read as local
+    // time — which is what dropping the zone amounts to — these two parse
+    // identically and the gap is zero, wherever the suite happens to run.
+    const berlin = startOf(ics`BEGIN:VEVENT
+DTSTART;TZID=Europe/Berlin:20260830T090000
+END:VEVENT`);
+    const newYork = startOf(ics`BEGIN:VEVENT
+DTSTART;TZID=America/New_York:20260830T090000
+END:VEVENT`);
+    expect((newYork - berlin) / 3600000).toBe(6);
+  });
+
+  test('REGRESSION: a zoned summer time resolves to the right instant', () => {
+    // 09:00 Berlin in August is CEST, UTC+2.
+    const d = startOf(ics`BEGIN:VEVENT
+DTSTART;TZID=Europe/Berlin:20260830T090000
+END:VEVENT`);
+    expect(d.toISOString()).toBe('2026-08-30T07:00:00.000Z');
+  });
+
+  test('REGRESSION: the same wall time in winter is an hour further from UTC', () => {
+    // 09:00 Berlin in January is CET, UTC+1 — proof the offset is read AT the
+    // instant rather than taken as a constant.
+    const d = startOf(ics`BEGIN:VEVENT
+DTSTART;TZID=Europe/Berlin:20260130T090000
+END:VEVENT`);
+    expect(d.toISOString()).toBe('2026-01-30T08:00:00.000Z');
+  });
+
+  test('a zone on the other side of the world, and one with a half-hour offset', () => {
+    expect(startOf(ics`BEGIN:VEVENT
+DTSTART;TZID=America/New_York:20260830T090000
+END:VEVENT`).toISOString()).toBe('2026-08-30T13:00:00.000Z');
+    expect(startOf(ics`BEGIN:VEVENT
+DTSTART;TZID=Asia/Kolkata:20260830T090000
+END:VEVENT`).toISOString()).toBe('2026-08-30T03:30:00.000Z');
+  });
+
+  test('DTEND carries its own zone', () => {
+    const [e] = allEvents(ics`BEGIN:VEVENT
+DTSTART;TZID=Europe/Berlin:20260830T090000
+DTEND;TZID=Europe/Berlin:20260830T103000
+END:VEVENT`);
+    expect(e.end.toISOString()).toBe('2026-08-30T08:30:00.000Z');
+  });
+
+  test('a Z value ignores any zone it is given — it is already an instant', () => {
+    expect(startOf(ics`BEGIN:VEVENT
+DTSTART;TZID=Europe/Berlin:20260830T070000Z
+END:VEVENT`).toISOString()).toBe('2026-08-30T07:00:00.000Z');
+  });
+
+  test('a floating time still belongs to whoever reads it', () => {
+    // No zone, no Z: the spec says this is the reader's local wall time, and a
+    // display showing its own building's schedule depends on that.
+    const d = startOf(ics`BEGIN:VEVENT
+DTSTART:20260830T090000
+END:VEVENT`);
+    expect(d.getHours()).toBe(9);
+    expect(d.getMinutes()).toBe(0);
+  });
+
+  test('an all-day date stays local midnight, zone or no zone', () => {
+    for (const line of ['DTSTART;TZID=Asia/Tokyo:20260830', 'DTSTART:20260830']) {
+      const d = startOf(`BEGIN:VEVENT\n${line}\nEND:VEVENT`);
+      expect(d.getHours()).toBe(0);
+      expect(d.getDate()).toBe(30);
+    }
+  });
+
+  test('a zone nobody has heard of falls back to local instead of throwing', () => {
+    const d = startOf(ics`BEGIN:VEVENT
+DTSTART;TZID=Mittelerde/Auenland:20260830T090000
+END:VEVENT`);
+    expect(d.getHours()).toBe(9);
+  });
+
+  test('the hour that does not exist still yields a usable instant', () => {
+    // Europe/Berlin jumps 02:00 → 03:00 on 29 March 2026, so 02:30 never
+    // happens. A calendar can still contain it; the player must not show
+    // "Invalid Date" on a wall.
+    const d = startOf(ics`BEGIN:VEVENT
+DTSTART;TZID=Europe/Berlin:20260329T023000
+END:VEVENT`);
+    expect(Number.isNaN(d.getTime())).toBeFalsy();
+    expect(d.toISOString()).toBe('2026-03-29T01:30:00.000Z');
+  });
+
+  test('the hour that happens twice resolves to one of them, not to neither', () => {
+    // 25 October 2026, 02:30 Berlin exists twice (CEST then CET).
+    const d = startOf(ics`BEGIN:VEVENT
+DTSTART;TZID=Europe/Berlin:20261025T023000
+END:VEVENT`);
+    expect(['2026-10-25T00:30:00.000Z', '2026-10-25T01:30:00.000Z']).toContain(d.toISOString());
   });
 });

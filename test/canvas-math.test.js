@@ -126,3 +126,62 @@ describe('canvas-math · computeSnap', () => {
     expect(SNAP).toBe(1.5);
   });
 });
+
+// A geometry function must never hand back something that is not a number.
+//
+// `zoom` lives in canvas.js module state and every gesture reads it, so ONE
+// NaN was permanent: the stage collapsed to `scale(NaN)` and no amount of
+// panning, zooming or clicking brought it back — only a page reload. The path
+// in was ordinary: inline-edit calls zoomToWidget() with whatever rect the
+// widget carries, and an imported or hand-edited playlist can carry a rect
+// with a missing size.
+describe('canvas-math · one bad number must not kill the canvas', () => {
+  test('REGRESSION: a malformed widget rect does not produce NaN', () => {
+    const t = widgetTransform(1600, 900, 1920, 1080, { x: 0, y: 0, w: 'abc', h: 10 });
+    expect(Number.isFinite(t.zoom)).toBe(true);
+    expect(Number.isFinite(t.panX)).toBe(true);
+    expect(Number.isFinite(t.panY)).toBe(true);
+  });
+
+  test('REGRESSION: a rect with no size at all is still a transform', () => {
+    const t = widgetTransform(1600, 900, 1920, 1080, { x: 10, y: 10 });
+    expect(Number.isFinite(t.zoom)).toBe(true);
+    expect(t.zoom >= 0.1 && t.zoom <= 4).toBe(true);
+  });
+
+  test('REGRESSION: a poisoned state cannot outlive the gesture', () => {
+    // Even if something upstream ever does go bad, the next zoom recovers
+    // instead of carrying it forward — which is what "state" made so costly.
+    const t = zoomAroundPoint(10, 10, 1.2, { zoom: NaN, panX: NaN, panY: NaN });
+    expect(Number.isFinite(t.zoom)).toBe(true);
+    expect(Number.isFinite(t.panX)).toBe(true);
+    expect(Number.isFinite(t.panY)).toBe(true);
+  });
+
+  test('clampZoom answers with a usable zoom for any input', () => {
+    for (const bad of [NaN, Infinity, -Infinity, undefined, null, 'x', {}]) {
+      const z = clampZoom(bad);
+      expect(Number.isFinite(z)).toBe(true);
+      expect(z >= 0.1 && z <= 4).toBe(true);
+    }
+  });
+});
+
+describe('canvas-math · Fit honours the same bounds as the buttons', () => {
+  test('REGRESSION: a narrow window does not fit below the minimum', () => {
+    // 150/1920 × 0.92 = 7%, under the 10% the zoom buttons can reach — so
+    // pressing "−" made the canvas bigger.
+    const t = fitTransform(150, 400, 1920, 1080);
+    expect(t.zoom).toBe(0.1);
+  });
+
+  test('REGRESSION: a tiny canvas size does not fit to 3680%', () => {
+    const t = fitTransform(1600, 900, 40, 20);
+    expect(t.zoom).toBe(4);
+  });
+
+  test('an ordinary fit is unchanged', () => {
+    const t = fitTransform(1600, 900, 1920, 1080);
+    expect(Math.round(t.zoom * 1000) / 1000).toBe(0.767);
+  });
+});

@@ -41,7 +41,7 @@ export function mountLicenses(body) {
             </tr>`))}
         ` : ''}
         <div class="bb-form-group" style="margin-top:16px;">
-          <label>${esc(t('lic.poolExtension', { org: activeOrgRow?.name ?? orgId ?? t('lic.none') }))}</label>
+          <label for="lic-delta">${esc(t('lic.poolExtension', { org: activeOrgRow?.name ?? orgId ?? t('lic.none') }))}</label>
           <p class="bb-form-help" style="font-size:11px;">${esc(t('lic.poolExtensionHelp', { org: orgId ?? '…' }))}</p>
           <div class="avs-flex-row">
             <input type="number" id="lic-delta" min="1" value="1" style="max-width:100px;">

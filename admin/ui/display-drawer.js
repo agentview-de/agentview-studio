@@ -5,14 +5,24 @@
 // (idempotent), populates from `state.fleet.displays`, and lazily fetches
 // per-tab data on demand.
 
+
 import { state } from '../store.js';
 import {
   displays as displaysApi, approval as approvalApi, grants as grantsApi,
   licensing as licensingApi, auth as authApi, slots as slotsApi, storeTemplates,
+  privacyModeOf, PREVIEW_LINK_TTL_S,
 } from '../api.js';
 import { t, tx } from '../i18n.js';
 import { toast } from './toast.js';
 import { extractSlotRefs } from '../../shared/store-template-preview.js';
+import { uiIconSvg } from '../../shared/data/ui-icons.js';
+import { readCapabilities, readLimitations } from '../../shared/display-capabilities.js';
+import { escapeHtml as esc } from '../../shared/utils/escape.js';
+import { fmtDateTime } from '../format-date.js';
+import { inertBackground } from './inert-background.js';
+import { confirmModal } from './modal.js';
+
+let unInert = null;
 
 const TABS = [
   { id: 'overview',     label: () => t('drawer.overview') },
@@ -21,6 +31,21 @@ const TABS = [
   { id: 'settings',     label: () => t('drawer.settings') },
   { id: 'access',       label: () => t('drawer.access') },
   { id: 'diagnostics',  label: () => t('drawer.diagnostics') },
+];
+
+// Display-setting enums, verbatim from the configure_display MCP schema — the
+// server rejects anything else, so they are listed rather than free-typed.
+// '' means "leave as the server has it" for the two optional string settings.
+const DISPLAY_LANGUAGES = [['', '—'], ['de', 'Deutsch'], ['en', 'English'], ['zh', '中文']];
+const WATERMARK_POSITIONS = ['', 'BottomLeft', 'BottomRight', 'TopLeft', 'TopRight'];
+// Per-display network policy (2.1.x). 'inherit' hands control back to the org
+// policy; 'whitelist-only' is only meaningful together with a whitelist, and
+// 'isolated' cuts the display off from every external origin.
+const CONNECTIVITY_MODES = [
+  ['inherit', 'drawer.connInherit'],
+  ['full-access', 'drawer.connFull'],
+  ['whitelist-only', 'drawer.connWhitelist'],
+  ['isolated', 'drawer.connIsolated'],
 ];
 
 // Per-display memory of the slot keys a Studio-initiated send installed, so the
@@ -45,13 +70,17 @@ function ensureMounted() {
   root.className = 'avs-drawer';
   root.setAttribute('role', 'dialog');
   root.setAttribute('aria-modal', 'true');
+  // A dialog needs a name. The heading below carries the display's name, which
+  // is exactly what a screen reader should announce when this opens — without
+  // this the drawer is announced as an unnamed dialog.
+  root.setAttribute('aria-labelledby', 'drw-title');
   root.innerHTML = `
     <header class="avs-drawer-head">
       <h3 id="drw-title">…</h3>
       <button class="avs-drawer-close" aria-label="${t('drawer.close')}">×</button>
     </header>
     <nav class="avs-drawer-tabs" id="drw-tabs"></nav>
-    <div class="avs-drawer-body" id="drw-body"></div>`;
+    <div class="avs-drawer-body" id="drw-body" role="tabpanel" tabindex="0"></div>`;
   document.body.append(backdrop, root);
   root.querySelector('.avs-drawer-close').addEventListener('click', close);
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && root.classList.contains('avs-on')) close(); });
@@ -64,10 +93,10 @@ export function open(displayId) {
   root.querySelector('#drw-title').textContent = d?.name ?? displayId;
   const tabsBar = root.querySelector('#drw-tabs');
   tabsBar.innerHTML = TABS.map(tab =>
-    `<button class="avs-drawer-tab" data-tab="${tab.id}">${tab.label()}</button>`).join('');
+    `<button class="avs-drawer-tab" id="drw-tab-${tab.id}" data-tab="${tab.id}"
+             aria-controls="drw-body">${tab.label()}</button>`).join('');
   tabsBar.querySelectorAll('.avs-drawer-tab').forEach(b => {
     b.setAttribute('role', 'tab');
-    b.setAttribute('tabindex', '0');
     b.addEventListener('click', () => switchTab(b.dataset.tab));
     // Keyboard navigation between tabs — left/right cycles, Home/End jump.
     b.addEventListener('keydown', e => {
@@ -90,6 +119,11 @@ export function open(displayId) {
   // We also clear any stale inline transform from a prior close() interruption.
   backdrop.style.opacity = '';
   root.style.transform = '';
+  // The rest of the page out of the accessibility tree, not just out of the
+  // tab order — see ui/inert-background.js.
+  unInert?.();
+  // Der Backdrop bleibt bedienbar: er schließt den Drawer per Klick.
+  unInert = inertBackground([root, backdrop]);
   setTimeout(() => {
     backdrop.classList.add('avs-on');
     root.classList.add('avs-on');
@@ -104,6 +138,8 @@ export function open(displayId) {
 
 export function close() {
   if (!root) return;
+  unInert?.();
+  unInert = null;
   backdrop.classList.remove('avs-on');
   root.classList.remove('avs-on');
   state.ui.displayDrawer = null;
@@ -115,8 +151,19 @@ export function close() {
 
 function switchTab(id) {
   state.ui.displayDrawerTab = id;
-  root.querySelectorAll('.avs-drawer-tab').forEach(b => b.classList.toggle('avs-on', b.dataset.tab === id));
+  // The active tab was marked with a CSS class alone: six buttons that a
+  // screen reader announced as equal, and six Tab stops instead of the one the
+  // tabs pattern asks for. aria-selected says which is current; the roving
+  // tabindex makes the strip a single stop that the arrow keys move inside
+  // (the same shape the slide rail uses).
+  root.querySelectorAll('.avs-drawer-tab').forEach(b => {
+    const on = b.dataset.tab === id;
+    b.classList.toggle('avs-on', on);
+    b.setAttribute('aria-selected', String(on));
+    b.tabIndex = on ? 0 : -1;
+  });
   const body = root.querySelector('#drw-body');
+  body.setAttribute('aria-labelledby', `drw-tab-${id}`);
   body.innerHTML = '<div class="avs-admin-loading">…</div>';
   Promise.resolve(({
     overview: renderOverview,
@@ -132,49 +179,65 @@ function switchTab(id) {
 
 // ---------- Tabs ----------
 
+// Renders what shared/display-capabilities.js says the response justifies. The
+// three-state decision (reported yes / reported no / never reported) lives there
+// as pure logic with its own test suite; this function only paints it.
+const FACT_TITLES = {
+  resolution: () => tx('Resolution'),
+  browser:    () => 'Browser',
+  platform:   () => tx('Operating system'),
+  touch:      () => tx('Touch input'),
+};
+
+function capabilityBadges(caps) {
+  const { reported, facts, features } = readCapabilities(caps);
+  if (!reported) {
+    return `<p class="avs-capnote">${uiIconSvg('info', 13)} ${esc(tx('This display has not reported its capabilities.'))}</p>`;
+  }
+  const badges = [
+    ...facts.map(f => `<span class="avs-capbadge" title="${esc(FACT_TITLES[f.kind]?.() ?? f.kind)}">${
+      f.kind === 'touch' ? uiIconSvg('touch', 12) + ' ' : ''}${esc(f.text)}</span>`),
+    ...features.map(f => f.supported
+      ? `<span class="avs-capbadge" title="${esc(f.title)}">${esc(f.label)}</span>`
+      : `<span class="avs-capbadge avs-capbadge-no" title="${esc(f.title)} — ${esc(tx('not supported'))}">${esc(f.label)}</span>`),
+  ];
+  if (!badges.length) {
+    return `<p class="avs-capnote">${uiIconSvg('info', 13)} ${esc(tx('The capabilities report arrived empty.'))}</p>`;
+  }
+  return `<div class="avs-capbadges">${badges.join('')}</div>`;
+}
+
 async function renderOverview(body, id) {
   const d = (state.fleet.displays ?? []).find(x => x.id === id) ?? {};
   let caps = null;
   try { caps = await displaysApi.capabilities(id); } catch { caps = null; }
   // Real shape (verified against agentview.de): caps.runtime.{browser,screen,features,input,platform}
-  // + caps.status.{isOnline, lastSeen, statusHint, isReachable}.
-  const rt = caps?.runtime ?? {};
-  const br = rt.browser ?? {};
-  const sz = rt.screen ?? caps?.screen ?? {};
-  const ft = rt.features ?? {};
-  const inp = rt.input ?? {};
+  // + caps.status.{isOnline, lastSeen, statusHint, isReachable}. Everything the
+  // capability panel shows is derived in shared/display-capabilities.js — note
+  // that `caps` is null whenever that request failed, which is exactly the case
+  // the reader has to refuse to guess about.
+  const limitations = readLimitations(caps);
   const stat = caps?.status ?? {};
-  const lastSeen = stat.lastSeen ?? d.lastSeen ?? d.lastFallbackPollAt ?? '—';
+  const lastSeen = fmtDateTime(stat.lastSeen ?? d.lastSeen ?? d.lastFallbackPollAt);
   const isOnline = d.isOnline ?? d.online ?? (d.status === 'online');
   body.innerHTML = `
     <h4>${tx('Status')}</h4>
-    <p>${isOnline ? '🟢 Online' : '⚫ Offline'} ·
+    <p><span class="avs-dot ${isOnline ? 'avs-on' : 'avs-off'}"></span> ${isOnline ? 'Online' : 'Offline'} ·
        <span class="avs-muted">${esc(d.id)}</span></p>
     <p class="avs-muted">${t('drawer.lastSeen')}: ${esc(lastSeen)}</p>
-    ${d.statusHint ? `<p class="avs-muted">💬 ${esc(d.statusHint)}</p>` : ''}
+    ${d.statusHint ? `<p class="avs-muted">${esc(d.statusHint)}</p>` : ''}
     <h4>${tx('Currently running')}</h4>
     <p>${esc(state.fleet.running?.[id] ?? '—')}</p>
     <h4>${t('drawer.capabilities')}</h4>
-    <div class="avs-capbadges">
-      ${sz.width ? `<span class="avs-capbadge" title="${tx('Resolution')}">📐 ${esc(sz.width)}×${esc(sz.height)}${sz.devicePixelRatio && sz.devicePixelRatio !== 1 ? ` @ ${esc(sz.devicePixelRatio)}x` : ''}</span>` : ''}
-      ${br.name ? `<span class="avs-capbadge" title="Browser">🌐 ${esc(br.name)} ${esc(br.major ?? br.version ?? '')}</span>` : ''}
-      ${rt.platform?.name ? `<span class="avs-capbadge" title="${tx('Operating system')}">💻 ${esc(rt.platform.name)}</span>` : ''}
-      ${inp.hasTouch || rt.hasTouch ? `<span class="avs-capbadge" title="${tx('Touch input')}">👆 Touch</span>` : ''}
-      ${ft.supportsFetch !== false ? `<span class="avs-capbadge" title="HTTP fetch()">📡 fetch</span>` : ''}
-      ${ft.supportsWebSockets !== false ? `<span class="avs-capbadge" title="WebSockets">🔌 WS</span>` : ''}
-      ${ft.supportsCssVariables !== false ? `<span class="avs-capbadge" title="CSS Custom Properties">🎨 CSS-Vars</span>` : ''}
-      ${ft.supportsBackdropFilter ? `<span class="avs-capbadge" title="backdrop-filter">✨ Backdrop</span>` : ''}
-      ${ft.supportsWebGl ? `<span class="avs-capbadge" title="WebGL">🎮 WebGL</span>` : ''}
-      ${ft.canRunCustomJavaScript === false ? `<span class="avs-capbadge" title="${tx('JavaScript blocked')}">🚫 JS</span>` : ''}
-    </div>
-    ${rt.knownLimitations?.length ? `<p class="avs-muted" style="margin-top:8px;">⚠️ ${esc(rt.knownLimitations.join(', '))}</p>` : ''}
+    ${capabilityBadges(caps)}
+    ${limitations.length ? `<p class="avs-capnote avs-capnote-warn">${uiIconSvg('alert', 13)} ${esc(limitations.join(', '))}</p>` : ''}
     <h4 style="margin-top:20px;">${tx('Actions')}</h4>
     <div class="avs-flex-row">
       <button class="bb-btn" id="dw-preview">${t('drawer.openPreview')}</button>
     </div>`;
   body.querySelector('#dw-preview').addEventListener('click', async () => {
     try {
-      const r = await displaysApi.previewLink(id);
+      const r = await displaysApi.previewLink(id, PREVIEW_LINK_TTL_S);
       // Server canonical key is previewUrl; older docs/MCP variants also surface
       // url / previewLink / shareUrl — try them all.
       const url = r?.previewUrl ?? r?.url ?? r?.previewLink ?? r?.shareUrl ?? r?.link;
@@ -228,7 +291,7 @@ async function renderContent(body, id) {
   body.querySelector('#ct-refresh').addEventListener('click', () => switchTab('content'));
   body.querySelector('#ct-view').addEventListener('click', async () => {
     try {
-      const r = await displaysApi.previewLink(id);
+      const r = await displaysApi.previewLink(id, PREVIEW_LINK_TTL_S);
       const url = r?.previewUrl ?? r?.url ?? r?.previewLink ?? r?.shareUrl ?? r?.link;
       if (url) window.open(url, '_blank', 'noopener'); else toast(t('content.noPreview'), { kind: 'warn' });
     } catch (e) { toast(e.message, { kind: 'error' }); }
@@ -299,7 +362,7 @@ async function renderContentTemplatePicker(host, id) {
     const q = search.value.trim(); lastQ = q;
     list.innerHTML = `<div class="avs-admin-loading">…</div>`;
     try {
-      const r = await storeTemplates.search(q);
+      const r = await storeTemplates.searchAll(q);
       if (q !== lastQ) return;
       const arr = Array.isArray(r) ? r : (r?.templates ?? r?.items ?? []);
       if (!arr.length) { list.innerHTML = `<p class="avs-muted">${t('store.empty')}</p>`; return; }
@@ -419,7 +482,10 @@ async function renderSettings(body, id) {
   let apiKeys = [];
   try {
     const keysRes = await authApi.apiKeyList();
-    apiKeys = Array.isArray(keysRes) ? keysRes : (keysRes?.apiKeys ?? keysRes?.items ?? []);
+    // The server's envelope key is `keys` (apiKeys/items are historical
+    // aliases). Missing it left this dropdown permanently empty, so the
+    // source-lock select showed no key to bind to.
+    apiKeys = Array.isArray(keysRes) ? keysRes : (keysRes?.keys ?? keysRes?.apiKeys ?? keysRes?.items ?? []);
   } catch (e) {
     console.warn("Failed to fetch API keys", e);
     toast(`${tx('API keys could not be loaded')}: ${e.message}`, { kind: 'warn' });
@@ -441,13 +507,13 @@ async function renderSettings(body, id) {
     <p class="bb-form-help">${t('drawer.sourceLockHelp') || tx('Binds the display exclusively to a specific API key. Other API keys can then no longer send content to this display.')}</p>
     <select id="s-lock-select" style="width: 100%; padding: 6px 8px; margin-bottom: 12px; background: var(--bb-bg-2); border: 1px solid var(--bb-border); color: var(--bb-ink); border-radius: var(--bb-r-sm);">
       <option value="">${t('drawer.noSourceLock') || tx('(No source lock)')}</option>
-      ${apiKeys.map(k => `<option value="${k.id}" ${k.id === currentLockId ? 'selected' : ''}>${esc(k.name ?? k.id)}</option>`).join('')}
+      ${apiKeys.map(k => { const kid = k.keyId ?? k.id ?? ''; return `<option value="${esc(kid)}" ${kid === currentLockId ? 'selected' : ''}>${esc(k.name ?? kid)}</option>`; }).join('')}
     </select>
 
     <h4>${t('drawer.privacy')}</h4>
     <select id="priv">
-      <option value="private" ${d.privacyMode === 'private' ? 'selected' : ''}>${tx('Private (1h TTL)')}</option>
-      <option value="public" ${d.privacyMode === 'public' ? 'selected' : ''}>${tx('Public (24h TTL)')}</option>
+      <option value="private" ${privacyModeOf(d) === 'private' ? 'selected' : ''}>${tx('Private (1h TTL)')}</option>
+      <option value="public" ${privacyModeOf(d) === 'public' ? 'selected' : ''}>${tx('Public (24h TTL)')}</option>
     </select>
 
     <h4>${t('drawer.embedOrigins')}</h4>
@@ -455,6 +521,29 @@ async function renderSettings(body, id) {
 
     <h4 style="margin-top:16px;">${t('drawer.idleContent')}</h4>
     <textarea id="idle" rows="3" placeholder="<div>${tx('Idle mode')}</div>">${esc(d.idleContent ?? '')}</textarea>
+
+    <h4>${t('drawer.appearance')}</h4>
+    <label class="bb-form-label" for="s-lang">${t('drawer.preferredLanguage')}</label>
+    <select id="s-lang">
+      ${DISPLAY_LANGUAGES.map(([v, label]) =>
+        `<option value="${v}" ${(d.preferredLanguage ?? '') === v ? 'selected' : ''}>${esc(label)}</option>`).join('')}
+    </select>
+    <label class="avs-flex-row"><input type="checkbox" id="s-cursor" ${d.showMouseCursor ? 'checked' : ''}> ${t('drawer.showCursor')}</label>
+    <label class="avs-flex-row"><input type="checkbox" id="s-badge" ${d.showBadgeOverlay ? 'checked' : ''}> ${t('drawer.showBadge')}</label>
+    <label class="bb-form-label" for="s-watermark">${t('drawer.watermarkPosition')}</label>
+    <select id="s-watermark">
+      ${WATERMARK_POSITIONS.map(v =>
+        `<option value="${v}" ${(d.watermarkPosition ?? '') === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
+    </select>
+
+    <h4>${t('drawer.connectivityMode')}</h4>
+    <p class="bb-form-help">${t('drawer.connectivityHelp')}</p>
+    <select id="s-conn">
+      ${CONNECTIVITY_MODES.map(([v, key]) =>
+        `<option value="${v}" ${(d.connectivityMode ?? 'inherit') === v ? 'selected' : ''}>${t(key)}</option>`).join('')}
+    </select>
+    <textarea id="s-whitelist" rows="3" placeholder="api.example.com&#10;cdn.example.com">${esc((d.whitelist ?? []).join('\n'))}</textarea>
+    <label class="avs-flex-row"><input type="checkbox" id="s-strict" ${d.strictWhitelist ? 'checked' : ''}> ${t('drawer.strictWhitelist')}</label>
 
     <h4>${t('drawer.gdprTitle')}</h4>
     <p class="bb-form-help">${t('drawer.gdprHelp')}</p>
@@ -476,10 +565,22 @@ async function renderSettings(body, id) {
   }));
   body.querySelector('#s-save').addEventListener('click', async () => {
     try {
+      // One configure call carries every setting. connectivityMode 'inherit'
+      // and an empty whitelist mean "fall back to the org policy" — they are
+      // sent explicitly so clearing a per-display override actually clears it.
+      const connectivityMode = body.querySelector('#s-conn').value;
+      const whitelist = body.querySelector('#s-whitelist').value.split(/\r?\n/).map(v => v.trim()).filter(Boolean);
       await displaysApi.configure(id, {
         allowCamera: body.querySelector('#cam').checked,
         allowMicrophone: body.querySelector('#mic').checked,
         allowGeolocation: body.querySelector('#geo').checked,
+        preferredLanguage: body.querySelector('#s-lang').value || undefined,
+        showMouseCursor: body.querySelector('#s-cursor').checked,
+        showBadgeOverlay: body.querySelector('#s-badge').checked,
+        watermarkPosition: body.querySelector('#s-watermark').value || undefined,
+        connectivityMode,
+        whitelist,
+        strictWhitelist: body.querySelector('#s-strict').checked,
       });
       await displaysApi.setPrivacyMode(id, body.querySelector('#priv').value);
       
@@ -494,7 +595,7 @@ async function renderSettings(body, id) {
     } catch (e) { toast(e.message, { kind: 'error' }); }
   });
   body.querySelector('#s-rot-managed').addEventListener('click', async () => {
-    const proceed = confirm(t('drawer.rotManagedConfirm'));
+    const proceed = await confirmModal({ message: t('drawer.rotManagedConfirm') });
     if (!proceed) return;
     try {
       await displaysApi.rotateManagedSecret(id);
@@ -502,7 +603,7 @@ async function renderSettings(body, id) {
     } catch (e) { toast(e.message, { kind: 'error' }); }
   });
   body.querySelector('#s-rev-managed').addEventListener('click', async () => {
-    const proceed = confirm(t('drawer.revManagedConfirm'));
+    const proceed = await confirmModal({ message: t('drawer.revManagedConfirm') });
     if (!proceed) return;
     try {
       await displaysApi.revokeManagedSecret(id);
@@ -510,7 +611,7 @@ async function renderSettings(body, id) {
     } catch (e) { toast(e.message, { kind: 'error' }); }
   });
   body.querySelector('#s-rot-recovery').addEventListener('click', async () => {
-    const proceed = confirm(t('drawer.rotRecoveryConfirm'));
+    const proceed = await confirmModal({ message: t('drawer.rotRecoveryConfirm') });
     if (!proceed) return;
     try {
       await displaysApi.rotateRecoverySecret(id);
@@ -621,6 +722,3 @@ async function renderDiagnostics(body, id) {
   });
 }
 
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}

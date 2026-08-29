@@ -13,6 +13,8 @@
 // tests (test/offline-data.test.js) and in the browser unchanged.
 
 // Field the bound slot value is injected into (the widget reads content._offline).
+import { walkAllWidgets } from './slide-schema.js';
+
 export const OFFLINE_FIELD = '_offline';
 
 // Is a widget "provided offline"? Two equivalent conventions exist so each widget
@@ -70,16 +72,6 @@ export const offlineSlugFor = (w) => 'avs-d-' + (w?.id ?? 'x');
 // in offline mode the key is only used Studio-side at refresh time and must never
 // reach the display.
 export const STRIP_KEYS = ['apiKey'];
-
-// Run fn(widget) for every widget of a playlist: slides → A/B variants → language
-// variants. The one place the full v3 widget set is enumerated for this feature.
-export function walkAllWidgets(pl, fn) {
-  for (const slide of pl?.slides ?? []) {
-    (slide.widgets ?? []).forEach(w => w && fn(w));
-    if (Array.isArray(slide.abVariants)) for (const v of slide.abVariants) (v?.widgets ?? []).forEach(w => w && fn(w));
-    if (slide.langs) for (const k of Object.keys(slide.langs)) (slide.langs[k]?.widgets ?? []).forEach(w => w && fn(w));
-  }
-}
 
 // Every "provided offline" widget in a playlist (drives the refresh-all action).
 export function offlineWidgets(pl) {

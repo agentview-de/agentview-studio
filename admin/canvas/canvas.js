@@ -16,6 +16,7 @@ import { applySlideBackground, applySlideContrast, applyWidgetBg, isPainted } fr
 import { playBuildOnce, applyLoop, clearLoop, isLoop } from '../../shared/animations.js';
 import { addHandles, makeInteractive, clampRect } from './widget-frame.js';
 import { clampZoom, fitTransform, centerTransform, zoomAroundPoint, widgetTransform, computeSnap } from './canvas-math.js';
+import { usesNetwork } from '../../shared/plugin-network.js';
 import {
   isLivePreview, enableLivePreview, disableLivePreview, resetLivePreviews,
   mountPrivacyPlaceholder, configureLivePreview,
@@ -26,7 +27,11 @@ import { open as openPalette } from '../ui/command-palette.js';
 import { openModal } from '../ui/modal.js';
 import { mountBackgroundEditor } from '../panels/background-editor.js';
 import { pickAsset } from '../ui/asset-library.js';
-import { t } from '../i18n.js';
+import { t, tx } from '../i18n.js';
+import { escapeHtml } from '../../shared/utils/escape.js';
+import { widgetIcon } from '../../shared/data/widget-icons.js';
+import { uiIconSvg } from '../../shared/data/ui-icons.js';
+import { fieldOwns } from '../shortcuts.js';
 
 const BASE_W = 1600, BASE_H = 900;          // 16:9 design space
 
@@ -274,12 +279,57 @@ function insertFrameInOrder(frameEl, widget) {
 // configureLivePreview so the extracted module needs no back-reference to canvas.
 export { isLivePreview, enableLivePreview, disableLivePreview, resetLivePreviews };
 
+// Keyboard nudge steps, in percent of the slide. 0.5 % is 8 px on the 1600 px
+// design canvas — fine enough to line something up, coarse enough to be useful.
+const NUDGE = 0.5;
+const NUDGE_COARSE = 5;
+// Arrow presses arrive in bursts. Apply each one immediately but fold the run
+// into ONE undo entry, the way a drag commits once on release instead of once
+// per pointermove.
+const NUDGE_COMMIT_MS = 400;
+
 function buildFrame(slide, widget) {
   const frameEl = document.createElement('div');
   frameEl.className = 'avs-widget-frame';
   frameEl.dataset.id = widget.id;
   setGeo(frameEl, widget.rect, widget.rotation ?? 0);
   frameEl.style.zIndex = frameZ(widget); // keep above the slide bg layer
+
+  // The canvas was mouse-only. Delete and D (duplicate) were already bound, but
+  // both act on state.ui.selectedWidgetId and nothing could SET that without a
+  // click — so the editor's central act, arranging widgets on a slide, had no
+  // keyboard path at all. A focusable frame gives Tab a way in; arrows move it.
+  frameEl.tabIndex = 0;
+  frameEl.setAttribute('role', 'button');
+  const plugin = getPlugin(widget.type);
+  frameEl.setAttribute('aria-label', `${tx(plugin?.label) ?? widget.type}${widget.title ? ' · ' + widget.title : ''}`);
+  frameEl.addEventListener('focus', () => selectWidget(widget.id));
+
+  let nudgeTimer = 0;
+  frameEl.addEventListener('keydown', e => {
+    const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (!dir) return;
+    // The inline text editor makes .bb-body contenteditable INSIDE this frame,
+    // so its arrow keys bubble straight into the nudge handler: pressing ← while
+    // writing on the canvas slid the widget sideways and left the caret where it
+    // was. Same rule as the global shortcuts — a bare key inside a text field
+    // belongs to the field. The frame itself is focusable and is not a field, so
+    // keyboard nudging still works.
+    if (fieldOwns(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const step = e.shiftKey ? NUDGE_COARSE : NUDGE;
+    const r = widget.rect;
+    // Alt resizes from the bottom-right instead of moving — the other half of
+    // arranging something, and the only part a pointer-less user could not do.
+    const next = e.altKey
+      ? clampRect({ ...r, w: r.w + dir[0] * step, h: r.h + dir[1] * step })
+      : clampRect({ ...r, x: r.x + dir[0] * step, y: r.y + dir[1] * step });
+    widget.rect = next;
+    setGeo(frameEl, next, widget.rotation ?? 0);
+    clearTimeout(nudgeTimer);
+    nudgeTimer = setTimeout(() => commit('move-widget'), NUDGE_COMMIT_MS);
+  });
 
   const bgLayer = document.createElement('div');
   bgLayer.className = 'avs-widget-bg';
@@ -298,8 +348,10 @@ function buildFrame(slide, widget) {
 
   const label = document.createElement('div');
   label.className = 'avs-widget-label';
-  const plugin = getPlugin(widget.type);
-  label.textContent = `${plugin?.icon ?? '◻'} ${plugin?.label ?? widget.type}`;
+  // innerHTML, not textContent: the icon is SVG markup. The label text is still
+  // escaped — it comes from the plugin registry today, but this is the one place
+  // a widget's own name could reach the DOM later.
+  label.innerHTML = `${widgetIcon(widget.type, escapeHtml(plugin?.icon ?? '◻'), 11)}<span>${escapeHtml(tx(plugin?.label) ?? widget.type)}</span>`;
   frameEl.appendChild(label);
 
   addHandles(frameEl, t('canvas.rotate'));
@@ -323,7 +375,10 @@ function buildFrame(slide, widget) {
     const w = preview ? { ...widget, content: { ...widget.content, _offline: preview } } : widget;
     dispose = mountWidget(w, slide, content, { mode: 'preview', t: k => k });
     if (!preview) loadOfflinePreview(widget.id);
-  } else if (plugin?.network && !isLivePreview(widget.id)) {
+  // usesNetwork asks the plugin about THIS content, not just about its type:
+  // a chart with inline data reaches nobody, and a menu whose rows carry
+  // remote photos reaches somebody — see shared/plugin-network.js.
+  } else if (usesNetwork(plugin, content) && !isLivePreview(widget.id)) {
     dispose = mountPrivacyPlaceholder(content, widget, plugin);
   } else {
     dispose = mountWidget(widget, slide, content, { mode: 'preview', t: k => k });
@@ -677,23 +732,23 @@ async function openWidgetBgModal(id) {
 function widgetMenuItems(id) {
   return [
     { label: t('ctx.duplicate'), icon: '⧉', run: () => duplicateSelected() },
-    { label: t('ctx.copy'), icon: '📋', run: () => copySelected() },
-    { label: t('ctx.paste'), icon: '📥', disabled: !clipboard, run: () => pasteWidget() },
-    { label: t('ctx.delete'), icon: '🗑', run: () => deleteSelected() },
+    { label: t('ctx.copy'), icon: uiIconSvg('copy', 14), run: () => copySelected() },
+    { label: t('ctx.paste'), icon: uiIconSvg('upload', 14), disabled: !clipboard, run: () => pasteWidget() },
+    { label: t('ctx.delete'), icon: uiIconSvg('trash', 14), run: () => deleteSelected() },
     { separator: true },
-    { label: t('ctx.toFront'), icon: '⬆️', run: () => bringToFront() },
-    { label: t('ctx.toBack'), icon: '⬇️', run: () => sendToBack() },
+    { label: t('ctx.toFront'), icon: uiIconSvg('arrow-up', 14), run: () => bringToFront() },
+    { label: t('ctx.toBack'), icon: uiIconSvg('arrow-down', 14), run: () => sendToBack() },
     { separator: true },
-    { label: t('ctx.background'), icon: '🎨', run: () => openWidgetBgModal(id) },
+    { label: t('ctx.background'), icon: uiIconSvg('image', 14), run: () => openWidgetBgModal(id) },
   ];
 }
 function canvasMenuItems(pt) {
   return [
-    { label: t('ctx.addText'), icon: '🔤', run: () => addTextAt(pt) },
-    { label: t('ctx.addWidget'), icon: '➕', run: () => openPalette() },
-    { label: t('ctx.paste'), icon: '📥', disabled: !clipboard, run: () => pasteWidget(pt) },
+    { label: t('ctx.addText'), icon: uiIconSvg('type', 14), run: () => addTextAt(pt) },
+    { label: t('ctx.addWidget'), icon: uiIconSvg('plus', 14), run: () => openPalette() },
+    { label: t('ctx.paste'), icon: uiIconSvg('upload', 14), disabled: !clipboard, run: () => pasteWidget(pt) },
     { separator: true },
-    { label: t('ctx.slideBg'), icon: '🎨', run: () => document.getElementById('ss-bg')?.click() },
+    { label: t('ctx.slideBg'), icon: uiIconSvg('image', 14), run: () => document.getElementById('ss-bg')?.click() },
     { label: t('ctx.fit'), icon: '⤢', run: () => zoomToFit() },
   ];
 }
