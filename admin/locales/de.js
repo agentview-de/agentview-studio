@@ -670,6 +670,8 @@ export const de = {
   // main.js — Topbar-Tooltips + Varianten-Banner
   'pub.republish': 'Erneut veröffentlichen (gleiches Ziel)',
   'pub.noLastTarget': 'Noch nichts veröffentlicht — bitte zuerst ein Ziel wählen.',
+  'variant.editingLang': 'Sprachvariante: {name}',
+  'variant.editingAb': 'A/B-Variante: {label}',
   'variant.backToDefault': 'Zurück zur Standard-Variante',
   // SSE-Slot-Toasts
   'slot.toastChanged': '🗄️ Slot {slug} {verb}',

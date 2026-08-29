@@ -161,11 +161,6 @@ function mountShell() {
     const btn = document.getElementById('t-republish');
     if (btn) btn.hidden = !state.meta?.lastPublish;
   });
-  subscribe('meta', p => {
-    if (p !== 'meta.lastPublish') return;
-    const btn = document.getElementById('t-republish');
-    if (btn) btn.hidden = !state.meta?.lastPublish;
-  });
   // Both publish controls follow the in-flight flag: disabled, and the primary
   // one says what it is doing rather than looking idle for the whole upload.
   subscribe('meta.publishingTo', reflectPublishing);
@@ -763,10 +758,9 @@ function bindGlobalShortcuts() {
 function moveSlide(delta) {
   const ids = state.playlist.slides.map(s => s.id);
   if (!ids.length) return;
-  // Switching slides while a variant is being edited must commit the variant
-  // edits back to its slot first — otherwise the swap-in-place would orphan
-  // the variant array on the new slide.
-  if (isEditingVariant()) exitVariantEdit();
+  // Switching slides ends a variant edit — canvas/variant-ctx.js watches
+  // ui.activeSlideId for that, so every one of the ten places that moves the
+  // selection is covered, not just this one.
   const cur = ids.indexOf(state.ui.activeSlideId);
   const next = cur === -1 ? 0 : (cur + delta + ids.length) % ids.length;
   state.ui.activeSlideId = ids[next];
@@ -790,7 +784,6 @@ function refreshVariantBanner() {
   });
 }
 subscribe('ui._variantStash', refreshVariantBanner);
-subscribe('ui', p => { if (p === 'ui._variantStash') refreshVariantBanner(); });
 
 // Failsafe: flush the variant swap + persist before the page goes away. Without
 // this a close-while-editing could leave the in-memory variant edits in the

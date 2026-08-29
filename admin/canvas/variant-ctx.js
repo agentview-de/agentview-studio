@@ -10,7 +10,8 @@
 // reference). It is intentionally not persisted to disk (the publish-flow
 // calls exitVariantEdit() before serializing).
 
-import { state, commit, on } from '../store.js';
+import { state, commit, on, subscribe } from '../store.js';
+import { t, getLocale } from '../i18n.js';
 
 function deepClone(x) { return JSON.parse(JSON.stringify(x)); }
 
@@ -29,11 +30,31 @@ export function isEditingVariant() {
   return !!state.ui._variantStash;
 }
 
+// The language's name in the READER's language: "Deutsch" in a German studio,
+// "German" in an English one. The tag itself ("de") is what a file format
+// wants, not what a person reading a banner wants.
+const LANG_NAMES = new Map();
+function languageName(tag) {
+  const key = `${getLocale()}|${tag}`;
+  if (!LANG_NAMES.has(key)) {
+    let name = String(tag ?? '');
+    try {
+      name = new Intl.DisplayNames([getLocale() || undefined], { type: 'language' }).of(tag) || name;
+    } catch { /* an unparsable tag stays as it is */ }
+    LANG_NAMES.set(key, name);
+  }
+  return LANG_NAMES.get(key);
+}
+
+// This banner sat half-translated: the label was hard-coded German
+// ("Sprachvariante: de") beside a button that read "Back to default variant".
 export function variantBannerLabel() {
   const s = state.ui._variantStash;
   if (!s) return '';
-  if (s.kind === 'lang') return `Sprachvariante: ${s.key}`;
-  if (s.kind === 'ab') return `A/B-Variante: ${s.label ?? String.fromCharCode(65 + Number(s.key))}`;
+  if (s.kind === 'lang') return t('variant.editingLang', { name: languageName(s.key) });
+  if (s.kind === 'ab') {
+    return t('variant.editingAb', { label: s.label ?? String.fromCharCode(65 + Number(s.key)) });
+  }
   return '';
 }
 
@@ -84,6 +105,23 @@ export function exitVariantEdit() {
   state.ui.editorPreviewAbIdx = null;
   commit('variant-exit');
 }
+
+// The swap lives on ONE slide, so moving to another has to put it back first.
+//
+// That guard used to sit at a single call site — the keyboard's next/previous
+// slide — with a comment explaining exactly why it was needed. Ten places set
+// `state.ui.activeSlideId`, six of them in the slide rail alone (a click, focus,
+// the arrow keys, add, duplicate, delete), and none of the others had it.
+// Clicking a slide in the rail therefore left the first one swapped: its DEFAULT
+// array holding the variant's widgets, a banner still offering to leave a
+// variant of a slide the user had already left, and the next edits landing in
+// the old slide's slot.
+//
+// A guard belongs to the change it protects, not to one of its callers.
+subscribe('ui.activeSlideId', () => {
+  const stash = state.ui._variantStash;
+  if (stash && state.ui.activeSlideId !== stash.slideId) exitVariantEdit();
+});
 
 // The store's persist() serializes state.playlist directly, but while a variant
 // is being edited slide.widgets holds the VARIANT array. Rather than teach the
