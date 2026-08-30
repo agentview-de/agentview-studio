@@ -11,9 +11,20 @@ import { openPublishPicker, publishToGroup, refreshRunning } from '../publish-fl
 import { t, tx } from '../i18n.js';
 import * as drawer from '../ui/display-drawer.js';
 import { renderConnectGate } from '../ui/connect-gate.js';
+import { saveRunningAsTemplate } from '../ui/html-templates.js';
 import { uiIconSvg } from '../../shared/data/ui-icons.js';
 import { escapeHtml as esc } from '../../shared/utils/escape.js';
 import { coalesce } from '../../shared/async-refresh.js';
+
+// The display half of pairing. agentView is purely browser-based — there is NO
+// native app to install; a display is any device whose browser opens this URL,
+// which then shows the 6-character setup code (verified against
+// agentview.de/agent-instructions, 2026-08-30). The pair dialog used to say
+// "open the display app" and never named the address, which sends people
+// looking in an app store for something that does not exist. Rendered as a
+// copy-block rather than a link on purpose: it has to be typed on the SCREEN,
+// not opened here.
+const DISPLAY_APP_URL = 'https://display.agentview.de';
 
 function normList(raw, key) {
   if (Array.isArray(raw)) return raw;
@@ -321,6 +332,7 @@ function displayCard(d) {
     </div>
     <div class="avs-dc-actions">
       <button class="bb-btn bb-btn-primary" data-act="pub">${t('disp.publish')}</button>
+      ${running ? `<button class="avs-iconbtn" data-act="save-tpl" title="${t('tpl.saveRunning')}">${uiIconSvg('grid')}</button>` : ''}
       <button class="avs-iconbtn" data-act="preview" title="${t('disp.preview')}">${uiIconSvg('eye')}</button>
       <button class="avs-iconbtn" data-act="lock" title="${d.locked ? t('disp.unlock') : t('disp.lock')}">${uiIconSvg(d.locked ? 'unlock' : 'lock')}</button>
       <button class="avs-iconbtn" data-act="details" title="${t('drawer.overview')}">${uiIconSvg('more')}</button>
@@ -333,6 +345,7 @@ function displayCard(d) {
   });
   el.querySelector('[data-act="pub"]').addEventListener('click', () =>
     openPublishPicker({ mode: 'single', displayId: id }));
+  el.querySelector('[data-act="save-tpl"]')?.addEventListener('click', () => saveRunningAsTemplate(id, d.name ?? id, running));
   el.querySelector('[data-act="preview"]').addEventListener('click', () => previewLink(id));
   el.querySelector('[data-act="lock"]').addEventListener('click', () => toggleLock(id, d.locked));
   el.querySelector('[data-act="details"]').addEventListener('click', () => drawer.open(id));
@@ -350,6 +363,8 @@ export async function pairModal() {
   const box = document.createElement('div');
   box.innerHTML = `
     <p class="bb-form-help">${t('disp.pairHelp')}</p>
+    <div class="bb-form-group"><label>${t('disp.pairUrlLabel')}</label>
+      <pre class="avs-codeblock avs-pair-url">${DISPLAY_APP_URL}</pre></div>
     <div class="bb-form-group"><label>${t('disp.pairCode')}</label>
       <input id="pc" maxlength="6" class="bb-pair-code" placeholder="ABCDEF" autocapitalize="characters" autocomplete="off"></div>
     <div class="bb-form-group"><label>${t('disp.pairTarget')}</label>

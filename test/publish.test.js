@@ -4,7 +4,7 @@
 // tests), so here we exercise only the framework- and network-free helpers.
 
 import { test, expect, describe } from './runner.js';
-import { buildGlobalLines, escapeScriptBody, inlineLocalScripts, rewriteCssAssetUrls } from '../admin/publish.js';
+import { buildGlobalLines, escapeScriptBody, inlineLocalScripts, rewriteCssAssetUrls, extractEmbeddedPlaylist } from '../admin/publish.js';
 
 // Fake resolver: maps any absolute URL to a deterministic asset URL by basename,
 // so the font-url rewrite logic is exercised without a network round-trip.
@@ -60,6 +60,51 @@ describe('publish · buildGlobalLines', () => {
     // The exact value is still present (JSON-escaped) but no live `</script` remains.
     expect(scriptBody).notToContain('</script');
     expect(scriptBody).toContain('<\\/script');
+  });
+});
+
+describe('publish · extractEmbeddedPlaylist', () => {
+  // The globals are emitted with join('') — no separator — so a template's
+  // playlist JSON is immediately followed by the next assignment. These tests
+  // pin that the scanner stops at the right brace anyway; getting this wrong
+  // means a saved template cannot be reopened in the editor.
+  const bundle = (globals) => '<html><body><script>'
+    + buildGlobalLines('https://r.example/x', globals).join('')
+    + '</script></body></html>';
+
+  test('round-trips a playlist written by buildGlobalLines', () => {
+    const pl = { name: 'Menu', slides: [{ id: 's1', widgets: [] }] };
+    expect(extractEmbeddedPlaylist(bundle({ BB_PLAYLIST: pl }))).toEqual(pl);
+  });
+
+  test('stops at the playlist even when another global follows on the same line', () => {
+    const pl = { name: 'Menu', slides: [] };
+    const html = bundle({ BB_PLAYLIST: pl, BB_VENDOR: { hls: 'x' } });
+    expect(extractEmbeddedPlaylist(html)).toEqual(pl);
+  });
+
+  test('a brace or quote inside a string value does not end the scan early', () => {
+    // Real content: a widget whose text contains `};` and escaped quotes is
+    // exactly what a naive regex match would truncate at.
+    const pl = { name: 'Tricky', slides: [], note: 'closes };} here and "quotes" too' };
+    expect(extractEmbeddedPlaylist(bundle({ BB_PLAYLIST: pl }))).toEqual(pl);
+  });
+
+  test('a nested array as the last member still closes at the right depth', () => {
+    const pl = { name: 'Nested', slides: [{ id: 's', widgets: [{ t: [1, [2, 3]] }] }] };
+    expect(extractEmbeddedPlaylist(bundle({ BB_PLAYLIST: pl }))).toEqual(pl);
+  });
+
+  test('a bundle without an embedded playlist reads as null, not a throw', () => {
+    // The normal publish path: slides live in a data slot, not in the HTML.
+    expect(extractEmbeddedPlaylist(bundle({ BB_ORG_BRAND: { font: 'Inter' } }))).toBe(null);
+    expect(extractEmbeddedPlaylist('')).toBe(null);
+    expect(extractEmbeddedPlaylist(null)).toBe(null);
+  });
+
+  test('truncated or corrupt JSON reads as null', () => {
+    expect(extractEmbeddedPlaylist('window.BB_PLAYLIST = {"name":"cut off')).toBe(null);
+    expect(extractEmbeddedPlaylist('window.BB_PLAYLIST = {oops};')).toBe(null);
   });
 });
 

@@ -589,6 +589,32 @@ button { font-family: inherit; }
 .avs-pub-target select { width: 100%; background: var(--bb-bg-2); border: 1px solid var(--bb-border); color: var(--bb-ink); border-radius: var(--bb-r-sm); padding: 8px 10px; }
 .avs-pub-checks { display: flex; flex-direction: column; gap: var(--bb-sp-3); max-height: 240px; overflow-y: auto; }
 .avs-check { display: flex; align-items: center; gap: var(--bb-sp-4); font-size: var(--bb-text-md); }
+/* The global `input { width: 100% }` catches checkboxes too, which stretched
+   every box in these rows across the dialog and pushed its label to the far
+   edge — the same opt-out .avs-ss-check makes further down. */
+.avs-check input[type="checkbox"] { width: auto; flex: 0 0 auto; margin: 0; }
+/* "Also save as a template" — a secondary outcome of the publish, so it sits
+   below the target picker behind a rule rather than competing with it. */
+.avs-pub-astpl { border-top: 1px solid var(--bb-border); padding-top: 12px; }
+.avs-pub-astpl .bb-form-group { margin: 10px 0 0; }
+/* Not input[type=text]: the field carries no type attribute, and that selector
+   does not match an implicit text input. */
+.avs-pub-astpl .bb-form-group input {
+  width: 100%; background: var(--bb-bg-2); border: 1px solid var(--bb-border);
+  color: var(--bb-ink); border-radius: var(--bb-r-sm); padding: 8px 10px;
+}
+/* The account's own saved templates, listed under the store door in Library. */
+.avs-lib-own-tpl { margin-top: 18px; border-top: 1px solid var(--bb-border); padding-top: 12px; }
+.avs-lib-subhead { margin: 0 0 8px; font-size: var(--bb-text-sm); color: var(--bb-ink-quiet); font-weight: 600; }
+.avs-tpl-own-list { display: flex; flex-direction: column; gap: var(--bb-sp-3); }
+.avs-tpl-own-row {
+  display: flex; align-items: center; gap: var(--bb-sp-4);
+  padding: 8px 10px; border: 1px solid var(--bb-border); border-radius: var(--bb-r-md);
+}
+.avs-tpl-own-main { min-width: 0; flex: 1; }
+.avs-tpl-own-name { font-weight: 600; font-size: var(--bb-text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.avs-tpl-own-sub { margin: 2px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.avs-tpl-own-actions { display: flex; align-items: center; gap: var(--bb-sp-2); flex-shrink: 0; }
 .avs-menu { display: flex; flex-direction: column; gap: var(--bb-sp-1); min-width: 240px; }
 /* flex, not block: every row is now icon + label (+ an optional trailing
    external-link mark on the legal links), and the label must stay on one line
@@ -904,7 +930,16 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 }
 .avs-codeblock:hover::after { opacity: 1; }
 .avs-codeblock.avs-copied { background: color-mix(in srgb, var(--bb-success) 18%, transparent); }
-.avs-codeblock.avs-copied::after { content: '✓ kopiert'; opacity: 1; color: var(--bb-success); }
+/* Language-neutral: the copied state used to read "✓ kopiert" — German baked
+   into the stylesheet, where no locale file can reach it, on every codeblock in
+   the English UI. */
+.avs-codeblock.avs-copied::after { content: '✓'; opacity: 1; color: var(--bb-success); }
+/* The pairing URL is read off this screen and typed on a TV remote, so it gets
+   the same weight as the code field it sits above. */
+.avs-pair-url {
+  text-align: center; font-size: var(--bb-text-md);
+  padding: 14px 12px; user-select: all;
+}
 .avs-license-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--bb-sp-6);
   margin-bottom: 24px;

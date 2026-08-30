@@ -38,6 +38,17 @@ const DISPLAY_LANG = (typeof window !== 'undefined' && window.BB_DISPLAY_LANG)
 // Org-level brand-kit can be injected by the publish bundle (window.BB_ORG_BRAND).
 const ORG_BRAND_KIT = (typeof window !== 'undefined' && window.BB_ORG_BRAND) || null;
 
+// A TEMPLATE bundle carries its slides inside the HTML instead of pointing at a
+// data slot. That is the whole difference between a template and a publish: the
+// slot behind BB_READ_URL is rewritten by the next publish of the same
+// playlist, so a template built the normal way would quietly start showing
+// something else — and would go blank if that slot were ever deleted. Embedded,
+// it stays what it was the day it was saved.
+//
+// Only the SLIDES are frozen. Widgets bound to data slots keep polling their
+// own endpoints, so a saved template still shows today's menu, not August's.
+const EMBEDDED_PLAYLIST = (typeof window !== 'undefined' && window.BB_PLAYLIST) || null;
+
 const RELOAD_MS = 6 * 60 * 60 * 1000; // 6h hard reload (jittered — see poll-schedule.js)
 const SCHEDULE_MS = 60_000;          // day-parting re-check, on its own clock
 
@@ -539,4 +550,13 @@ if (new URLSearchParams(location.search).get('debug') === '1') {
 // remote or a touchscreen. Five taps in the top-left corner, or shift+D.
 armHudToggle(() => state);
 
-playlistPoll.start();
+// An embedded playlist has no upstream, so there is nothing to poll for — but a
+// malformed one must not leave the screen dark: fall through to the slot, which
+// the bundle still names, exactly as a normal publish would.
+if (EMBEDDED_PLAYLIST && checkPlaylistShape(EMBEDDED_PLAYLIST).ok) {
+  state.lastFetch = Date.now();
+  applyPlaylist(EMBEDDED_PLAYLIST);
+} else {
+  if (EMBEDDED_PLAYLIST) console.warn('embedded playlist rejected — falling back to the data slot');
+  playlistPoll.start();
+}

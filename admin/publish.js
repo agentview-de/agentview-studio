@@ -211,6 +211,45 @@ export function buildGlobalLines(readUrl = '', windowGlobals = {}) {
   return lines;
 }
 
+// The reverse of the BB_PLAYLIST global written above: read the slides back OUT
+// of a finished bundle, so a template saved in agentView can be reopened in the
+// editor instead of only being sendable to a screen.
+//
+// Why a scanner and not a regex: the globals are emitted joined by nothing
+// (`buildGlobalLines(...).join('')`), so the playlist JSON is followed
+// immediately by the next `window.BB_…` assignment on the SAME line — there is
+// no delimiter to anchor on, and a `};` inside a string value would fool a
+// lazy match. Depth counting with string/escape awareness is enough here
+// (never a general JS parser): JSON.stringify emits no raw newlines and
+// escapes every quote inside strings.
+//
+// Returns null for anything it cannot read — a bundle published before this
+// existed, or one built from a slot URL — which callers must treat as "this
+// template has no slides to edit", not as an error.
+export function extractEmbeddedPlaylist(html) {
+  const marker = 'window.BB_PLAYLIST = ';
+  const at = String(html ?? '').indexOf(marker);
+  if (at < 0) return null;
+  const start = at + marker.length;
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < html.length; i++) {
+    const c = html[i];
+    if (esc) { esc = false; continue; }
+    if (inStr) {
+      if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') { inStr = true; continue; }
+    if (c === '{' || c === '[') depth++;
+    else if (c === '}' || c === ']') {
+      if (--depth > 0) continue;
+      try { return JSON.parse(html.slice(start, i + 1)); } catch { return null; }
+    }
+  }
+  return null;
+}
+
 // Vendored runtime libs that player widgets lazy-load by resolving a path against
 // import.meta.url (→ document.baseURI → content host, where the sibling 404s; and
 // the asset store rejects .js). For each widget TYPE present in the playlist we

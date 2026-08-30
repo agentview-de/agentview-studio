@@ -96,6 +96,15 @@ export async function loadInto(slug, label) {
     toast(t('cloud.loadFailed', { msg: e.message }), { kind: 'error' });
     return false;
   }
+  return applyPlaylistValue(value, label ?? slug);
+}
+
+// The shape check, migration chain, compatibility report and store handover —
+// everything that turns "some JSON" into the editor's live playlist. Split out
+// of loadInto() so a playlist that did NOT come from a data slot can use the
+// identical path: a template bundle carries its slides inside the HTML, and
+// re-deriving any of this beside it is how the two would drift.
+export function applyPlaylistValue(value, label) {
   // The SAME front door the player and the file import use. This module grew
   // its own copy of the check, and the copy was stricter in one place: a bare
   // array of slides is a legitimate v1 payload that migratePlaylist() wraps,
@@ -138,7 +147,7 @@ export async function loadInto(slug, label) {
   state.ui.selectedWidgetId = null;
   commit('load-from-cloud');
   persist();
-  toast(t('cloud.loaded', { name: label || pl.name || slug }), { kind: 'success' });
+  toast(t('cloud.loaded', { name: label || pl.name || '' }), { kind: 'success' });
   return true;
 }
 

@@ -5,7 +5,7 @@
 // proxy decision breaks every call), so they're worth pinning.
 
 import { test, expect, describe } from './runner.js';
-import { authHeader, resolveUrl, storeQuery, nextStoreOffset } from '../admin/api-url.js';
+import { authHeader, resolveUrl, storeQuery, nextStoreOffset, unwrapList } from '../admin/api-url.js';
 
 describe('api-url · authHeader', () => {
   test('no credential → no auth header', () => {
@@ -121,5 +121,35 @@ describe('api-url · nextStoreOffset · a capped page size is not the end', () =
   test('an empty page ends it whatever the total claims', () => {
     // A total that outruns the data must not turn into an endless walk.
     expect(nextStoreOffset({ offset: 300, limit: 100, returned: 0, total: 999 })).toBe(null);
+  });
+});
+
+describe('api-url · unwrapList', () => {
+  test('a bare array is the list', () => {
+    expect(unwrapList([{ id: 'a' }])).toEqual([{ id: 'a' }]);
+    expect(unwrapList([])).toEqual([]);
+  });
+
+  test('an endpoint-specific key wins over the generic ones', () => {
+    // Both present: the caller named `templates`, so `items` must not shadow it.
+    const raw = { templates: [{ id: 'own' }], items: [{ id: 'other' }] };
+    expect(unwrapList(raw, ['templates'])).toEqual([{ id: 'own' }]);
+  });
+
+  test('the generic wraps are covered when no key matches', () => {
+    expect(unwrapList({ items: [1] })).toEqual([1]);
+    expect(unwrapList({ data: [2] })).toEqual([2]);
+    expect(unwrapList({ results: [3] })).toEqual([3]);
+  });
+
+  test('anything unrecognised degrades to an empty list, never undefined', () => {
+    // The owner API documents its responses as a bare "200 OK", so an
+    // unexpected shape is a real possibility — a list view must render empty
+    // instead of throwing on `.map` of undefined.
+    expect(unwrapList(null)).toEqual([]);
+    expect(unwrapList(undefined)).toEqual([]);
+    expect(unwrapList({ total: 0 })).toEqual([]);
+    expect(unwrapList('not json')).toEqual([]);
+    expect(unwrapList({ items: { nested: true } })).toEqual([]);
   });
 });
