@@ -5,7 +5,9 @@
 # Playwright) lives in devDependencies and never reaches shipped code.
 #
 #   headless — pure-function suites under Node, no install (fast first signal).
-#   lint     — ESLint flat config: dead imports, unused vars, == traps, etc.
+#   lint     — ESLint flat config (dead imports, unused vars, == traps), plus
+#              the consistency gates: i18n coverage, template-store invariants
+#              and the doc counts that would otherwise silently go stale.
 #   browser  — the DOM-dependent suites (sanitize, schema, slide round-trip,
 #              canvas z-order) in headless Chromium. The sanitizer + schema are
 #              security/data-loss critical and MUST be gated, not run by hand.
@@ -41,6 +43,16 @@ jobs:
         run: npm ci
       - name: Lint
         run: npm run lint
+      # The consistency gates. They are cheap and need no browser, so they ride
+      # with lint rather than earning a job of their own — but they DO have to
+      # run somewhere: a guard that only fires on a developer's machine is a
+      # guard for whoever remembers to type `npm run check`.
+      #   i18n  — every t() key exists in both dictionaries
+      #   store — the template store's own invariants
+      #   docs  — the counts the README and the welcome screen quote, against
+      #           the registry that actually holds them
+      - name: Consistency gates (i18n · template store · docs)
+        run: npm run i18n -- --quiet && npm run store && npm run docs -- --quiet
 
   browser:
     runs-on: ubuntu-latest
