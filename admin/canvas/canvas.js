@@ -210,6 +210,16 @@ export function mountCanvas(host, { onSelect } = {}) {
 
   applyCanvasSizeFromState();
   renderSlide();
+  // Reconcile the RESTORED selection against the slide that actually loaded.
+  //
+  // `ui.selectedWidgetIds` is persisted, and hydrate() assigns it back wholesale
+  // — so ids belonging to a playlist that has since been replaced, or to a slide
+  // that was deleted in another tab, come back as a selection of ghosts. The
+  // Arrange panel counted them and said "3 widgets selected" over nothing at
+  // all, with every button silently doing nothing. setSelection drops whatever
+  // is not on the slide, so this is the one call that makes the restored state
+  // honest.
+  setSelection(selectedIds());
   requestAnimationFrame(zoomToFit);
   setTimeout(zoomToFit, 120); // fallback once layout settles
   let rt = null;
