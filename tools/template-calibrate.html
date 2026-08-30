@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <title>Template calibration</title>
+  <!-- DEV TOOL — not part of the app.
+       Signage type has one job: be readable from across the room. The catalog
+       was tuned by eye and most of it landed at 2-4 % of the slide height,
+       which is a laptop size, not a wall size.
+       This searches, per widget, for the LARGEST `textScale` that still fits
+       its box — capped at the target for its role — by rendering the real
+       widget at its real size and measuring. Output is a patch table:
+       window.__patch = [{ tpl, slide, widget, type, from, to }].
+       Open from the dev server: /tools/template-calibrate.html -->
+  <link rel="stylesheet" href="../styles/fonts.css" />
+  <script src="../shared/vendor/marked.min.js"></script>
+  <script src="../shared/vendor/pdf.min.js"></script>
+  <script src="../shared/vendor/prism.min.js"></script>
+  <link rel="stylesheet" href="../shared/vendor/prism-tomorrow.min.css" />
+  <link rel="stylesheet" href="../styles/tokens.css" />
+  <link rel="stylesheet" href="../styles/components.css" />
+  <link rel="stylesheet" href="../styles/slide-themes.css" />
+  <link rel="stylesheet" href="../styles/studio.css" />
+  <style>
+    body { margin: 0; background: #0b0b10; color: #eee; font: 12px/1.5 ui-monospace, monospace; }
+    #out { padding: 14px; white-space: pre-wrap; }
+    #rig { position: fixed; left: -20000px; top: 0; }
+  </style>
+</head>
+<body>
+<div id="out">calibrating…</div>
+<div id="rig"></div>
+<script type="module">
+import '../shared/plugins/all.js';
+import '../shared/templates/all.js';
+import { listTemplates, buildSlides } from '../shared/templates/registry.js';
+import { renderSlideThumb } from '../admin/ui/slide-thumb.js';
+import { get as getPlugin } from '../shared/plugins/registry.js';
+import { usesNetwork } from '../shared/plugin-network.js';
+
+// Measure with the REAL faces. Inter is wider than the system fallback, so a
+// layout measured mid-load fits and then overflows once the webfont lands —
+// which is exactly the disagreement these two tools had with each other.
+await document.fonts.ready;
+
+const rig = document.getElementById('rig');
+const out = document.getElementById('out');
+
+// Target hero size as a share of SLIDE height, by what the widget is FOR.
+// A statement slide gets to shout; a table of six rows physically cannot, so
+// asking it to would only mean clipping it.
+const TARGET = {
+  text: 9, quote: 9, greeting: 8, countdown: 12, 'days-since': 22, 'queue-call': 26,
+  markdown: 6, steps: 6.5, leaderboard: 7.5, 'opening-hours': 6.5, progress: 9,
+  menu: 5.5, 'data-table': 5.5, calendar: 5, 'kpi-cards': 7, 'world-clock': 8,
+  // A corner clock is a caption. Targeting 8 % made it louder than the slide
+  // header it sits beside.
+  clock: 5, ticker: 4.5, rss: 4.5, 'news-photos': 4.5, currency: 7,
+  'qr-code': 4.5, 'live-json': 4.5, weather: 8, 'audio-viz': 5, code: 4.5,
+};
+const MAXSCALE = 400, MINSCALE = 60;
+
+function measure(host) {
+  let biggest = 0;
+  for (const el of host.querySelectorAll('*')) {
+    if (!el.textContent || !el.textContent.trim()) continue;
+    if ([...el.children].some(c => c.textContent && c.textContent.trim())) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) continue;
+    const fs = parseFloat(getComputedStyle(el).fontSize) || 0;
+    if (fs > biggest) biggest = fs;
+  }
+  // The widget ROOT only. Scanning descendants sounds stricter and is simply
+  // noisy: an ellipsised label, a sparkline and a marquee all report scroll
+  // overflow by design, and treating those as defects pinned 95 widgets to the
+  // scale floor. What the root cannot see — a child that shrinks while its
+  // content does not — is fixed at the source instead (opening-hours' table is
+  // `flex: 0 0 auto`), which turns it into an honest root overflow.
+  const inner = host.querySelector('.bb-slide') ?? host;
+  const over = Math.max(inner.scrollHeight - inner.clientHeight, inner.scrollWidth - inner.clientWidth);
+  return { biggest, over };
+}
+
+// Render ONE widget at its real pixel size and report (hero px, overflow px).
+//
+// Through renderSlideThumb, NOT a hand-built slot: the calibrator and the
+// legibility suite have to agree to the pixel, and while this mounted into a
+// bare div the two disagreed by 4-8 px — enough for the calibrator to bless a
+// scale the suite then failed. One render path, one answer.
+function trial(widget, slide, W, H, scale) {
+  const probe = { ...widget, content: { ...widget.content, textScale: scale } };
+  const one = { ...slide, widgets: [probe] };
+  const box = document.createElement('div');
+  rig.appendChild(box);
+  const dispose = renderSlideThumb(box, one, { canvas: { w: W, h: H } }, { width: W });
+  const m = measure(box.querySelector('.avs-thumb-slot') ?? box);
+  dispose();
+  box.remove();
+  return m;
+}
+
+const patch = [];
+const skipped = [];
+for (const tpl of listTemplates()) {
+  if (tpl.category === 'blank') continue;
+  const W = tpl.canvas?.w ?? 1920, H = tpl.canvas?.h ?? 1080;
+  // BOTH languages, always. German runs 10-30 % longer than English
+  // ("Öffnungszeiten" against "Hours", "Bitte behalten Sie Ihre Wartenummer"
+  // against "Keep your ticket"), so a scale calibrated on English alone fitted
+  // English and clipped German on eleven slides. The specs are identical, so
+  // widget i of slide j is the same widget in both — only its text differs.
+  const slides = buildSlides(tpl, { lang: 'en' });
+  const slidesDe = buildSlides(tpl, { lang: 'de' });
+  slides.forEach((slide, si) => {
+    const slideDe = slidesDe[si];
+    slide.widgets.forEach((w, wi) => {
+      const wDe = slideDe?.widgets?.[wi];
+      const plugin = getPlugin(w.type);
+      if (!plugin) return;
+      if (!('textScale' in (w.content ?? {}))) return;          // no lever
+      if (usesNetwork(plugin, w.content ?? {})) { skipped.push(`${tpl.id}#${si + 1} ${w.type} (network)`); return; }
+      const target = TARGET[w.type];
+      if (!target) { skipped.push(`${tpl.id}#${si + 1} ${w.type} (no target)`); return; }
+      const targetPx = (target / 100) * H;
+
+      // Two independent searches, because "bigger than the target" and "does
+      // not fit" are different facts and only one of them is a defect.
+      //   maxFit  — the largest scale that does not overflow its box.
+      //   atTgt   — the scale that lands the hero on its target size.
+      // Grow to min(maxFit, atTgt); SHRINK only when the box cannot hold what
+      // is already there. Without that split the search "corrected" every
+      // queue board down from a deliberately huge 32 % to the 26 % target —
+      // making the best slides in the catalog worse.
+      const search = (fits, widget, sl) => {
+        let lo = MINSCALE, hi = MAXSCALE, best = MINSCALE;
+        for (let step = 0; step < 9 && lo <= hi; step++) {
+          const mid = Math.round((lo + hi) / 2);
+          if (fits(trial(widget, sl, W, H, mid))) { best = mid; lo = mid + 1; } else { hi = mid - 1; }
+        }
+        return best;
+      };
+      const fitsBox = m => m.over <= 2;
+      const maxFit = Math.min(
+        search(fitsBox, w, slide),
+        wDe ? search(fitsBox, wDe, slideDe) : MAXSCALE);
+      const atTgt = search(m => m.biggest <= targetPx, w, slide);
+      const from = w.content.textScale;
+      const grown = Math.min(maxFit, atTgt);
+      // FLOOR to the step, never round: rounding 203 up to 205 hands back a
+      // scale the binary search had just proved does not fit, which is how a
+      // "calibrated" widget ended up overflowing by 36 px.
+      //
+      // And back off one more step when the BOX is what limits us. Font metrics
+      // are not identical across renderers — the same seven-row table measured
+      // here and in headless Chromium differed by 7 px, one pixel a row — so a
+      // scale sitting exactly on the limit fits in the browser it was measured
+      // in and clips in CI. Where the TARGET is the limit there is nothing to
+      // back off from; the size is already the one we wanted.
+      const raw = grown > from ? grown : Math.min(from, maxFit);
+      const boxLimited = maxFit <= atTgt;
+      const to = Math.max(MINSCALE, Math.floor(raw / 5) * 5 - (boxLimited ? 5 : 0));
+      if ((to < from && from - to >= 5) || to - from >= 10) {
+        patch.push({ tpl: tpl.id, slide: si + 1, widget: wi, type: w.type, from, to,
+          why: to > from ? 'grow' : 'fit' });
+      }
+    });
+  });
+}
+
+window.__patch = patch;
+out.textContent = patch
+  .map(p => `${p.why === 'fit' ? 'FIT ' : '    '}${p.tpl}#${p.slide}[${p.widget}] ${p.type.padEnd(15)} ${String(p.from).padStart(4)} -> ${String(p.to).padStart(4)}`)
+  .join('\n')
+  + `\n\n— ${patch.length} widgets to rescale\n\nskipped (${skipped.length}):\n` + skipped.join('\n');
+window.__calibrateReady = true;
+</script>
+</body>
+</html>

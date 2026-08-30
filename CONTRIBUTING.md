@@ -85,6 +85,25 @@ running anything:
 node tools/import-graph.mjs .
 ```
 
+### Looking at the template catalog
+
+Three dev pages render the slide-set templates for real — open them from the dev
+server (`node server.mjs`), they are not part of the app:
+
+| Page | What it answers |
+|---|---|
+| `/tools/template-sheet.html` | *Does the catalog look right?* Every slide of every template as a contact sheet. `?t=<id>` for one set, `?skip=&take=` to page, `?lang=de`, `?w=` for cell width. |
+| `/tools/template-audit.html` | *Is anything clipped or too small?* Renders each slide at 1920×1080 and reports the biggest type as a share of slide height, plus overflow. `?lang=de`. |
+| `/tools/template-calibrate.html` | *What size SHOULD this be?* Binary-searches the largest `textScale` that still fits each widget's box — in **both** languages — capped at a per-widget-type target, and prints the patch table. |
+
+Signage type is not a matter of taste you can settle by squinting at a 40 % zoom:
+the catalog was once tuned by eye and most of it landed near 3 % of the slide
+height, which is a laptop size. `test/template-legibility.test.html` is the gate
+that keeps it honest. It renders every slide of every template at its true
+design size, in both languages, and fails if one clips, if a ticker asks for
+type taller than its own strip, or if a slide's largest type drops below 4 % of
+the slide height.
+
 ## Dev tooling (optional, dev-only)
 
 The shipped app stays dependency-free — but the repo carries a small **dev**
@@ -96,7 +115,7 @@ npm ci                                       # install the dev toolchain
 npm run lint                                 # ESLint flat config (eslint.config.js)
 npm test                                     # == node test/run-node.mjs
 npx playwright install --with-deps chromium  # one-time, for the browser runner
-npm run test:browser                         # drives all four browser pages headlessly in CI
+npm run test:browser                         # drives every browser page headlessly in CI
 npm run i18n                                 # every t() key present in both dictionaries
 npm run check                                # lint + i18n + headless tests in one shot
 ```

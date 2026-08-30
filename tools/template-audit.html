@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <title>Template audit</title>
+  <!-- DEV TOOL — not part of the app. Renders every slide of every slide-set
+       template at its TRUE design size (1920×1080, unscaled) off-screen and
+       measures what actually lands on the glass: how big the biggest piece of
+       type is as a share of slide height, whether any widget's content spills
+       out of its box, and how much of its box the content fills.
+       Eyeballing 97 slides finds the loud problems and misses the quiet ones;
+       this finds the quiet ones. Read the JSON from window.__audit.
+       Open from the dev server: /tools/template-audit.html -->
+  <link rel="stylesheet" href="../styles/fonts.css" />
+  <script src="../shared/vendor/marked.min.js"></script>
+  <script src="../shared/vendor/pdf.min.js"></script>
+  <script src="../shared/vendor/prism.min.js"></script>
+  <link rel="stylesheet" href="../shared/vendor/prism-tomorrow.min.css" />
+  <link rel="stylesheet" href="../styles/tokens.css" />
+  <link rel="stylesheet" href="../styles/components.css" />
+  <link rel="stylesheet" href="../styles/slide-themes.css" />
+  <link rel="stylesheet" href="../styles/studio.css" />
+  <style>
+    body { margin: 0; background: #0b0b10; color: #eee; font: 12px/1.5 ui-monospace, monospace; }
+    #out { padding: 14px; white-space: pre-wrap; }
+    #rig { position: fixed; left: -20000px; top: 0; }
+  </style>
+</head>
+<body>
+<div id="out">measuring…</div>
+<div id="rig"></div>
+<script type="module">
+import '../shared/plugins/all.js';
+import '../shared/templates/all.js';
+import { listTemplates, buildSlides } from '../shared/templates/registry.js';
+import { localize } from '../shared/templates/lib.js';
+import { renderSlideThumb } from '../admin/ui/slide-thumb.js';
+
+// Measure with the REAL faces. Inter is wider than the system fallback, so a
+// layout measured mid-load fits and then overflows once the webfont lands —
+// which is exactly the disagreement these two tools had with each other.
+await document.fonts.ready;
+
+const rig = document.getElementById('rig');
+const out = document.getElementById('out');
+const lang = new URLSearchParams(location.search).get('lang') === 'de' ? 'de' : 'en';
+
+// Text we care about: a rendered leaf with visible characters.
+function textLeaves(root) {
+  const els = [];
+  for (const el of root.querySelectorAll('*')) {
+    if (!el.textContent || !el.textContent.trim()) continue;
+    // Leaf-ish: no element child that itself has text.
+    if ([...el.children].some(c => c.textContent && c.textContent.trim())) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) continue;
+    els.push(el);
+  }
+  return els;
+}
+
+const report = [];
+for (const tpl of listTemplates()) {
+  if (tpl.category === 'blank') continue;
+  const slides = buildSlides(tpl, { lang });
+  const pl = { canvas: tpl.canvas, defaults: tpl.defaults };
+  const H = tpl.canvas?.h ?? 1080;
+  const W = tpl.canvas?.w ?? 1920;
+
+  for (let i = 0; i < slides.length; i++) {
+    const s = slides[i];
+    const box = document.createElement('div');
+    rig.appendChild(box);
+    // width = the design width → scale 1, so every measurement is in design px.
+    const dispose = renderSlideThumb(box, s, pl, { width: W });
+    const stage = box.querySelector('.avs-thumb-stage');
+
+    let biggest = 0, biggestText = '';
+    const overflows = [];
+    const fills = [];
+    for (const slot of stage.querySelectorAll('.avs-thumb-slot')) {
+      const sr = slot.getBoundingClientRect();
+      const type = '';
+      for (const el of textLeaves(slot)) {
+        const fs = parseFloat(getComputedStyle(el).fontSize) || 0;
+        if (fs > biggest) { biggest = fs; biggestText = (el.textContent || '').trim().slice(0, 34); }
+      }
+      // Content taller/wider than the slot that is NOT clipped on purpose.
+      const inner = slot.querySelector('.bb-slide') ?? slot;
+      const oy = inner.scrollHeight - inner.clientHeight;
+      const ox = inner.scrollWidth - inner.clientWidth;
+      if (oy > 4 || ox > 4) overflows.push({ type, oy: Math.round(oy), ox: Math.round(ox), h: Math.round(sr.height) });
+      // How much of the slot the ink actually covers, vertically.
+      let top = Infinity, bot = -Infinity;
+      for (const el of textLeaves(slot)) {
+        const r = el.getBoundingClientRect();
+        top = Math.min(top, r.top); bot = Math.max(bot, r.bottom);
+      }
+      if (top < Infinity) fills.push(Math.round(((bot - top) / Math.max(1, sr.height)) * 100));
+    }
+    report.push({
+      tpl: tpl.id,
+      name: localize(tpl.name, lang),
+      slide: i + 1,
+      slideName: s.name || '',
+      widgets: s.widgets.length,
+      types: s.widgets.map(w => w.type).join('+'),
+      // Biggest type on the slide, as a percentage of slide HEIGHT — the number
+      // that decides whether anyone reads this from across a room.
+      hero: +((biggest / H) * 100).toFixed(2),
+      heroText: biggestText,
+      overflow: overflows.length,
+      overflowPx: overflows.map(o => o.oy).filter(v => v > 4),
+      fill: fills.length ? Math.max(...fills) : 0,
+    });
+    dispose();
+    box.remove();
+  }
+}
+
+window.__audit = report;
+const flag = r => (r.hero < 5 ? 'SMALL ' : '      ') + (r.overflow ? 'OVERFLOW' : '        ');
+out.textContent = report
+  .map(r => `${flag(r)} ${String(r.hero).padStart(5)}%h  fill${String(r.fill).padStart(4)}%  ${r.tpl}#${r.slide} ${r.slideName} [${r.types}] "${r.heroText}"`)
+  .join('\n')
+  + `\n\n— ${report.length} slides · ${report.filter(r => r.hero < 5).length} with timid type · ${report.filter(r => r.overflow).length} overflowing`;
+window.__auditReady = true;
+</script>
+</body>
+</html>

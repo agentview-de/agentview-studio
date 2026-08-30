@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>agentView Studio · Template legibility</title>
+
+  <!-- Its own page because this suite is the only one that needs the app's REAL
+       stylesheets to mean anything. Every type size in the catalog is a cqmin
+       clamp defined in slide-themes.css; without that sheet every widget renders
+       at the browser's default 16 px and the whole suite passes — or fails —
+       for reasons that have nothing to do with the templates. The shared suite
+       deliberately runs without app CSS, so this cannot live there.
+
+       Fonts matter too: Inter is wider than the system fallback, and a layout
+       measured mid-load fits and then clips once the webfont lands. The suite
+       awaits document.fonts.ready before it measures. -->
+  <link rel="stylesheet" href="../styles/fonts.css" />
+  <script src="../shared/vendor/marked.min.js"></script>
+  <script src="../shared/vendor/pdf.min.js"></script>
+  <script src="../shared/vendor/prism.min.js"></script>
+  <link rel="stylesheet" href="../shared/vendor/prism-tomorrow.min.css" />
+  <link rel="stylesheet" href="../styles/tokens.css" />
+  <link rel="stylesheet" href="../styles/components.css" />
+  <link rel="stylesheet" href="../styles/slide-themes.css" />
+  <link rel="stylesheet" href="../styles/studio.css" />
+
+  <style>
+    :root { color-scheme: dark; }
+    body { background: #0e0f12; color: #d9dde6; font: 14px/1.45 ui-sans-serif, system-ui, sans-serif; margin: 0; padding: 24px; }
+    h1 { font-size: 18px; margin: 0 0 16px 0; font-weight: 600; }
+    .tr-summary { padding: 10px 14px; border-radius: 8px; font-weight: 600; margin-bottom: 12px; }
+    .tr-summary-pass { background: #14361f; color: #6bd998; border: 1px solid #1f5933; }
+    .tr-summary-fail { background: #3b1418; color: #ef6d72; border: 1px solid #5d2129; }
+    .tr-suite { background: #161922; border: 1px solid #1f2433; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; max-width: 900px; }
+    .tr-suite ul { list-style: none; padding: 0; margin: 4px 0 0 0; }
+    .tr-suite li { padding: 3px 0; border-top: 1px solid #1f2433; }
+    .tr-suite li:first-child { border-top: none; }
+    .tr-pass { color: #8ab59c; }
+    .tr-fail { color: #ef6d72; }
+    .tr-mark { display: inline-block; width: 18px; text-align: center; font-weight: 700; }
+    pre { background: #0b0d12; color: #ef9a9d; padding: 10px 12px; border-radius: 6px; overflow: auto; font: 12px/1.4 ui-monospace, monospace; margin: 6px 0 0 0; white-space: pre-wrap; }
+    #boot-error { color: #ef6d72; background: #2a0f12; padding: 10px 14px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>agentView Studio — template &amp; widget legibility</h1>
+  <div id="test-results">Loading…</div>
+  <div id="boot-error" hidden></div>
+
+  <script type="module">
+    import { runAll } from './runner.js';
+    (async () => {
+      try {
+        await document.fonts.ready;
+        await import('./template-legibility.test.js');
+        const summary = await runAll('#test-results');
+        document.title = (summary.fail === 0 ? '✓ ' : '✗ ') + document.title;
+      } catch (e) {
+        const host = document.getElementById('boot-error');
+        host.hidden = false;
+        host.innerHTML = `<strong>Test bootstrap failed:</strong><pre>${(e.stack || e.message || String(e)).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))}</pre>`;
+        console.error(e);
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -63,6 +63,16 @@ const PAGES = [
     path: '/test/plugin-resilience.test.html',
     expect: /Failed to load resource|pdf\.js not loaded|PDF render error|ERR_|net::/i,
   },
+  // Renders all 97 template slides at their true design size, in both
+  // languages, with the app's REAL stylesheets loaded — which is why it needs
+  // its own page: every type size in the catalog is a cqmin clamp that only
+  // exists in slide-themes.css, and the shared suite runs without app CSS.
+  // The image widgets reach for demo URLs that 404 here, as everywhere else.
+  {
+    name: 'template legibility',
+    path: '/test/template-legibility.test.html',
+    expect: /Failed to load resource|ERR_|net::/i,
+  },
 ];
 
 let chromium;
