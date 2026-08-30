@@ -21,7 +21,7 @@ registerTemplate({
       duration: 18,
       widgets: [
         W('text', [5, 5, 90, 20], headline(
-          L('Today’s menu', 'Tageskarte'), { theme: 'bistro-warm', font: 'serif', textScale: 300 })),
+          L('Today’s menu', 'Tageskarte'), { theme: 'bistro-warm', font: 'serif', textScale: 295 })),
         W('menu', [5, 27, 90, 68], {
           rows: [
             { section: L('Starters', 'Vorspeisen'), name: L('Pumpkin soup', 'Kürbissuppe'), price: 5.50, desc: L('Roasted seeds, crème fraîche', 'Geröstete Kerne, Crème fraîche'), tags: 'vegetarian', image: '' },
@@ -35,7 +35,7 @@ registerTemplate({
           showPrices: true, showImages: false, columns: '2', sectionFilter: '',
           footnote: L('Allergen information on request · all prices include VAT',
             'Allergenhinweise auf Anfrage · alle Preise inkl. MwSt.'),
-          textScale: 160, locale: '', theme: 'bistro-warm',
+          textScale: 155, locale: '', theme: 'bistro-warm',
         }, { anim: 'fade-up', duration: 600 }),
       ],
     }),
@@ -48,11 +48,11 @@ registerTemplate({
         W('image', [0, 0, 100, 100], backdrop('', 60), { z: 0, loop: 'kenburns' }),
         W('text', [8, 22, 84, 34], headline(
           L('Special of the day', 'Tagesangebot'),
-          { theme: 'bistro-warm', font: 'serif', textScale: 400 }), { z: 1, anim: 'fade-up', duration: 600 }),
+          { theme: 'bistro-warm', font: 'serif', textScale: 395 }), { z: 1, anim: 'fade-up', duration: 600 }),
         W('text', [8, 54, 84, 26], paragraph(
           L('<p><strong>Beef stew with dumplings</strong><br>with a small salad — <strong>11,90 €</strong></p>',
             '<p><strong>Rindsgulasch mit Semmelknödel</strong><br>inkl. kleinem Salat — <strong>11,90 €</strong></p>'),
-          { theme: 'bistro-warm', font: 'sans', textScale: 210 }), { z: 2, anim: 'fade-up', delay: 250, duration: 600 }),
+          { theme: 'bistro-warm', font: 'sans', textScale: 205 }), { z: 2, anim: 'fade-up', delay: 250, duration: 600 }),
       ],
     }),
     S({
@@ -72,7 +72,7 @@ registerTemplate({
           ],
           currency: 'EUR', currencyPosition: 'after', hideZeroDecimals: false,
           showPrices: true, showImages: false, columns: '2', sectionFilter: '',
-          footnote: '', textScale: 180, locale: '', theme: 'bistro-warm',
+          footnote: '', textScale: 175, locale: '', theme: 'bistro-warm',
         }),
       ],
     }),
@@ -150,7 +150,7 @@ registerTemplate({
       widgets: [
         W('text', [5, 5, 90, 20], headline(
           L('Fresh from the oven', 'Frisch aus dem Ofen'),
-          { theme: 'bistro-warm', font: 'serif', textScale: 300 })),
+          { theme: 'bistro-warm', font: 'serif', textScale: 295 })),
         W('menu', [5, 27, 90, 68], {
           rows: [
             { section: L('Bread', 'Brot'), name: L('Farmhouse loaf 1 kg', 'Bauernbrot 1 kg'), price: 4.80, desc: L('Sourdough, baked at 04:00', 'Sauerteig, gebacken um 4 Uhr'), tags: 'vegan', image: '' },
@@ -164,7 +164,7 @@ registerTemplate({
           currency: 'EUR', currencyPosition: 'after', hideZeroDecimals: false,
           showPrices: true, showImages: false, columns: '2', sectionFilter: '',
           footnote: L('Allergen list at the counter', 'Allergenliste an der Theke'),
-          textScale: 160, locale: '', theme: 'bistro-warm',
+          textScale: 155, locale: '', theme: 'bistro-warm',
         }, { anim: 'fade-up', duration: 600 }),
       ],
     }),
@@ -207,7 +207,7 @@ registerTemplate({
       duration: 12,
       widgets: [
         W('text', [6, 8, 88, 22], headline(
-          L('Happy hour', 'Happy Hour'), { theme: 'neon-cyber', textScale: 360 }),
+          L('Happy hour', 'Happy Hour'), { theme: 'neon-cyber', textScale: 355 }),
         { anim: 'blur', duration: 700 }),
         W('countdown', [10, 32, 80, 44], {
           target: { at: Date.now() + 3 * 3600e3, tz: 'Europe/Berlin' },
@@ -241,7 +241,7 @@ registerTemplate({
           currency: 'EUR', currencyPosition: 'after', hideZeroDecimals: false,
           showPrices: true, showImages: false, columns: '2', sectionFilter: '',
           footnote: L('−30 % during happy hour', '−30 % während der Happy Hour'),
-          textScale: 185, locale: '', theme: 'neon-cyber',
+          textScale: 180, locale: '', theme: 'neon-cyber',
         }, { anim: 'fade-up', duration: 600 }),
       ],
     }),
@@ -298,12 +298,12 @@ registerTemplate({
       widgets: [
         W('image', [0, 0, 100, 100], backdrop('', 45), { z: 0, loop: 'kenburns' }),
         W('text', [6, 20, 60, 26], headline(
-          L('Autumn sale', 'Herbst-Sale'), { theme: 'editorial-mono', textScale: 400 }),
+          L('Autumn sale', 'Herbst-Sale'), { theme: 'editorial-mono', textScale: 395 }),
         { z: 1, anim: 'fade-right', duration: 600 }),
         W('text', [6, 50, 60, 22], paragraph(
           L('<p>Up to <strong>40 % off</strong> selected jackets and knitwear.</p>',
             '<p>Bis zu <strong>40 % Rabatt</strong> auf ausgewählte Jacken und Strick.</p>'),
-          { theme: 'editorial-mono', textScale: 250 }), { z: 2, anim: 'fade-right', delay: 250, duration: 600 }),
+          { theme: 'editorial-mono', textScale: 220 }), { z: 2, anim: 'fade-right', delay: 250, duration: 600 }),
         W('icon', [72, 26, 22, 34], {
           symbol: 'star', color: '#ef4444', label: '−40 %',
           scale: 100, labelScale: 130, labelPos: 'below',
@@ -329,7 +329,7 @@ registerTemplate({
           showPrices: true, showImages: false, columns: '2', sectionFilter: '',
           footnote: L('While stocks last · no combination with other discounts',
             'Solange der Vorrat reicht · nicht mit anderen Rabatten kombinierbar'),
-          textScale: 170, locale: '', theme: 'editorial-mono',
+          textScale: 165, locale: '', theme: 'editorial-mono',
         }, { anim: 'fade-up', duration: 600 }),
       ],
     }),
@@ -360,7 +360,7 @@ registerTemplate({
         W('text', [6, 18, 46, 50], paragraph(
           L('<h2>Shop it online</h2><p>Everything you see here — and the sizes we sold out of.</p>',
             '<h2>Online weiterstöbern</h2><p>Alles aus dem Laden — und die Größen, die hier vergriffen sind.</p>'),
-          { theme: 'editorial-mono', textScale: 275 }), { anim: 'fade-right', duration: 600 }),
+          { theme: 'editorial-mono', textScale: 270 }), { anim: 'fade-right', duration: 600 }),
         W('qr-code', [56, 12, 38, 70], {
           template: 'url', url: 'https://agentview.de', text: '',
           wifiSsid: '', wifiPassword: '', wifiEnc: 'WPA', wifiHidden: false,
@@ -392,7 +392,7 @@ registerTemplate({
       duration: 16,
       widgets: [
         W('text', [5, 5, 90, 20], headline(
-          L('Floor guide', 'Etagenplan'), { theme: 'minimal-dark', textScale: 300 })),
+          L('Floor guide', 'Etagenplan'), { theme: 'minimal-dark', textScale: 295 })),
         W('data-table', [5, 27, 90, 68], {
           source: 'inline',
           headers: L('Floor, Departments, Services', 'Etage, Abteilungen, Service'),
@@ -468,7 +468,7 @@ registerTemplate({
           label: L('Free WiFi — scan to connect', 'Gratis-WLAN — scannen zum Verbinden'),
           showDetails: true, layout: 'vertical', size: 480, moduleStyle: 'square',
           fgColor: '#000000', bgColor: '#ffffff', ecLevel: 'M', logoUrl: '', logoSize: 22,
-          frameless: false, textScale: 270, theme: 'gradient-blue', textColor: '', accentColor: '',
+          frameless: false, textScale: 305, theme: 'gradient-blue', textColor: '', accentColor: '',
         }, { anim: 'scale', duration: 600 }),
         W('weather', [52, 14, 42, 68], {
           dataMode: 'live', location: PLACES.hamburg, unit: 'C', windUnit: 'kmh', apiKey: '',

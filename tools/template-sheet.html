@@ -35,7 +35,9 @@ import '../shared/templates/all.js';
 import { listTemplates, buildSlides } from '../shared/templates/registry.js';
 import { localize } from '../shared/templates/lib.js';
 import { renderSlideThumb } from '../admin/ui/slide-thumb.js';
+import { fontsLoaded } from '../test/fonts-loaded.js';
 
+await fontsLoaded();
 const params = new URLSearchParams(location.search);
 const only = params.get('t');
 // Page through the catalog a few templates at a time: the whole sheet is

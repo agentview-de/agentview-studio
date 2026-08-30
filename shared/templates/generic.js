@@ -43,7 +43,7 @@ registerTemplate({
           showDate: true, showTime: true, locale: '', textScale: 220,
           theme: 'gradient-blue',
         }, { anim: 'fade-up', duration: 700 }),
-        cornerClock({ theme: 'gradient-blue', display: 'time', textScale: 105 }),
+        cornerClock({ theme: 'gradient-blue', display: 'time', textScale: 150 }),
       ],
     }),
     S({
@@ -219,7 +219,7 @@ registerTemplate({
       widgets: [
         W('text', [5, 5, 58, 20], headline(
           L('Today at a glance', 'Heute auf einen Blick'),
-          { theme: 'corporate-blue', valign: 'middle', textScale: 395 })),
+          { theme: 'corporate-blue', valign: 'middle', textScale: 390 })),
         cornerClock({ theme: 'corporate-blue', display: 'time', rect: [75, 5, 20, 20], textScale: 105 }),
         W('kpi-cards', [5, 27, 90, 68], {
           cards: [
@@ -371,7 +371,7 @@ registerTemplate({
         W('text', [64, 8, 32, 34], paragraph(L(
           '<h2>Getting here</h2><p>U3 / U6 to Marienplatz.<br>Parking: Rindermarkt garage, 3 min walk.</p>',
           '<h2>Anfahrt</h2><p>U3 / U6 bis Marienplatz.<br>Parken: Tiefgarage Rindermarkt, 3 Min. Fußweg.</p>'),
-        { theme: 'minimal-dark', valign: 'top', textScale: 220 }), { anim: 'fade-left', duration: 600 }),
+        { theme: 'minimal-dark', valign: 'top', textScale: 215 }), { anim: 'fade-left', duration: 600 }),
         W('qr-code', [64, 44, 32, 50], {
           template: 'url', url: 'https://agentview.de', text: '',
           wifiSsid: '', wifiPassword: '', wifiEnc: 'WPA', wifiHidden: false,
@@ -379,7 +379,7 @@ registerTemplate({
           label: L('Register here', 'Hier anmelden'),
           showDetails: false, layout: 'vertical', size: 380, moduleStyle: 'square',
           fgColor: '#000000', bgColor: '#ffffff', ecLevel: 'M', logoUrl: '', logoSize: 22,
-          frameless: false, textScale: 320, theme: 'minimal-dark', textColor: '', accentColor: '',
+          frameless: false, textScale: 345, theme: 'minimal-dark', textColor: '', accentColor: '',
         }, { anim: 'fade-left', delay: 200, duration: 600 }),
       ],
     }),
@@ -404,7 +404,7 @@ registerTemplate({
         W('image', [0, 0, 100, 100], backdrop('', 62), { z: 0, loop: 'kenburns' }),
         W('text', [5, 52, 62, 36], headline(
           L('A year<br>in pictures', 'Ein Jahr<br>in Bildern'),
-          { theme: 'dark-minimal', valign: 'bottom', textScale: 400 }), { z: 1, anim: 'fade-up', duration: 800 }),
+          { theme: 'dark-minimal', valign: 'bottom', textScale: 395 }), { z: 1, anim: 'fade-up', duration: 800 }),
       ],
     }),
     S({

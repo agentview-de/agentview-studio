@@ -50,9 +50,10 @@
 
   <script type="module">
     import { runAll } from './runner.js';
+    import { fontsLoaded } from './fonts-loaded.js';
     (async () => {
       try {
-        await document.fonts.ready;
+        await fontsLoaded();
         await import('./template-legibility.test.js');
         // Same page, same reason: both suites need the app's real stylesheets
         // and a laid-out render to mean anything.

@@ -42,9 +42,10 @@ import '../shared/plugins/all.js';
 import { list as listPlugins } from '../shared/plugins/registry.js';
 import { createSlide, createWidget } from '../shared/slide-schema.js';
 import { renderSlideThumb } from '../admin/ui/slide-thumb.js';
+import { fontsLoaded } from '../test/fonts-loaded.js';
 import { usesNetwork } from '../shared/plugin-network.js';
 
-await document.fonts.ready;
+await fontsLoaded();
 
 const rig = document.getElementById('rig');
 const out = document.getElementById('out');

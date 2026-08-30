@@ -22,8 +22,8 @@ registerTemplate({
       widgets: [
         W('text', [5, 5, 58, 20], headline(
           L('Substitutions — today', 'Vertretungsplan — heute'),
-          { theme: 'medical-calm', textScale: 395 })),
-        cornerClock({ theme: 'medical-calm', display: 'weekday', rect: [65, 5, 30, 20], align: 'right', textScale: 150 }),
+          { theme: 'medical-calm', textScale: 390 })),
+        cornerClock({ theme: 'medical-calm', display: 'weekday', rect: [65, 5, 30, 20], align: 'right', textScale: 175 }),
         W('data-table', [5, 27, 90, 68], {
           source: 'inline',
           headers: L('Lesson, Class, Subject, Room, Note', 'Std., Klasse, Fach, Raum, Hinweis'),
@@ -52,7 +52,7 @@ registerTemplate({
       theme: 'bistro-warm',
       duration: 18,
       widgets: [
-        W('menu', [4, 5, 92, 84], {
+        W('menu', [4, 4, 92, 92], {
           rows: [
             { section: L('Monday', 'Montag'), name: L('Pasta with tomato sauce', 'Nudeln mit Tomatensauce'), price: 3.20, desc: L('with grated cheese', 'mit geriebenem Käse'), tags: 'vegetarian', image: '' },
             { section: L('Tuesday', 'Dienstag'), name: L('Chicken fricassee with rice', 'Hühnerfrikassee mit Reis'), price: 3.80, desc: '', tags: '', image: '' },
@@ -64,7 +64,7 @@ registerTemplate({
           showPrices: true, showImages: false, columns: '2', sectionFilter: '',
           footnote: L('Salad and dessert bar 1,20 € · allergens listed at the counter',
             'Salat- und Nachtischbar 1,20 € · Allergene an der Ausgabe'),
-          textScale: 150, locale: '', theme: 'bistro-warm',
+          textScale: 145, locale: '', theme: 'bistro-warm',
         }, { anim: 'fade-up', duration: 600 }),
       ],
     }),
@@ -206,7 +206,7 @@ registerTemplate({
         W('text', [4, 82, 92, 14], paragraph(
           L('<p>Exchange office, room 1.05 — walk-in hours Tuesday and Thursday, 10:00–12:00.</p>',
             '<p>International Office, Raum 1.05 — offene Sprechstunde Dienstag und Donnerstag, 10:00–12:00 Uhr.</p>'),
-          { theme: 'dark-minimal', textScale: 75, valign: 'middle' })),
+          { theme: 'dark-minimal', textScale: 70, valign: 'middle' })),
       ],
     }),
   ],
@@ -246,7 +246,7 @@ registerTemplate({
       widgets: [
         W('text', [5, 5, 90, 20], headline(
           L('Today in the house', 'Heute im Haus'),
-          { theme: 'gradient-purple', font: 'serif', textScale: 300 })),
+          { theme: 'gradient-purple', font: 'serif', textScale: 295 })),
         W('data-table', [5, 27, 90, 68], {
           source: 'inline',
           headers: L('Time, Event, Room, Host', 'Zeit, Veranstaltung, Raum, Gastgeber'),
@@ -331,7 +331,7 @@ registerTemplate({
       duration: 30,
       widgets: [
         W('text', [6, 3, 88, 8], headline(
-          L('Salon Mozart', 'Salon Mozart'), { theme: 'corporate-blue', textScale: 260 })),
+          L('Salon Mozart', 'Salon Mozart'), { theme: 'corporate-blue', textScale: 255 })),
         W('calendar', [4, 12, 92, 60], {
           heading: '',
           view: 'now-next', maxItems: 4, hidePast: true, daysAhead: 1,
@@ -352,7 +352,7 @@ registerTemplate({
           label: L('Book this room', 'Diesen Raum buchen'),
           showDetails: false, layout: 'horizontal', size: 480, moduleStyle: 'rounded',
           fgColor: '#000000', bgColor: '#ffffff', ecLevel: 'M', logoUrl: '', logoSize: 22,
-          frameless: true, textScale: 140, theme: 'corporate-blue', textColor: '', accentColor: '',
+          frameless: true, textScale: 130, theme: 'corporate-blue', textColor: '', accentColor: '',
         }, { anim: 'fade-up', delay: 250, duration: 600 }),
         tickerBar([
           L('Please leave the room as you found it', 'Bitte den Raum so hinterlassen, wie Sie ihn vorgefunden haben'),
@@ -380,7 +380,7 @@ registerTemplate({
       duration: 20,
       widgets: [
         W('text', [5, 5, 58, 20], headline(
-          L('Classes today', 'Kurse heute'), { theme: 'neon-cyber', textScale: 395 })),
+          L('Classes today', 'Kurse heute'), { theme: 'neon-cyber', textScale: 390 })),
         cornerClock({ theme: 'neon-cyber', display: 'time', rect: [75, 5, 20, 20], textScale: 105 }),
         W('data-table', [5, 27, 90, 68], {
           source: 'inline',
@@ -463,7 +463,7 @@ registerTemplate({
           source: 'inline', dataUrl: '', refreshSec: 300,
           style: 'bar', showValue: true, animate: true,
           align: 'center', labelPos: 'above', labelEmphasis: true,
-          color: '#22c55e', locale: '', textScale: 375, labelScale: 90, valueScale: 110,
+          color: '#22c55e', locale: '', textScale: 390, labelScale: 90, valueScale: 110,
           useThresholds: false, invertThresholds: false, thresholdWarn: 70, thresholdGood: 90,
           colorLow: '#ef4444', colorMid: '#f59e0b', colorHigh: '#22c55e',
           theme: 'neon-cyber',
@@ -510,7 +510,7 @@ registerTemplate({
         W('text', [61, 80, 36, 14], paragraph(
           L('<p>4 rooms · built 1998 · energy certificate B</p>',
             '<p>4 Zimmer · Baujahr 1998 · Energieausweis B</p>'),
-          { theme: 'editorial-mono', textScale: 180 }), { z: 3 }),
+          { theme: 'editorial-mono', textScale: 165 }), { z: 3 }),
       ],
     }),
     S({
@@ -558,7 +558,7 @@ registerTemplate({
         W('text', [6, 16, 44, 46], paragraph(
           L('<h2>The full listing</h2><p>Floor plans, energy certificate and viewing dates — scan and read it on your phone, any time of day.</p>',
             '<h2>Das ganze Exposé</h2><p>Grundrisse, Energieausweis und Besichtigungstermine — scannen und bequem am Handy lesen, rund um die Uhr.</p>'),
-          { theme: 'editorial-mono', textScale: 235 }), { anim: 'fade-right', duration: 600 }),
+          { theme: 'editorial-mono', textScale: 230 }), { anim: 'fade-right', duration: 600 }),
         W('qr-code', [54, 10, 40, 78], {
           template: 'url', url: 'https://agentview.de', text: '',
           wifiSsid: '', wifiPassword: '', wifiEnc: 'WPA', wifiHidden: false,

@@ -162,7 +162,7 @@ registerTemplate({
       widgets: [
         W('text', [5, 5, 90, 20], headline(
           L('Emergency service tonight', 'Notdienst heute Nacht'),
-          { theme: 'minimal-dark', textScale: 300 })),
+          { theme: 'minimal-dark', textScale: 295 })),
         W('data-table', [5, 27, 90, 68], {
           source: 'inline',
           headers: L('Date, Pharmacy, Address, Phone', 'Datum, Apotheke, Adresse, Telefon'),
@@ -261,7 +261,7 @@ registerTemplate({
         W('text', [4, 72, 92, 16], paragraph(
           L('<p>Wait times are estimates and update every few minutes. Booked appointments are always served first.</p>',
             '<p>Die Wartezeiten sind Schätzwerte und aktualisieren sich alle paar Minuten. Termine werden immer vorrangig bedient.</p>'),
-          { theme: 'corporate-blue', textScale: 110, valign: 'top' })),
+          { theme: 'corporate-blue', textScale: 105, valign: 'top' })),
       ],
     }),
     S({
@@ -362,14 +362,14 @@ registerTemplate({
         W('text', [5, 10, 54, 40], paragraph(
           L('<h2>Winter check</h2><p>Battery, tyres, lights, antifreeze and wiper blades — <strong>29,90 €</strong> instead of 49,90 €.</p>',
             '<h2>Wintercheck</h2><p>Batterie, Reifen, Beleuchtung, Frostschutz und Wischerblätter — <strong>29,90 €</strong> statt 49,90 €.</p>'),
-          { theme: 'industrial-steel', textScale: 280, valign: 'middle' }), { anim: 'fade-right', duration: 600 }),
+          { theme: 'industrial-steel', textScale: 250, valign: 'middle' }), { anim: 'fade-right', duration: 600 }),
         W('countdown', [5, 54, 54, 34], {
           target: { at: Date.now() + 14 * 86400000, tz: 'Europe/Berlin' },
           heading: L('Offer ends in', 'Aktion endet in'),
           theme: 'industrial-steel',
           expiredText: L('Offer ended', 'Aktion beendet'),
           units: 'dhm', unitStyle: 'short', locale: '', showTarget: false,
-          textScale: 250, urgentBelow: 48, urgentColor: '#f59e0b', finishedMode: 'text',
+          textScale: 245, urgentBelow: 48, urgentColor: '#f59e0b', finishedMode: 'text',
         }, { anim: 'fade-right', delay: 200, duration: 600 }),
         W('qr-code', [63, 14, 32, 70], {
           template: 'url', url: 'https://agentview.de', text: '',
@@ -392,7 +392,7 @@ registerTemplate({
           heading: L('Days without a workshop accident', 'Tage ohne Unfall in der Werkstatt'),
           showDate: true, locale: '', unitSingular: '', unitPlural: '',
           recordDays: 365, milestoneEvery: 100, goodAbove: 90, goodColor: '',
-          textScale: 100, theme: 'industrial-steel',
+          textScale: 90, theme: 'industrial-steel',
         }, { anim: 'rise', duration: 700 }),
         tickerBar([
           L('Safety shoes and glasses in the workshop at all times',

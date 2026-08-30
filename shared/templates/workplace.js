@@ -37,7 +37,7 @@ registerTemplate({
             { c1: '14:00', c2: L('Auditor — TÜV', 'Prüfer — TÜV'), c3: 'K. Hoffmann', c4: L('Lab', 'Labor') },
           ],
           dataUrl: '', refreshSec: 0, striped: false, autoAlignNumbers: false,
-          density: 'comfortable', headerStyle: 'accent', textScale: 400,
+          density: 'comfortable', headerStyle: 'accent', textScale: 395,
           pageRows: 0, pageSec: 8, highlightRules: [], theme: 'corporate-blue',
         }, { anim: 'fade-up', delay: 250, duration: 600 }),
       ],
@@ -69,7 +69,7 @@ registerTemplate({
         W('text', [6, 16, 44, 42], paragraph(
           L('<h2>Guest WiFi</h2><p>Scan the code — no password to type in, no note to lose.</p>',
             '<h2>Gäste-WLAN</h2><p>Code scannen — kein Passwort abtippen, kein Zettel, der verloren geht.</p>'),
-          { theme: 'corporate-blue', textScale: 270 }), { anim: 'fade-right', duration: 600 }),
+          { theme: 'corporate-blue', textScale: 265 }), { anim: 'fade-right', duration: 600 }),
         W('qr-code', [54, 10, 40, 78], {
           template: 'wifi', url: '', text: '',
           wifiSsid: 'Company-Guest', wifiPassword: 'Welcome-2026', wifiEnc: 'WPA', wifiHidden: false,
@@ -122,7 +122,7 @@ registerTemplate({
       widgets: [
         W('text', [5, 5, 58, 20], headline(
           L('Sprint 42 — day 6 of 10', 'Sprint 42 — Tag 6 von 10'),
-          { theme: 'dark-minimal', textScale: 395 })),
+          { theme: 'dark-minimal', textScale: 390 })),
         cornerClock({ theme: 'dark-minimal', display: 'time', rect: [75, 5, 20, 20], textScale: 105 }),
         W('kpi-cards', [5, 27, 61, 66], {
           cards: [
@@ -134,7 +134,7 @@ registerTemplate({
           source: 'inline', dataUrl: '', refreshSec: 0,
           columns: '2', density: 'comfortable',
           showDelta: true, showSparkline: true, showTarget: true,
-          numberFormat: 'full', locale: '', textScale: 100, theme: 'dark-minimal',
+          numberFormat: 'full', locale: '', textScale: 95, theme: 'dark-minimal',
         }, { anim: 'fade-up', duration: 600 }),
         W('progress', [69, 27, 26, 66], {
           label: L('Sprint burn-down', 'Sprint-Fortschritt'),
@@ -329,7 +329,7 @@ registerTemplate({
           heading: L('Days without a lost-time accident', 'Tage ohne meldepflichtigen Unfall'),
           showDate: true, locale: '', unitSingular: '', unitPlural: '',
           recordDays: 312, milestoneEvery: 50, goodAbove: 100, goodColor: '',
-          textScale: 95, theme: 'industrial-steel',
+          textScale: 90, theme: 'industrial-steel',
         }, { anim: 'rise', duration: 700 }),
         tickerBar([
           L('Report every near miss — that is how the streak survives',
@@ -385,7 +385,7 @@ registerTemplate({
             { c1: L('Packing', 'Verpackung'), c2: L('Early', 'Früh'), c3: L('STOPPED', 'STÖRUNG'), c4: '11:12' },
           ],
           dataUrl: '', refreshSec: 0, striped: true, autoAlignNumbers: false,
-          density: 'compact', headerStyle: 'accent', textScale: 400,
+          density: 'compact', headerStyle: 'accent', textScale: 395,
           pageRows: 0, pageSec: 8,
           highlightRules: [
             { keyword: L('STOPPED', 'STÖRUNG'), color: 'bad' },
@@ -406,7 +406,7 @@ registerTemplate({
             '<h2>Verpackungslinie steht</h2><p>Instandhaltung ist vor Ort. Paletten bis auf Weiteres in den Puffer Halle 3.</p>'),
           { theme: 'industrial-steel', maxWidth: 'comfortable' }),
           priority: 'urgent', pulse: true,
-          textScale: 255,
+          textScale: 235,
         }, { anim: 'fade-up', duration: 600 }),
       ],
     }),
@@ -431,7 +431,7 @@ registerTemplate({
       widgets: [
         W('text', [5, 5, 58, 20], headline(
           L('Dock schedule — today', 'Rampenplan — heute'),
-          { theme: 'industrial-steel', textScale: 395 })),
+          { theme: 'industrial-steel', textScale: 390 })),
         cornerClock({ theme: 'industrial-steel', display: 'time', rect: [75, 5, 20, 20], textScale: 105 }),
         W('data-table', [5, 27, 90, 68], {
           source: 'inline',
@@ -498,7 +498,7 @@ registerTemplate({
           ...paragraph(L(
             '<p><strong>Cycle count in aisle 12 today, 14:00.</strong> Please do not pick from bins 12-40 to 12-58 during the count.</p>',
             '<p><strong>Inventur in Gang 12 heute, 14:00 Uhr.</strong> Aus den Plätzen 12-40 bis 12-58 während der Zählung bitte nicht kommissionieren.</p>'),
-          { theme: 'minimal-dark', textScale: 165 }),
+          { theme: 'minimal-dark', textScale: 150 }),
           priority: 'warning',
         }, { anim: 'fade-up', delay: 250, duration: 600 }),
       ],

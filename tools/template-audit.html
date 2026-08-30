@@ -35,11 +35,12 @@ import '../shared/templates/all.js';
 import { listTemplates, buildSlides } from '../shared/templates/registry.js';
 import { localize } from '../shared/templates/lib.js';
 import { renderSlideThumb } from '../admin/ui/slide-thumb.js';
+import { fontsLoaded } from '../test/fonts-loaded.js';
 
 // Measure with the REAL faces. Inter is wider than the system fallback, so a
 // layout measured mid-load fits and then overflows once the webfont lands —
 // which is exactly the disagreement these two tools had with each other.
-await document.fonts.ready;
+await fontsLoaded();
 
 const rig = document.getElementById('rig');
 const out = document.getElementById('out');

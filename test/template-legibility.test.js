@@ -93,6 +93,32 @@ function measureSlide(tpl, slide) {
 
 const templates = listTemplates().filter(t => t.category !== 'blank');
 
+// Runs FIRST, because every number below it is meaningless if this one is
+// wrong. Text metrics are the measurement, and the measurement is only about
+// the templates if the face is the one that ships.
+//
+// The trap is that `await document.fonts.ready` looks like it covers this and
+// does not: the font set only tracks faces some laid-out text has already
+// asked for, so on an empty page it is idle and the promise resolves at once.
+// Everything then renders in the system fallback (`font-display: swap` paints
+// in it first) and gets measured before the swap. That passed on a machine
+// whose fallback happens to resemble Inter and reported five slides clipped on
+// CI's Linux runner, every one of them horizontally, because DejaVu Sans is
+// wider. fontsLoaded() in the page bootstrap loads the faces up front; this
+// fails loudly if that ever stops working, instead of quietly measuring a
+// different font than the displays will use.
+describe('templates · the measurement uses the shipped faces', () => {
+  test('Inter and Inter Tight are loaded, not swapped in later', () => {
+    const missing = ['400 48px "Inter"', '800 48px "Inter Tight"']
+      .filter(spec => !document.fonts.check(spec));
+    if (missing.length) {
+      throw new Error(
+        `web font not loaded: ${missing.join(', ')} — every size below would be `
+        + 'the system fallback\'s, not the shipped face\'s');
+    }
+  });
+});
+
 describe('templates · nothing is clipped, in either language', () => {
   for (const lang of ['en', 'de']) {
     test(`every slide fits its widgets (${lang})`, () => {
