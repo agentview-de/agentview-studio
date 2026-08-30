@@ -23,8 +23,8 @@ import { storeTemplates } from '../api.js';
 import { createSlide, createWidget } from '../../shared/slide-schema.js';
 import { commit } from '../store.js';
 import { openModal } from '../ui/modal.js';
-import { loadInto } from '../cloud-load.js';
 import { openTemplateStore } from '../ui/template-store.js';
+import { renderOwnTemplates } from '../ui/html-templates.js';
 import { renderSlide as canvasRenderSlide } from '../canvas/canvas.js';
 
 const TABS = [
@@ -196,15 +196,18 @@ async function insertStoreTemplate(id) {
 
 async function copyStoreTemplate(slug, title) {
   if (state.connection.status !== 'connected') { toast(t('pub.connectFirst'), { kind: 'warn' }); return; }
-  const defaultName = `${title} ${t('common.copySuffix', 'Kopie')}`;
+  // t() takes a PARAMS object as its second argument, never a fallback string —
+  // it answers with the key itself when one is missing, so the strings that used
+  // to sit here were dead weight that could never render.
+  const defaultName = `${title} ${t('common.copySuffix')}`;
   const box = document.createElement('div');
   box.className = 'bb-form-group';
   box.innerHTML = `
-    <p class="bb-form-help">${t('store.newName', 'Name der Playlist-Kopie')}</p>
+    <p class="bb-form-help">${t('store.newName')}</p>
     <input type="text" id="tpl-copy-name" value="${escapeHtml(defaultName)}" style="width:100%;padding:6px;" autofocus>`;
   const proceed = await openModal({
-    title: t('store.copy', 'In Playlist kopieren'), body: box,
-    actions: [{ label: t('common.cancel') }, { label: t('store.copy', 'Kopieren'), kind: 'primary', value: 1 }],
+    title: t('store.copy'), body: box,
+    actions: [{ label: t('common.cancel') }, { label: t('store.copyGo'), kind: 'primary', value: 1 }],
     onMount: card => {
       setTimeout(() => box.querySelector('#tpl-copy-name')?.focus(), 10);
       const inp = box.querySelector('#tpl-copy-name');
@@ -220,17 +223,23 @@ async function copyStoreTemplate(slug, title) {
   const displayName = box.querySelector('#tpl-copy-name').value.trim();
   if (!displayName) return;
 
-  toast(t('store.copying', 'Kopiere Template…'), { kind: 'info', ttl: 3000 });
+  toast(t('store.copying'), { kind: 'info', ttl: 3000 });
   try {
     const res = await storeTemplates.copy(slug, displayName);
-    const clonedSlug = res?.slot?.slug ?? res?.slug;
-    if (!clonedSlug) {
-      throw new Error(tx('No target slug received from the server.'));
-    }
-    const success = await loadInto(clonedSlug, displayName);
-    if (success) {
-      canvasRender();
-    }
+    // `/copy` creates a PRIVATE HTML TEMPLATE in the account — not a data slot
+    // holding a playlist. Its response is { success, templateSlug, templateId,
+    // name } (store spec + verified live). This read `res.slot.slug ?? res.slug`,
+    // neither of which exists, so every copy ended in "No target slug received
+    // from the server" — while the server had in fact created the template. A
+    // live account had three of them sitting there unnoticed, because until now
+    // nothing in the Studio listed owned templates at all.
+    const id = res?.templateId ?? res?.templateSlug;
+    if (!id) throw new Error(tx('The server returned no template id.'));
+    toast(t('store.copiedToTemplates', { name: res?.name || displayName }), { kind: 'success' });
+    // Show the result instead of describing it: switch to the tab that now
+    // holds the copy.
+    state.ui.libraryTab = 'templates';
+    _libRender?.();
   } catch (e) {
     toast(e.message, { kind: 'error' });
   }
@@ -429,6 +438,18 @@ function renderTemplates(body) {
   btn.innerHTML = uiIconSvg('grid', 14) + escapeHtml(t('tplStore.libOpen'));
   btn.addEventListener('click', () => openTemplateStore().then(applied => { if (applied) canvasRenderSlide(); }));
   body.appendChild(btn);
+
+  // Below the door to the Studio's own slide sets: the templates THIS account
+  // saved in agentView (from a publish, or off a running display). Different
+  // things entirely — one is a catalog to start from, the other is your own
+  // shelf — so they get their own heading rather than one merged list.
+  const own = document.createElement('div');
+  own.className = 'avs-lib-own-tpl';
+  own.innerHTML = `<h4 class="avs-lib-subhead">${escapeHtml(t('tpl.ownHead'))}</h4>`;
+  const list = document.createElement('div');
+  own.appendChild(list);
+  body.appendChild(own);
+  renderOwnTemplates(list);
 }
 
 function renderApis(body) {

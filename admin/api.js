@@ -7,7 +7,7 @@
 import { state } from './store.js';
 import { toast } from './ui/toast.js';
 import { t, getLocale } from './i18n.js';
-import { authHeader, resolveUrl, storeQuery, nextStoreOffset } from './api-url.js';
+import { authHeader, resolveUrl, storeQuery, nextStoreOffset, unwrapList } from './api-url.js';
 
 // The server rejects admin/owner calls made with a non-admin token (a session
 // the user approved without admin rights, or a content_only API key) with a
@@ -588,6 +588,64 @@ export const storeTemplates = {
   agentArtifactRaw: (slug, key) =>
     request('GET', `/api/v1/store/templates/${encodeURIComponent(slug)}/agent-artifacts/${encodeURIComponent(key)}/raw`),
 };
+
+// ---------- Own HTML templates (Owner API) ----------
+// The account's OWN saved templates — NOT the public store above. The catalog
+// under /api/v1/store/* is editorial and accepts nothing from outside; its
+// write calls (send/copy/preview-share/materialize) all need a template that
+// already exists there. Saving something of your own lives here.
+//
+// Source: /swagger/owner/swagger.json (Screen.Server 2.1.128, read 2026-08-30);
+// unauth GET → 401, so the routes are live. Worth knowing for the next drift
+// check: this whole surface is absent from BOTH the MCP tool manifest and
+// agentview.de/agent-instructions, which cover only the agent + store APIs.
+// Reading "no MCP tool" as "the feature does not exist" is how these endpoints
+// stayed unused. The Swagger index lists three specs (agent/store/owner) and
+// is the only complete source; the conventional /swagger/v1/swagger.json 404s.
+//
+// Request bodies, from the spec's schemas (lengths are server-enforced):
+//   create       { name ≤200, description ≤2000, html, sourceProfileId ≤64 }
+//   saveCurrent  { name, description }        — no html: the server snapshots
+//                                               what that display is RUNNING
+//   update       { name, description, html }
+//   share        { groupType ≤64, groupId ≤64 }
+// Every response is documented as a bare "200 OK" with no schema, so nothing
+// here may assume a shape: list() goes through unwrapList(), and the callers
+// read ids defensively (see templateIdOf).
+export const htmlTemplates = {
+  list: async () => unwrapList(await request('GET', '/api/v1/owner/html-templates'),
+    ['templates', 'htmlTemplates']),
+  get: (id) => request('GET', `/api/v1/owner/html-templates/${encodeURIComponent(id)}`),
+  create: ({ name, description, html, sourceProfileId } = {}) =>
+    request('POST', '/api/v1/owner/html-templates', {
+      name, html,
+      ...(description ? { description } : {}),
+      ...(sourceProfileId ? { sourceProfileId } : {}),
+    }),
+  update: (id, body) =>
+    request('PATCH', `/api/v1/owner/html-templates/${encodeURIComponent(id)}`, body),
+  remove: (id) => request('DELETE', `/api/v1/owner/html-templates/${encodeURIComponent(id)}`),
+  // Snapshot what a display is showing right now. Nothing is uploaded — the
+  // server reads its own stored content for that profile, so this also works
+  // for content the Studio did not publish.
+  saveCurrent: (displayId, { name, description } = {}) =>
+    request('POST', `/api/v1/owner/displays/${encodeURIComponent(displayId)}/current-html/save-template`,
+      { name, ...(description ? { description } : {}) }),
+  shares: (id) => request('GET', `/api/v1/owner/html-templates/${encodeURIComponent(id)}/shares`),
+  share: (id, groupType, groupId) =>
+    request('POST', `/api/v1/owner/html-templates/${encodeURIComponent(id)}/shares`, { groupType, groupId }),
+  // The only one of these whose parameters travel as a query string (per spec).
+  unshare: (id, groupType, groupId) =>
+    request('DELETE', `/api/v1/owner/html-templates/${encodeURIComponent(id)}/shares?`
+      + new URLSearchParams({ groupType: groupType ?? '', groupId: groupId ?? '' }).toString()),
+};
+
+// Ids come back under whichever key the undocumented response chose. One place
+// to look them up, so a server that says `templateId` doesn't leave the list
+// rendering rows that cannot be opened or deleted.
+export function templateIdOf(tpl) {
+  return tpl?.id ?? tpl?.templateId ?? tpl?.htmlTemplateId ?? tpl?.slug ?? null;
+}
 
 // ---------- License management ----------
 // Verified (2026-05-28 reply):

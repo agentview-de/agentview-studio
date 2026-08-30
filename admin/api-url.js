@@ -61,3 +61,20 @@ export function nextStoreOffset({ offset = 0, limit = 0, returned = 0, total } =
   if (limit && returned < limit) return null;       // short page, no total → done
   return next;
 }
+
+// ---------- List envelopes ----------
+// agentView's list endpoints answer in several shapes: a bare array, or an
+// object wrapping the rows under an endpoint-specific key (`templates`,
+// `assets`, `slots`, …) or a generic `items` / `data` / `results`. For the
+// owner API the shape is not merely inconsistent but UNDOCUMENTED — its spec
+// declares every response as a bare "200 OK" with no schema — so a caller
+// cannot know before the server answers. Try the endpoint's own key(s) first,
+// then the generic wraps, and return [] rather than letting a `.map` of
+// undefined throw a list view into a blank page.
+export function unwrapList(raw, keys = []) {
+  if (Array.isArray(raw)) return raw;
+  for (const k of [...keys, 'items', 'data', 'results']) {
+    if (Array.isArray(raw?.[k])) return raw[k];
+  }
+  return [];
+}

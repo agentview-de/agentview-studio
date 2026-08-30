@@ -12,6 +12,7 @@ import { state } from './store.js';
 import { displays as displaysApi, slots, groups as groupsApi, assets, categoryIdOf } from './api.js';
 import { bundlePlayer, VENDOR_TYPES } from './publish.js';
 import { openModal } from './ui/modal.js';
+import { saveBundleAsTemplate } from './ui/html-templates.js';
 import { toast } from './ui/toast.js';
 import { t } from './i18n.js';
 import { collectUniqueSlots } from '../shared/binding-resolver.js';
@@ -301,7 +302,7 @@ async function resolveSlotEndpoints(pl) {
   return out;
 }
 
-async function buildBundle() {
+async function buildBundle({ alsoFrozen = false } = {}) {
   // v3 safety: if a variant is being edited via swap-in-place, restore the
   // default widgets BEFORE serialising — otherwise the published playlist
   // would have the variant's widgets at slide.widgets and the default array
@@ -335,20 +336,30 @@ async function buildBundle() {
   // ship playlist.
   const plBlob = JSON.stringify(plToShip ?? {});
   const vendorTypes = VENDOR_TYPES.filter(t => plBlob.includes(`"type":"${t}"`));
-  const html = await bundlePlayer({
-    baseUrl, readUrl,
-    windowGlobals: {
-      BB_ORG_BRAND: state.admin?.brandKitOrg ?? null,
-    },
-    // Fonts (woff2) upload fine as agentView assets and are repointed at those
-    // URLs (relative /fonts paths 404 on the content host); deduped per account by
-    // sha256. Vendor scripts are inlined instead (the asset store rejects .js).
-    resolveAsset: makeAssetResolver(),
-    vendorTypes,
-  });
+  const windowGlobals = { BB_ORG_BRAND: state.admin?.brandKitOrg ?? null };
+  // ONE resolver across both builds below: it caches per source URL and dedupes
+  // by sha256, so the second bundle re-uses every upload the first one made
+  // instead of hashing and re-checking the account's asset list a second time.
+  // Fonts (woff2) upload fine as agentView assets and are repointed at those
+  // URLs (relative /fonts paths 404 on the content host). Vendor scripts are
+  // inlined instead (the asset store rejects .js).
+  const resolveAsset = makeAssetResolver();
+  const html = await bundlePlayer({ baseUrl, readUrl, windowGlobals, resolveAsset, vendorTypes });
+  // The template copy, when one was asked for. It differs in exactly one way:
+  // the slides travel INSIDE the HTML (BB_PLAYLIST) instead of being fetched
+  // from `readUrl` at boot. That slot is rewritten by the next publish of this
+  // same playlist, so a template built from the live bundle would silently
+  // become a mirror of it — and blank if the slot were deleted. Costs a second
+  // bundle pass, which is why it only runs when the box is ticked.
+  const frozenHtml = alsoFrozen
+    ? await bundlePlayer({
+      baseUrl, readUrl, resolveAsset, vendorTypes,
+      windowGlobals: { ...windowGlobals, BB_PLAYLIST: plToShip },
+    })
+    : null;
   // sourcePlaylist (with keys intact) is snapshotted to history so a restore keeps
   // the full config; the displays only ever see the key-stripped plToShip.
-  return { html, slug, name: plToShip?.name ?? 'Playlist', shippedPlaylist: plToShip, sourcePlaylist: pl };
+  return { html, frozenHtml, slug, name: plToShip?.name ?? 'Playlist', shippedPlaylist: plToShip, sourcePlaylist: pl };
 }
 
 export async function publishToDisplay(displayId) {
@@ -388,9 +399,27 @@ export async function openPublishPicker(preselect = {}) {
       <button class="bb-bezel-btn" data-mode="multi">${t('pub.multi')}</button>
     </div>
     <p class="bb-form-help">${t('pub.modeHelp')}</p>
-    <div class="avs-pub-target" id="avs-pub-target"></div>`;
+    <div class="avs-pub-target" id="avs-pub-target"></div>
+    <!-- Optional second outcome of the same action: keep what is being sent as
+         a reusable template in the account (Owner API). Off by default — a
+         publish that silently filled the template list would be a surprise —
+         and the name field only appears once it is asked for. -->
+    <div class="avs-pub-astpl">
+      <label class="avs-check">
+        <input type="checkbox" id="pub-astpl"> ${t('pub.alsoTemplate')}
+      </label>
+      <div class="bb-form-group" id="pub-astpl-name" hidden>
+        <input id="pub-tplname" maxlength="200" value="${esc(state.playlist?.name ?? '')}"
+               placeholder="${esc(t('tpl.name'))}" autocomplete="off">
+        <p class="bb-form-help">${t('pub.alsoTemplateHelp')}</p>
+      </div>
+    </div>`;
 
   const target = box.querySelector('#avs-pub-target');
+  box.querySelector('#pub-astpl').addEventListener('change', e => {
+    box.querySelector('#pub-astpl-name').hidden = !e.target.checked;
+    if (e.target.checked) box.querySelector('#pub-tplname').focus();
+  });
   let mode = preselect.mode ?? 'single';
   // Read the fleet live so a display paired mid-flow shows up on re-render.
   const fleetDisplays = () => state.fleet.displays ?? [];
@@ -439,18 +468,24 @@ export async function openPublishPicker(preselect = {}) {
   });
   if (!ok) return;
 
-  if (mode === 'single') return doPublish({ mode: 'single', displayIds: [box.querySelector('#pub-one')?.value].filter(Boolean) });
+  // Only a ticked box with a non-empty name asks for a template; an empty name
+  // would be saved as one nobody can find again in the list.
+  const tplName = box.querySelector('#pub-astpl').checked
+    ? box.querySelector('#pub-tplname').value.trim() : '';
+  const saveTemplate = tplName ? { name: tplName } : null;
+
+  if (mode === 'single') return doPublish({ mode: 'single', displayIds: [box.querySelector('#pub-one')?.value].filter(Boolean), saveTemplate });
   if (mode === 'group') {
     const gid = box.querySelector('#pub-grp')?.value;
     if (!gid) { toast(t('pub.noGroups'), { kind: 'warn' }); return; }
-    return doPublish({ mode: 'group', groupId: gid });
+    return doPublish({ mode: 'group', groupId: gid, saveTemplate });
   }
   const ids = [...box.querySelectorAll('.avs-pub-checks input:checked')].map(i => i.value);
   if (!ids.length) { toast(t('pub.pickTarget'), { kind: 'warn' }); return; }
-  return doPublish({ mode: 'multi', displayIds: ids });
+  return doPublish({ mode: 'multi', displayIds: ids, saveTemplate });
 }
 
-async function doPublish({ mode, displayIds = [], groupId }) {
+async function doPublish({ mode, displayIds = [], groupId, saveTemplate = null }) {
   // Guard against publishing an empty playlist — would silently push a blank
   // bundle to every targeted display and leave them showing nothing.
   if (!state.playlist?.slides?.length) {
@@ -467,7 +502,7 @@ async function doPublish({ mode, displayIds = [], groupId }) {
   state.meta.publishingTo = { mode, displayIds, groupId, at: Date.now() };
   toast(t('pub.publishing'), { kind: 'info', ttl: 2000 });
   try {
-    const { html, name, sourcePlaylist } = await buildBundle();
+    const { html, frozenHtml, name, sourcePlaylist } = await buildBundle({ alsoFrozen: !!saveTemplate?.name });
     // Pre-publish dry-run (warn only — never blocks shipping).
     try {
       const r = await displaysApi.testContent(html);
@@ -505,6 +540,21 @@ async function doPublish({ mode, displayIds = [], groupId }) {
       // Multi → one broadcast call with the picked displayIds.
       await displaysApi.broadcast({ displayIds: ids, html, description: name, contentDescription: name });
       toast(t('pub.success'), { kind: 'success' });
+    }
+    // Optional: keep this very bundle as a reusable template in the account.
+    // After the send and never before it — the screens are what the button
+    // promised; the template is the extra. saveBundleAsTemplate() swallows its
+    // own errors into a warning for the same reason.
+    if (saveTemplate?.name) {
+      await saveBundleAsTemplate({
+        // The frozen copy — never the live bundle. See buildBundle().
+        html: frozenHtml ?? html,
+        name: saveTemplate.name,
+        description: saveTemplate.description,
+        // The server links a template to where it came from. Group and multi
+        // sends have no single origin, so only a single send names one.
+        sourceProfileId: mode === 'single' ? ids[0] : undefined,
+      });
     }
     // v3: best-effort version snapshot after a successful publish.
     snapshotVersion(sourcePlaylist ?? state.playlist, ids).catch(() => {});
