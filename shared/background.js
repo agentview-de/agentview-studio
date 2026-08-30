@@ -147,6 +147,26 @@ function bgLuminance(bg) {
   return null;
 }
 
+// Readable ink for a solid COLOUR — the same luminance rule as
+// readableTextColor below, for callers that hold a colour rather than a
+// background object. A badge painted with the theme accent has this exact
+// problem: the ticker's lead label used `color: var(--bb-st-bg)`, which is a
+// gradient string on most themes, so the declaration was dropped and the label
+// inherited the theme's own light text — white on a light amber pill. Returns
+// null for anything unparseable, so the caller can keep its own colour.
+export function readableOn(color) {
+  const l = luminance(color);
+  if (l == null) return null;
+  // Whichever of the two inks has the higher WCAG contrast ratio — NOT a
+  // luminance > 0.5 test. The accent palette is full of mid-tone colours where
+  // the two disagree: amber #f59e0b sits at luminance 0.44, so a 0.5 threshold
+  // picks light ink, and white on amber is 2.1:1 where black is 10:1. Sky blue
+  // #38bdf8 and cyan #06b6d4 fail the same way. The crossover is near 0.18, and
+  // deriving it from the ratio means it never has to be re-derived by hand.
+  const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  return ratio(l, luminance(FG_LIGHT)) >= ratio(l, luminance(FG_DARK)) ? FG_LIGHT : FG_DARK;
+}
+
 // Readable text colour for a painted slide background, or null to keep the theme's.
 export function readableTextColor(bg) {
   const l = bgLuminance(bg);
