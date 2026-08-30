@@ -13,6 +13,9 @@ export const THEME_SWATCHES = {
   'industrial-steel': { bg: 'linear-gradient(135deg, #1b1b22, #2c2c36 50%, #11111a 100%)', accent: '#fbbf24' },
   'neon-cyber':       { bg: 'radial-gradient(circle at 30% 20%, #2a005f 0%, #1a0040 35%, #02041a 100%)', accent: '#f0abfc' },
   'editorial-mono':   { bg: '#f4f3ef', accent: '#b91c1c' },
+  // Audience themes rather than venue themes — see slide-themes.css.
+  'playful-bright':   { bg: 'linear-gradient(150deg, #d3ecfd 0%, #e9f7d6 48%, #ffe7b3 100%)', accent: '#9a3412' },
+  'clarity-light':    { bg: '#f6f5f1', accent: '#0b4f86' },
 };
 
 // All theme ids in display order.

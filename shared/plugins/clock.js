@@ -40,6 +40,7 @@ export default register({
   defaults: () => ({ ...colorOverrideDefaults(),
     timezone: defaultTz(),
     label: '',
+    showLabel: true,
     locale: '',
     showOffset: false,
     display: 'date-time',
@@ -60,8 +61,11 @@ export default register({
       { type: 'section', key: 'clock', label: 'Clock' },
       { key: 'timezone', type: 'timezone', label: 'Time zone',
         help: 'Drives both the time and the date line — set the venue\'s zone, not the player\'s.' },
+      { key: 'showLabel', type: 'toggle', label: 'Show label',
+        help: 'The small line above the clock. Turn it off for a bare clock — a corner clock on a single-site screen has nothing useful to say there.' },
       { key: 'label', type: 'text', label: 'Label', placeholder: 'e.g. Berlin',
-        help: 'Shown above the clock. Leave blank to show the time zone name.' },
+        showIf: c => c.showLabel !== false,
+        help: 'Shown above the clock. Leave blank to show the time zone name instead.' },
       { ...localeField(), tier: 'advanced' },
       { key: 'showOffset', type: 'toggle', label: 'Show UTC offset', tier: 'advanced',
         help: 'Appends the zone offset (e.g. UTC+2) next to the label — handy on multi-site boards.' },
@@ -197,9 +201,18 @@ export default register({
     if (align !== 'center') root.style.alignItems = align === 'left' ? 'flex-start' : 'flex-end';
 
     // c.label || tz (NOT ??): defaults() stores '', which must still fall
-    // through to the time zone name on a fresh clock.
-    const labelHtml = `
-      <div class="bb-clock-label" data-field="label timezone showOffset align textScale locale">${escapeHtml(c.label || tz)}${c.showOffset
+    // through to the time zone name on a fresh clock — that is what the field's
+    // help promises, and a clock dropped on an empty slide should say which
+    // zone it is showing.
+    //
+    // What it must NOT do is make that undeclinable. Every corner clock in the
+    // template catalog carried a tiny uppercase "EUROPE/BERLIN" above it — nine
+    // slides, up to 29 px of it on the school board — because clearing the
+    // label is exactly how you ask for no label, and clearing it brought the
+    // zone back. `showLabel` is the way to say no. It defaults to true, so no
+    // stored playlist changes: the key is simply absent and reads as on.
+    const labelHtml = c.showLabel === false ? '' : `
+      <div class="bb-clock-label" data-field="label showLabel timezone showOffset align textScale locale">${escapeHtml(c.label || tz)}${c.showOffset
         ? '<span class="bb-clock-offset" data-field="showOffset timezone locale" style="opacity:.65;margin-left:.6em;font-size:.85em;letter-spacing:.05em;"></span>' : ''}</div>`;
     const titleHtml = slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : '';
     const badgeHtml = '<div class="bb-clock-badge" data-field="showOpenBadge openFrom openTo openText closedText timezone locale textScale" style="display:none"></div>';

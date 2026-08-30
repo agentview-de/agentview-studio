@@ -40,6 +40,9 @@
       // Browser-only: the thumbnail renderer's box arithmetic needs a laid-out
       // element. No app stylesheet needed — every number it asserts is inline.
       './slide-thumb.test.js',
+      // Browser-only: fetches slide-themes.css as text to check it against the
+      // theme registry. Two files, one question.
+      './themes.test.js',
       './schema.test.js',
       './round-trip.test.js',
       './migrate.test.js',

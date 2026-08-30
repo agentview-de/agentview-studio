@@ -11,5 +11,8 @@ import './gastro.js';
 import './service.js';
 import './workplace.js';
 import './places.js';
+// The sets chosen by WHO is reading rather than by what kind of venue it is —
+// nursery, primary school, youth club, paediatrics, day centre, community centre.
+import './audience.js';
 
 export {};

@@ -45,12 +45,12 @@ no `npm install` to run it. Serve the folder and open `index.html`.
 | ▦ **Designs, not fixed zones** | Six layouts (Fullscreen · Split 50/50 · Split 70/30 · Main + ticker · 2×2 grid · Header + main) **stamp editable widgets** onto the canvas — then move them freely. No locked zones. |
 | 📺 **Displays dashboard** | Screens grouped by native agentView **groups** (categories), each card showing online state and the slideshow currently running. |
 | 🚀 **One-click publish** | Deploy to one display, a whole group, or a hand-picked set. The playlist is bundled into a self-contained player and pushed live in seconds. |
-| 🏬 **Template store** | 26 complete, industry-specific slide sets — bistro, practice, citizen office, workshop, hotel, school, gym, sales floor — plus the blank start. Live previews, bilingual content, one click to load. |
+| 🏬 **Template store** | 32 complete slide sets — by industry (bistro, practice, citizen office, workshop, hotel, school, gym, sales floor) and by audience (nursery, primary school, youth club, paediatrics, day centre, community centre) — plus the blank start. Live previews, bilingual content, one click to load. |
 | 🛠 **Admin console** | A third view beside Editor & Displays — a 9-tab owner console: approvals · audit log · webhooks · API keys · members · licenses · connectivity · brand kit · version history. |
 | ⏰ **Day-parting & scheduling** | Per slide: days of week · time windows · date ranges. The player evaluates visibility every minute and skips slides outside their window. |
 | 🪄 **Drop any file → slideshow** | PDF, multiple images, `.csv`, `.xlsx`, `.docx`, `.pptx`, `.ics`, `.json` — auto-detected and imported as the right widgets. (Drop a media URL for video / streams.) |
 | ⌨️ **Command palette + shortcuts** | `⌘/Ctrl+K` runs every action by name · undo/redo · `J`/`K` navigate slides · `D` duplicate · `Del` remove. |
-| 🌗 **Themes** | 11 slide themes + light/dark admin chrome. |
+| 🌗 **Themes** | 13 slide themes, two of them chosen by who is reading rather than by venue, + light/dark admin chrome. |
 | 🎬 **Motion** | 9 slide transitions, 10 per-widget entrance **builds** (fade-up · pop · reveal · blur · rise …), and 6 continuous ambient **loops** (float · pulse · sway · Ken Burns · glow · spin). All pure-CSS and `prefers-reduced-motion`-aware. |
 | 🎯 **Plugin architecture** | Every widget type is a small ES-module plugin with a declarative `schema()` and a `render()` that handles its own `dispose()`. The **same** plugin renders the editor preview and the live screen — no drift. |
 | 🌍 **Bilingual** | English (default) and German UI, switchable at runtime. |
@@ -205,7 +205,7 @@ right now, and a numbered process that can walk its own highlight.
 
 On first run Studio asks one question: blank slide set, or a ready-made one?
 The **Template store** (⋯ menu → *New from template*, `⌘/Ctrl+K`, or the Library's
-*Templates* tab) holds **26 complete slide sets** plus the blank start, filtered by
+*Templates* tab) holds **32 complete slide sets** plus the blank start, filtered by
 industry and searchable by name, industry or widget ("queue", "Wartezimmer",
 "menu"). Every card shows a **real preview** — the same plugin `render()` the
 canvas and the player use, laid out at the design size and scaled down — so you
@@ -221,6 +221,16 @@ to, so a German bakery gets "Es bedient sich Nummer", not "Now serving".
 Templates ship **photo-free** — an image widget with no URL shows the placeholder
 and the asset picker is one click away — and browsing the store contacts no
 third party: network widgets render a stand-in rather than fetching.
+
+Most sets are chosen by venue. Six are chosen by **who is standing in front of
+the screen** — a nursery, a primary school, a youth club, a paediatric waiting
+room, a day centre and a community centre — because sorted by audience rather
+than by industry the catalog was one block of adults 20-65. They are searchable
+by "children" / "Kinder" and "seniors" / "Senioren", and they carry two themes
+of their own: `playful-bright` and `clarity-light`, both light-ground (light
+text on a dark field is the harder read for an ageing eye, and for a bright
+room). The two 60+/75+ sets carry no ticker at all: reading moving text needs
+the text held stable across saccades, which is exactly what declines.
 
 ### Build a slideshow on the canvas
 

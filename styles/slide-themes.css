@@ -188,6 +188,43 @@
   --bb-st-font: "Playfair Display", Georgia, serif;
 }
 
+/* The two themes that exist for a VIEWER rather than for a venue. Every other
+   theme here answers "what kind of place is this"; these two answer "whose eyes
+   are reading it", which is the one axis the catalog had no answer for.
+
+   Both are light-ground on purpose. Light text on a dark field is the house
+   style and it is the harder read for an ageing eye: the lens scatters light,
+   so bright glyphs bloom into the dark around them. Dark ink on a light ground
+   does not do that. It is also the better read across a bright room — a day
+   room, a classroom, a foyer with windows — which is where both audiences are.
+
+   Contrast is measured, not assumed. Figures are the worst gradient stop. */
+
+/* Children. Pastel rather than primary: saturated colour at wall scale is
+   exhausting to sit under all day, and it eats the contrast the text needs.
+   Sky -> mint -> apricot keeps every stop light enough for one dark ink
+   (14.5:1 at worst) and reads as friendly without shouting. Font is left to
+   the default deliberately — a rounded face would suit this better and the app
+   does not ship one; claiming it in the stack would just fall back silently. */
+.bb-theme-playful-bright  {
+  --bb-st-bg: linear-gradient(150deg, #d3ecfd 0%, #e9f7d6 48%, #ffe7b3 100%);
+  --bb-st-fg: #17181d;
+  --bb-st-accent: #9a3412;   /* 6.0:1 as ink, 7.3:1 for white on it */
+}
+
+/* Older eyes. Flat ground, not a gradient: a gradient behind text means the
+   contrast is only as good as its worst stop, and the whole point here is that
+   there is no worst stop. 16.4:1 for the text, 7.8:1 for the accent — AAA both
+   ways, where the rest of the catalog aims at AA. Inter rather than the display
+   face: the larger x-height and the open counters are what make 'a' and 'o'
+   separable when acuity is down. */
+.bb-theme-clarity-light   {
+  --bb-st-bg: #f6f5f1;
+  --bb-st-fg: #15171b;
+  --bb-st-accent: #0b4f86;   /* 7.8:1 as ink, 8.5:1 for white on it */
+  --bb-st-font: "Inter", system-ui, sans-serif;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Weather widget — premium redesign
    ───────────────────────────────────────────────────────────────────────────

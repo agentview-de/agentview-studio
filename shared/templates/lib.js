@@ -197,9 +197,15 @@ export const tickerBar = (items, opts = {}) => W('ticker', opts.rect ?? [0, 88, 
 }, { z: opts.z ?? 5 });
 
 // A small corner clock — the other element every second template wants.
+//
+// showLabel defaults to FALSE here, unlike the widget. A clock in the corner of
+// a lobby board is answering "what time is it", not "which time zone is this
+// screen in"; the catalog shipped nine slides captioned EUROPE/BERLIN because
+// the widget reads a blank label as "show the zone".
 export const cornerClock = (opts = {}) => W('clock', opts.rect ?? [76, 3, 21, 12], {
   timezone: opts.tz ?? 'Europe/Berlin',
   label: opts.label ?? '',
+  showLabel: opts.showLabel ?? false,
   locale: '',
   showOffset: false,
   display: opts.display ?? 'time',

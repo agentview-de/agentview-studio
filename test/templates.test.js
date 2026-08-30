@@ -159,6 +159,27 @@ describe('templates · content is sane on a real screen', () => {
       if (!ok) throw new Error(`rect off-slide: ${where} ${JSON.stringify(r)}`);
     }
   });
+  test('no clock in the catalog captions itself with a time zone', () => {
+    // The clock widget renders `label || timezone`, which is what its help
+    // text promises and which made a blank label undeclinable: nine slides
+    // shipped with a small uppercase EUROPE/BERLIN over the clock, 29 px of it
+    // on the school board. cornerClock() now sets showLabel:false, and this is
+    // the check that a future template does not go back to hand-rolling a
+    // clock widget and reintroduce it.
+    const bad = [];
+    for (const { w, where } of everyWidget()) {
+      if (w.type !== 'clock') continue;
+      const c = w.content ?? {};
+      if (c.showLabel === false) continue;
+      // Label on: it has to be a label somebody wrote, not a fallback.
+      if (!String(c.label ?? '').trim()) bad.push(where);
+    }
+    if (bad.length) {
+      throw new Error(`${bad.length} clock(s) fall back to the time zone as their label — `
+        + `set showLabel:false or give them one:\n  ` + bad.join('\n  '));
+    }
+  });
+
   test('every slide has a duration long enough to read', () => {
     for (const tpl of all()) for (const s of build(tpl.id, 'en').slides) {
       if (!(s.duration >= 5)) throw new Error(`${tpl.id} › ${s.name}: ${s.duration}s is too short to read`);

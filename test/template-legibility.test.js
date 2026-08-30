@@ -174,15 +174,23 @@ describe('templates · readable from across the room', () => {
   test(`the largest type on every slide is at least ${MIN_HERO_PCT}% of the slide height`, () => {
     const bad = [];
     for (const tpl of templates) {
-      buildSlides(tpl, { lang: 'en' }).forEach((slide, i) => {
-        const types = (slide.widgets ?? []).map(w => w.type);
-        // A slide made only of offline stand-ins has nothing of its own to measure.
-        if (types.every(t => NETWORK_TYPES.has(t) || UNMEASURABLE.has(t))) return;
-        const { heroPct } = measureSlide(tpl, slide);
-        if (heroPct < MIN_HERO_PCT) {
-          bad.push(`${tpl.id}#${i + 1} "${slide.name ?? ''}" tops out at ${heroPct.toFixed(2)}% [${types.join('+')}]`);
-        }
-      });
+      // BOTH languages, like the clipping check above. This ran English-only
+      // and that was a hole rather than a saving: several widgets fit their
+      // type to their content (a menu drops a size when a dish name wraps, a
+      // table when a cell does), so the rendered size is language-dependent
+      // even though textScale is not. German runs 10-30 % longer, so German is
+      // where a slide goes quiet first.
+      for (const lang of ['en', 'de']) {
+        buildSlides(tpl, { lang }).forEach((slide, i) => {
+          const types = (slide.widgets ?? []).map(w => w.type);
+          // A slide made only of offline stand-ins has nothing of its own to measure.
+          if (types.every(t => NETWORK_TYPES.has(t) || UNMEASURABLE.has(t))) return;
+          const { heroPct } = measureSlide(tpl, slide);
+          if (heroPct < MIN_HERO_PCT) {
+            bad.push(`${tpl.id}#${i + 1} (${lang}) "${slide.name ?? ''}" tops out at ${heroPct.toFixed(2)}% [${types.join('+')}]`);
+          }
+        });
+      }
     }
     if (bad.length) throw new Error(`${bad.length} slide(s) too timid:\n  ` + bad.join('\n  '));
   });

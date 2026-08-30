@@ -60,10 +60,6 @@ on('slots.changed', () => { _slotSlugCache = null; });
 // The brand-kit colour grid (slide / playlist / org) lives in one shared module
 // now — see admin/ui/brand-kit-form.js (brandKitGrid / readBrandKitGrid).
 
-export const THEMES = [
-  'minimal-dark', 'dark-minimal', 'gradient-purple', 'gradient-blue', 'gradient-orange',
-  'bistro-warm', 'corporate-blue', 'medical-calm', 'industrial-steel', 'neon-cyber', 'editorial-mono',
-];
 
 function activeSlide() {
   const pl = state.playlist;
@@ -213,7 +209,11 @@ function buildSlideSettingsBody(slide) {
   // Through the same field-control registry the schema forms use, so the theme
   // picker has ONE code path (registered by ui/inspector.js, statically imported
   // above so the registration has run by the time this renders).
-  const themeCtrl = getControl('theme')({ options: THEMES }, slide.theme, v => {
+  // No `options`: the theme control falls back to ALL_THEMES. This used to pass
+  // a hand-copied list, so the SLIDE picker and every WIDGET picker were two
+  // sources of truth for the same question — a theme added to themes.js
+  // appeared on every widget and silently not here.
+  const themeCtrl = getControl('theme')({}, slide.theme, v => {
     slide.theme = v; applyTheme(); commit('slide-theme');
   });
   box.querySelector('#sm-theme-host').appendChild(themeCtrl.el);
