@@ -22,7 +22,7 @@ screens — all from a single static HTML app.
 
 agentView Studio is a visual editor **and** player for the
 [agentView](https://agentview.de) digital-signage platform. You compose slides on a
-zoomable free canvas using 38 widget types, schedule them with day-parting, and deploy
+zoomable free canvas using 39 widget types, schedule them with day-parting, and deploy
 to one screen, a whole group, or a hand-picked set — then a built-in **Admin** console
 runs the organisation behind the screens (approvals, audit, webhooks, members, licenses).
 
@@ -41,11 +41,12 @@ no `npm install` to run it. Serve the folder and open `index.html`.
 | | |
 |---|---|
 | 🎨 **Free-canvas editor** | A three-column Keynote-style shell: slide rail · zoomable canvas · inspector & library. Drop widgets anywhere, drag/resize with snap guides, live previews. |
+| 🖨 **Print / PDF** | Export the deck for someone who will not open the studio: one slide per page on a page cut to the slide's own shape, or a 2/4/6-up A4 handout with numbered captions. Uses the browser's own Save-as-PDF — no export server, no upload. |
 | 📑 **Slide master** | One set of widgets drawn behind every slide — a standing logo bar, a footer rule, a corner clock. Edit it from the rail, opt any single slide out. The player honours it, so it reaches the wall. |
 | 📐 **Smart guides** | Snaps to edges and centres, to **even spacing** (drop a third card and it takes the gap the first two already have), and to another widget's **size** while resizing. Optional grid and TV-safe-area overlay. Hold `Alt` to switch it all off mid-drag. |
 | 🗂 **Layers panel** | Every widget on the slide, top of the stack first. Rename them, drag to restack, **lock** one so you stop picking up the background by accident, and **hide** one without deleting it — hidden means hidden on the screen too, not just in the editor. |
 | ▣ **Multi-select, group & arrange** | Marquee-drag, shift-click or `Ctrl/⌘+A` to pick several. Drag any of them to move the block, drag the selection's own handles to scale the whole layout, then align (6 ways), give them even gaps, or match their sizes. `Ctrl/⌘+G` makes it a lasting **group**. |
-| 🧩 **38 widget types** | From plain text, Markdown and **vector shapes** (40 of them — rectangles, arrows, stars, callouts, dividers) to live weather, charts, maps, RSS, currency tickers, QR codes, queue boards, leaderboards, opening hours, video, PDF and IP-camera streams — see the [full catalog](#-widget-catalog). |
+| 🧩 **39 widget types** | From plain text, Markdown and **vector shapes** (40 of them — rectangles, arrows, stars, callouts, dividers) to live weather, charts, maps, RSS, currency tickers, QR codes, queue boards, leaderboards, opening hours, video, PDF and IP-camera streams — see the [full catalog](#-widget-catalog). |
 | ▦ **Designs, not fixed zones** | Six layouts (Fullscreen · Split 50/50 · Split 70/30 · Main + ticker · 2×2 grid · Header + main) **stamp editable widgets** onto the canvas — then move them freely. No locked zones. |
 | 📺 **Displays dashboard** | Screens grouped by native agentView **groups** (categories), each card showing online state and the slideshow currently running. |
 | 🚀 **One-click publish** | Deploy to one display, a whole group, or a hand-picked set. The playlist is bundled into a self-contained player and pushed live in seconds. |
@@ -166,7 +167,7 @@ agentview-studio/              ← this repository (standalone, no build, no npm
 - **Free-canvas widget model.** A slide is a container; every element is a positioned
   widget with a percent rect (`slide.widgets[]`). Designs are just generators that stamp
   widgets — so the player has **one** render path and there is no separate layout engine.
-- **Plugins over a megaswitch.** Each of the 38 widget types is a tiny plugin with a
+- **Plugins over a megaswitch.** Each of the 39 widget types is a tiny plugin with a
   declarative schema (the inspector auto-builds the form) and one `render()`/`dispose()`.
   Adding another means a single new file in `shared/plugins/`.
 - **Same render in editor and screen.** A `widgetAsSlide()` adapter feeds each widget to
@@ -187,11 +188,11 @@ agentview-studio/              ← this repository (standalone, no build, no npm
 
 ## 🧩 Widget catalog
 
-38 widget types, organised into four library groups:
+39 widget types, organised into four library groups:
 
 | Group | Widgets |
 |---|---|
-| **Basic** | Announcement · Markdown · Quote · Code Block · News Ticker · Icon / Symbol · **Shape** · Greeting · **Steps / Process** · Menu / Pricelist |
+| **Basic** | Announcement · Markdown · Quote · Code Block · News Ticker · Icon / Symbol · **Shape** · Greeting · **Steps / Process** · Menu / Pricelist · Custom Widget |
 | **Media** | Image · Image Gallery (Ken Burns) · Video · YouTube / Vimeo · PDF Document · Audio Visualizer · Web Page (iframe) · Embed / Web · Live Stream / IP Camera |
 | **Data** | Chart · KPI Cards · Live JSON Viewer · Data Table · **Leaderboard** · **Queue / Now Serving** · Progress / Goal · Map · QR Code · Calendar |
 | **Live** | Clock · World Clock · **Opening Hours** · Countdown · Days Since · Currency Ticker · Live Weather · RSS Feed · News with Photos |
@@ -272,6 +273,9 @@ the text held stable across saccades, which is exactly what declines.
    slide. It shows through on the canvas as you design over it, but is not editable there —
    two ways to change one widget, one of which silently edits every other slide, is how a
    master becomes a thing people are afraid of. Any single slide can opt out in its settings.
+9. **Print / PDF…** (⋯ menu or `⌘/Ctrl+K`) turns the deck into a document for review. Live
+   widgets print their placeholder rather than their data — the export never fetches, so
+   handing someone a PDF cannot quietly call six third-party APIs on your behalf.
 
 ### Find a slide in a long playlist
 

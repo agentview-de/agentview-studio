@@ -1561,4 +1561,92 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 .avs-master-banner strong { font-size: var(--bb-text-sm); }
 .avs-master-banner span { font-size: var(--bb-text-xs); color: var(--bb-ink-muted); line-height: 1.45; }
 .avs-master-banner .bb-btn { align-self: flex-start; margin-top: 4px; }
-.avs-ss-check { display: flex; align-items: center; gap: 8px; font-size: var(--bb-text-sm); }
+/* An inline checkbox row inside a form group. It has to opt OUT of the group's
+   label styling: `.bb-form-group label` is the uppercase, muted, 11px treatment
+   for a field's HEADING, and a sentence you tick reading as a section heading is
+   the wrong shape for the thing entirely. */
+/* `.bb-form-group label` is (0,1,1); a bare `.avs-ss-check` is (0,1,0) and loses
+   to it. Naming both is what actually turns the heading styling off. */
+.bb-form-group label.avs-ss-check, .avs-ss-check {
+  display: flex; align-items: center; gap: 8px;
+  font-size: var(--bb-text-sm); text-transform: none;
+  letter-spacing: normal; color: var(--bb-ink); font-weight: 400;
+}
+.avs-ss-check input[type="checkbox"] { flex: 0 0 auto; margin: 0; width: auto; }
+/* The text is the part that may wrap; without min-width:0 a flex item refuses to
+   shrink below its content and pushes the row out of the dialog. */
+.avs-ss-check > span { min-width: 0; }
+/* `[hidden]` loses to any display declaration, and .bb-form-group sets one — the
+   same trap .avs-slide-card[hidden] already documents. A group hidden by script
+   stayed on screen. */
+.bb-form-group[hidden] { display: none; }
+
+/* ---------- Print / Save-as-PDF export ----------
+   The print root is built on demand and lives outside the app's layout. On
+   SCREEN it is never shown; in print it is the only thing shown. */
+.avs-print-root { display: none; }
+
+.avs-print-opts { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--bb-sp-2); }
+.avs-print-opt {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 10px 6px; font-size: 11px; color: var(--bb-ink-muted);
+  background: var(--bb-bg-2); border: 1px solid var(--bb-border); border-radius: var(--bb-r-sm);
+}
+.avs-print-opt:hover { color: var(--bb-ink); border-color: var(--bb-border-strong); }
+.avs-print-opt.bb-on { border-color: var(--bb-accent); color: var(--bb-ink); background: color-mix(in srgb, var(--bb-accent) 12%, transparent); }
+/* A miniature of the page it produces — the fastest way to say "four to a
+   sheet" is to draw four boxes on a sheet. */
+.avs-print-opt-grid {
+  display: grid; grid-template-columns: repeat(var(--cols), 1fr); gap: 2px;
+  width: 26px; aspect-ratio: 210 / 297; padding: 2px;
+  border: 1px solid currentColor; border-radius: 2px;
+}
+.avs-print-opt-grid i { background: currentColor; border-radius: 1px; }
+
+@media print {
+  /* Hide the application, show the sheet. `visibility` rather than `display`
+     on body children: a display:none ancestor collapses the print root's own
+     layout in some engines even when it is not inside one. */
+  body > *:not(#avs-print-root) { display: none !important; }
+  html, body {
+    background: #fff !important;
+    width: auto; height: auto; overflow: visible;
+  }
+  .avs-print-root { display: block !important; }
+
+  .avs-print-page {
+    /* A page break AFTER each page, never inside one. `break-*` is the modern
+       spelling and `page-break-*` the one older engines still read; both are
+       cheap to state and only one of them has to land. */
+    break-after: page; page-break-after: always;
+    break-inside: avoid; page-break-inside: avoid;
+    display: grid; grid-template-columns: repeat(var(--cols), 1fr);
+    gap: 8mm; align-content: start;
+  }
+  .avs-print-page:last-child { break-after: auto; page-break-after: auto; }
+
+  /* One slide per page: the page IS the slide (see pageRuleFor), so the frame
+     fills it edge to edge with nothing around it. */
+  .avs-print-deck .avs-print-page { display: block; gap: 0; height: 100vh; }
+  .avs-print-deck .avs-print-cell { height: 100%; }
+  .avs-print-deck .avs-print-frame { width: 100%; height: 100%; }
+
+  .avs-print-cell { break-inside: avoid; page-break-inside: avoid; }
+  .avs-print-frame {
+    width: 100%; background: #000;
+    /* A slide is a lit screen; on paper it needs an edge or it bleeds into the
+       margin. Hairline, so it never reads as part of the design. */
+    outline: 0.2mm solid rgba(0, 0, 0, .35); outline-offset: 0;
+  }
+  .avs-print-caption {
+    display: flex; align-items: baseline; gap: 2mm;
+    margin-top: 1.5mm; font-size: 8pt; color: #333;
+  }
+  .avs-print-caption span { font-weight: 700; color: #000; }
+
+  /* Print the colours. Signage slides are dark by design and a browser's
+     default "economy" mode would render most of this deck as white paper. */
+  .avs-print-root, .avs-print-root * {
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+}

@@ -36,6 +36,7 @@ import { openPreview } from './preview-flow.js';
 import { addWidget, applyActiveDesign, deleteSelected, duplicateSelected, selectAllWidgets, alignSelection, distributeSelection, groupSelection, ungroupSelection, renderSlide as canvasRender, zoomToFit as canvasFit, resetLivePreviews } from './canvas/canvas.js';
 import { splitText } from './ai/smart-split.js';
 import { exportPlaylist, importPlaylist } from './playlist-io.js';
+import { openPrintExport } from './export-print.js';
 import { isEditingVariant, variantBannerLabel, exitVariantEdit } from './canvas/variant-ctx.js';
 import { openTemplateStore, openStartChooser, playlistIsPristine } from './ui/template-store.js';
 import { legalLinks } from './legal-links.js';
@@ -580,6 +581,7 @@ async function openOverflow() {
     { k: 'cloud-open',  icon: 'cloud',     label: t('menu.openCloud') },
     { k: 'import',      icon: 'upload',    label: t('menu.import') },
     { k: 'export',      icon: 'download',  label: t('menu.export') },
+    { k: 'print',       icon: 'printer',   label: t('print.menu') },
     { k: 'brandkit',    icon: 'brandkit',  label: t('brandkit.playlistMenu') },
     { k: 'slots',       icon: 'database',  label: t('menu.dataSlots') },
     { k: 'apis',        icon: 'plug',      label: t('menu.publicApis') },
@@ -614,6 +616,7 @@ function handleMenu(k) {
   else if (k === 'templates') openTemplateStore().then(applied => { if (applied) { ensureSlide(); canvasRender(); } });
   else if (k === 'cloud-open') cloudLoad.open().then(() => canvasRender());
   else if (k === 'export') exportPlaylist();
+  else if (k === 'print') openPrintExport();
   else if (k === 'import') importPlaylist({ ensureSlide, render: canvasRender });
   else if (k === 'brandkit') openPlaylistBrandKit();
   else if (k === 'slots') slotInspector.open();
@@ -767,6 +770,7 @@ function registerAllCommands() {
     ['arrange.distributeV', 'arr-dist-v', 'v'],
   ]) registerCommand({ label: t(key), icon: uiIconSvg(icon), keywords: 'distribute spacing arrange verteilen abstand', run: () => distributeSelection(axis) });
   registerCommand({ label: t('menu.export'), icon: uiIconSvg('download'), run: () => exportPlaylist() });
+  registerCommand({ label: t('print.menu'), icon: uiIconSvg('printer'), keywords: 'print pdf export drucken handout ausgeben', run: () => openPrintExport() });
   registerCommand({ label: t('menu.import'), icon: uiIconSvg('upload'), run: () => importPlaylist({ ensureSlide, render: canvasRender }) });
   registerCommand({ label: t('menu.openCloud'), icon: uiIconSvg('cloud'), keywords: 'cloud agentview load open', run: () => handleMenu('cloud-open') });
   registerCommand({ label: t('view.displays'), icon: uiIconSvg('tv'), run: () => switchView('displays') });

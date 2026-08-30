@@ -38,6 +38,8 @@ const suites = [
   './layers.test.js',
   // The slide master: the resolver, and the ordering promise it rests on.
   './master.test.js',
+  // Print/PDF export: how the deck is cut into pages and what shape they are.
+  './export-print.test.js',
   './migrate.test.js',
   // animations.test.js is pure logic (animation catalogs + schema round-trip);
   // it imports shared/animations.js + shared/slide-schema.js, neither of which
