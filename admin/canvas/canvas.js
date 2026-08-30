@@ -28,6 +28,7 @@ import { open as openPalette } from '../ui/command-palette.js';
 import { openModal } from '../ui/modal.js';
 import { mountBackgroundEditor } from '../panels/background-editor.js';
 import { pickAsset } from '../ui/asset-library.js';
+import { toast } from '../ui/toast.js';
 import { t } from '../i18n.js';
 import { escapeHtml } from '../../shared/utils/escape.js';
 import { widgetIcon } from '../../shared/data/widget-icons.js';
@@ -35,6 +36,7 @@ import { uiIconSvg } from '../../shared/data/ui-icons.js';
 import { fieldOwns } from '../shortcuts.js';
 import { activeSlide, isEditingMaster } from '../active-slide.js';
 import { widgetName } from '../widget-name.js';
+import { arm as armPainter, disarm as disarmPainter, isArmed as painterArmed, armedFormat, applyFormat } from '../format-painter.js';
 
 const BASE_W = 1600, BASE_H = 900;          // 16:9 design space
 
@@ -110,6 +112,8 @@ export function mountCanvas(host, { onSelect } = {}) {
     // the pointerdown that starts a group resize would clear the selection first
     // and the resize would have nothing left to resize.
     if (e.target.closest('.avs-widget-frame, .avs-group-frame')) return;
+    // Clicking past every widget is how you change your mind about the brush.
+    if (painterArmed()) { disarmFormatPainter(); return; }
     // Shift/ctrl-drag on empty canvas ADDS to the selection instead of
     // replacing it, so a marquee can be used to extend a hand-picked set.
     const additive = !!(e.shiftKey || e.metaKey || e.ctrlKey);
@@ -533,6 +537,10 @@ function buildFrame(slide, widget) {
     getRect: () => widget.rect,
     getRotation: () => widget.rotation ?? 0,
     onSelect: (e) => {
+      // The brush is armed: this click paints instead of selecting. Handled on
+      // pointerDOWN rather than on the tap so a slip of the hand cannot start
+      // dragging the widget you meant to paint.
+      if (painterArmed()) { paintWidget(widget.id); return; }
       const additive = !!(e?.shiftKey || e?.metaKey || e?.ctrlKey);
       downAdditive = additive;
       downWasInSelection = selectionCount() > 1 && selectedIds().includes(widget.id);
@@ -1059,6 +1067,52 @@ function startMarquee(downEvent, additive) {
 const intersects = (a, b) =>
   a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 
+// ---- format painter ----
+// PowerPoint's model: pick the look up off one widget, then click another. The
+// "paste" being a CLICK rather than a keystroke is what keeps this out of the
+// keyboard entirely — Ctrl+Shift+V is the browser's paste-as-plain-text inside
+// a text field, and a format painter is not worth breaking that for.
+export function armFormatPainter() {
+  const w = selectedWidgets().slice(-1)[0];   // the primary
+  if (!w) return false;
+  const ok = armPainter(w);
+  if (ok) {
+    document.body.classList.add('avs-fmt-armed');
+    // The brush is a MODE, and a mode with no visible state is a trap. The
+    // cursor changes, and this says what to do next and how to get out.
+    toast(t('fmt.armed'), { kind: 'info', ttl: 6000 });
+  }
+  return ok;
+}
+export function disarmFormatPainter() {
+  document.body.classList.remove('avs-fmt-armed');
+  return disarmPainter();
+}
+export function isFormatPainterArmed() { return painterArmed(); }
+
+// Paint one widget and put the brush down. One click, one target: a brush that
+// stayed armed would repaint the next thing you touched for any reason, and
+// "why did that change" is a bad thing to have to work out.
+function paintWidget(id) {
+  const slide = activeSlide();
+  const w = slide?.widgets.find(x => x.id === id);
+  const fmt = armedFormat();
+  disarmFormatPainter();
+  if (!w || !fmt) return false;
+  if (!applyFormat(w, fmt)) {
+    // Saying "nothing changed" beats silence: the click DID something (it put
+    // the brush down), and a user who sees no change needs to know which.
+    toast(t('fmt.none'), { kind: 'info', ttl: 2500 });
+    renderSlide();
+    return false;
+  }
+  commit('paint-format');
+  renderSlide();
+  selectWidget(id);
+  toast(t('fmt.done'), { kind: 'success', ttl: 1800 });
+  return true;
+}
+
 // ---- slide master ----
 // Switching modes is a full re-render: the canvas is now showing a different
 // widget array, and the selection named widgets that are no longer on it.
@@ -1369,6 +1423,9 @@ function widgetMenuItems(id) {
   // A background is one widget's property; with several selected there is no
   // single widget for the editor to open.
   if (!multi) items.push({ label: t('ctx.background'), icon: uiIconSvg('image', 14), run: () => openWidgetBgModal(id) });
+  if (!multi) {
+    items.push({ label: t('fmt.copy'), icon: uiIconSvg('brush', 14), run: () => armFormatPainter() });
+  }
   items.push({ label: t('ctx.selectAll'), icon: uiIconSvg('copy', 14), run: () => selectAllWidgets() });
   return items;
 }

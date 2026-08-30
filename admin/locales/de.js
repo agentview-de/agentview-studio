@@ -991,4 +991,9 @@ export const de = {
   "rt.indent": "Einrücken",
   "rt.outdent": "Ausrücken",
   "rt.changeCase": "Groß-/Kleinschreibung (Satz · GROSS · klein · Wörter)",
+  // --- Format painter ---
+  "fmt.copy": "Formatierung kopieren",
+  "fmt.armed": "Formatierung aufgenommen — Widget anklicken, um sie zu übertragen. Esc bricht ab.",
+  "fmt.done": "Formatierung übertragen",
+  "fmt.none": "Nichts geändert — dieses Widget sieht schon so aus.",
 };

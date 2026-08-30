@@ -1650,3 +1650,9 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
 }
+
+/* ---------- Format painter ----------
+   The armed brush is a MODE, and a mode with no visible state is a trap. The
+   cursor says it on every widget the click could land on. */
+body.avs-fmt-armed .avs-widget-frame { cursor: copy; }
+body.avs-fmt-armed .avs-stage { cursor: default; }

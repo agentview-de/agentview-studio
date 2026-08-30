@@ -33,7 +33,7 @@ import { mountAdmin, refreshAdmin } from './views/admin.js';
 import { openPublishPicker, publishLast, refreshRunning, openOfflineDataPanel, hasOfflineData } from './publish-flow.js';
 import { orgs as orgsApi } from './api.js';
 import { openPreview } from './preview-flow.js';
-import { addWidget, applyActiveDesign, deleteSelected, duplicateSelected, selectAllWidgets, alignSelection, distributeSelection, groupSelection, ungroupSelection, renderSlide as canvasRender, zoomToFit as canvasFit, resetLivePreviews } from './canvas/canvas.js';
+import { addWidget, applyActiveDesign, deleteSelected, duplicateSelected, selectAllWidgets, alignSelection, distributeSelection, groupSelection, ungroupSelection, armFormatPainter, disarmFormatPainter, isFormatPainterArmed, renderSlide as canvasRender, zoomToFit as canvasFit, resetLivePreviews } from './canvas/canvas.js';
 import { splitText } from './ai/smart-split.js';
 import { exportPlaylist, importPlaylist } from './playlist-io.js';
 import { openPrintExport } from './export-print.js';
@@ -755,6 +755,7 @@ function registerAllCommands() {
   // is the faster path — and the palette is the app's one search-by-name index,
   // so an action missing from it is invisible to anyone who searches there first.
   registerCommand({ label: t('sc.selectAll'), icon: uiIconSvg('copy'), keywords: 'select all widgets alles auswählen markieren', run: () => selectAllWidgets() });
+  registerCommand({ label: t('fmt.copy'), icon: uiIconSvg('brush'), keywords: 'format painter formatting copy style formatierung übertragen pinsel', run: () => armFormatPainter() });
   registerCommand({ label: t('arrange.group'), icon: uiIconSvg('arr-group'), keywords: 'group gruppieren zusammenfassen', run: () => groupSelection() });
   registerCommand({ label: t('arrange.ungroup'), icon: uiIconSvg('arr-ungroup'), keywords: 'ungroup gruppierung aufheben', run: () => ungroupSelection() });
   for (const [key, icon, mode] of [
@@ -799,7 +800,13 @@ function bindGlobalShortcuts() {
   // Escape exits the widget inspector → swaps the right pane back to Library.
   // Only fires when an inspector is open AND nothing else is in front (modals,
   // popovers handle Escape themselves and stopPropagation before this runs).
-  bindShortcut('escape', () => { if (state.ui.selectedWidgetId) state.ui.selectedWidgetId = null; });
+  bindShortcut('escape', () => {
+    // The armed brush is the innermost mode, so Escape puts it down FIRST —
+    // otherwise the one key that means "get me out of this" would clear the
+    // selection and leave the mode running.
+    if (isFormatPainterArmed()) { disarmFormatPainter(); return; }
+    if (state.ui.selectedWidgetId) state.ui.selectedWidgetId = null;
+  });
   // Select every widget on the slide. Bound on the editor view only — in
   // Displays or Verwaltung, mod+A must stay the browser's "select all text".
   bindShortcut('mod+a', () => { if (state.ui.activeView === 'editor') selectAllWidgets(); });

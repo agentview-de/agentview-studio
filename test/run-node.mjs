@@ -42,6 +42,8 @@ const suites = [
   './export-print.test.js',
   // Change Case: the character transform behind the Aa button.
   './text-case.test.js',
+  // Format painter: what "make this look like that" carries, and what it does not.
+  './format-painter.test.js',
   './migrate.test.js',
   // animations.test.js is pure logic (animation catalogs + schema round-trip);
   // it imports shared/animations.js + shared/slide-schema.js, neither of which

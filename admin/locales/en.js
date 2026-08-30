@@ -983,4 +983,9 @@ export const en = {
   "rt.indent": "Indent",
   "rt.outdent": "Outdent",
   "rt.changeCase": "Change case (Sentence · UPPER · lower · Title)",
+  // --- Format painter ---
+  "fmt.copy": "Copy formatting",
+  "fmt.armed": "Formatting picked up — click a widget to paint it on. Esc cancels.",
+  "fmt.done": "Formatting applied",
+  "fmt.none": "Nothing changed — that widget already looks like this.",
 };
