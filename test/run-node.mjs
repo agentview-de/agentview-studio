@@ -40,6 +40,8 @@ const suites = [
   './master.test.js',
   // Print/PDF export: how the deck is cut into pages and what shape they are.
   './export-print.test.js',
+  // Change Case: the character transform behind the Aa button.
+  './text-case.test.js',
   './migrate.test.js',
   // animations.test.js is pure logic (animation catalogs + schema round-trip);
   // it imports shared/animations.js + shared/slide-schema.js, neither of which

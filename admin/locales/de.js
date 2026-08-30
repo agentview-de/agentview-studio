@@ -987,4 +987,8 @@ export const de = {
   "print.help": "{n} Folie(n). Live-Widgets drucken ihren Platzhalter — der Export ruft nichts ab.",
   "print.go": "Drucken…",
   "print.empty": "Es gibt noch keine Folien zum Drucken.",
+  // --- Rich text: indent + change case ---
+  "rt.indent": "Einrücken",
+  "rt.outdent": "Ausrücken",
+  "rt.changeCase": "Groß-/Kleinschreibung (Satz · GROSS · klein · Wörter)",
 };

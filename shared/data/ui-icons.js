@@ -163,6 +163,10 @@ export const UI_ICONS = {
   // the frame broken open, so the pair reads as one action and its undo.
   // Stacked sheets — the slide MASTER (and the Layers panel's own header):
   // one thing drawn under all the others.
+  // Indent / outdent: text lines with an arrow showing which way the block
+  // moves. The arrow points the direction of travel, not at the text.
+  'text-indent':  '<line x1="3" y1="4" x2="21" y2="4"/><line x1="10" y1="9" x2="21" y2="9"/><line x1="10" y1="14" x2="21" y2="14"/><line x1="3" y1="19" x2="21" y2="19"/><polyline points="3 9 6 11.5 3 14"/>',
+  'text-outdent': '<line x1="3" y1="4" x2="21" y2="4"/><line x1="10" y1="9" x2="21" y2="9"/><line x1="10" y1="14" x2="21" y2="14"/><line x1="3" y1="19" x2="21" y2="19"/><polyline points="6 9 3 11.5 6 14"/>',
   printer:        '<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
   layers:         '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
   'arr-group':    '<rect x="2" y="2" width="20" height="20" rx="2" stroke-dasharray="3 3"/><rect x="5" y="5" width="7" height="7" rx="1"/><rect x="12" y="12" width="7" height="7" rx="1"/>',

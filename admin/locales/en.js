@@ -979,4 +979,8 @@ export const en = {
   "print.help": "{n} slide(s). Live widgets print their placeholder — the export never fetches.",
   "print.go": "Print…",
   "print.empty": "There are no slides to print yet.",
+  // --- Rich text: indent + change case ---
+  "rt.indent": "Indent",
+  "rt.outdent": "Outdent",
+  "rt.changeCase": "Change case (Sentence · UPPER · lower · Title)",
 };

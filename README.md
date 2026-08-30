@@ -417,6 +417,8 @@ console needs **no backend of its own**, consistent with the single-file, no-ins
 | `Shift + P` | Live preview |
 | `Shift + ?` | Show this shortcut list |
 | `Ctrl/⌘ + A` | Select every widget on the slide |
+| `Tab` / `Shift+Tab` (in a list) | Nest / un-nest the bullet |
+| `Shift+F3` (in text) | Change case — Sentence · UPPER · lower · Title |
 | `Alt` (while dragging) | Suspend snapping for this drag |
 | `Ctrl/⌘ + G` | Group the selection |
 | `Ctrl/⌘ + Shift + G` | Ungroup |

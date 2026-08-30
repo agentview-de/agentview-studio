@@ -11,13 +11,14 @@
 // props + per-tag attribute filtering), so pasted junk and malicious markup
 // can't escape into the slide data.
 
-import { t, tx } from '../../i18n.js';
+import { t, tx, getLocale } from '../../i18n.js';
 import { openModal } from '../modal.js';
 import { pickAsset, uploadAndGetUrl } from '../asset-library.js';
 import { toast } from '../toast.js';
 import { sanitizeHtml, plainToHtml, looksLikeHtml } from '../../../shared/sanitize-html.js';
 import { h, esc, escAttr, escText } from './_shared.js';
 import { buildTableHtml } from './rich-text-table.js';
+import { changeCase, nextCaseMode } from '../../../shared/utils/text-case.js';
 import { uiIconSvg } from '../../../shared/data/ui-icons.js';
 
 // Unique-id counter so each editor's size <datalist> has its own id (the expand
@@ -282,6 +283,14 @@ export function renderRichText(f, v, set, opts = {}) {
   // Justify (less common than the three primary alignments)
   sep(more);
   more.append(btn(uiIconSvg('align-justify'), t('rt.justify'), () => exec('justifyFull'), { cmd: 'justifyFull' }));
+  // Indent / outdent. Inside a list these nest and un-nest the bullet, which is
+  // what Tab does in every other editor; outside one they shift the block.
+  more.append(btn(uiIconSvg('text-outdent'), t('rt.outdent'), () => exec('outdent')));
+  more.append(btn(uiIconSvg('text-indent'),  t('rt.indent'),  () => exec('indent')));
+  // Change Case. One button that CYCLES rather than a four-item menu: you press
+  // it until the text looks right, which is how the same key works in Word and
+  // PowerPoint, and it costs one control instead of five.
+  more.append(btn('Aa', t('rt.changeCase'), () => cycleCase(), { extraClass: 'bb-richtext-size-btn' }));
 
   // HR + table + emoji + special char
   sep(more);
@@ -422,6 +431,66 @@ export function renderRichText(f, v, set, opts = {}) {
     }
   }
 
+  // ----- Change Case -----
+  // Replaces the SELECTED CHARACTERS, not a CSS text-transform: the text has to
+  // stay changed when it is copied out, exported to PDF or read aloud.
+  //
+  // Rich formatting inside the selection is preserved by walking the text nodes
+  // in the range and rewriting each one in place, rather than replacing the
+  // range with a flat string — the latter is one line of code and throws away
+  // every bold word the user had put in.
+  let caseMode = 'sentence';
+  function cycleCase() {
+    restoreSelection();
+    const sel = document.getSelection();
+    if (!sel || !sel.rangeCount || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return;
+
+    const nodes = textNodesInRange(range);
+    if (!nodes.length) return;
+    // `prefix` accumulates the selected text seen so far and is what stops each
+    // fragment from looking like the start of the whole selection — see the note
+    // on changeCase's opts. Without it "lift <b>b</b> out" sentence-cased to
+    // "Lift <b>B</b> Out", one capital per text node.
+    let prefix = '';
+    for (const { node, from, to } of nodes) {
+      const before = node.data.slice(0, from);
+      const mid = node.data.slice(from, to);
+      const after = node.data.slice(to);
+      node.data = before + changeCase(mid, caseMode, { locale: getLocale(), prefix }) + after;
+      prefix += mid;
+    }
+    caseMode = nextCaseMode(caseMode);
+    commit();
+    refreshActiveStates();
+  }
+
+  // The text nodes a range touches, each with the slice of it that is selected.
+  // Partial nodes at the ends are why this returns offsets rather than nodes:
+  // selecting the middle of a word must not recase the whole word.
+  function textNodesInRange(range) {
+    const out = [];
+    const walker = document.createTreeWalker(
+      range.commonAncestorContainer, NodeFilter.SHOW_TEXT, null,
+    );
+    // commonAncestorContainer is itself a text node when the selection sits
+    // inside one word — a TreeWalker rooted at a text node visits nothing.
+    if (range.commonAncestorContainer.nodeType === Node.TEXT_NODE) {
+      const n = range.commonAncestorContainer;
+      out.push({ node: n, from: range.startOffset, to: range.endOffset });
+      return out;
+    }
+    let n;
+    while ((n = walker.nextNode())) {
+      if (!range.intersectsNode(n)) continue;
+      const from = n === range.startContainer ? range.startOffset : 0;
+      const to = n === range.endContainer ? range.endOffset : n.data.length;
+      if (to > from) out.push({ node: n, from, to });
+    }
+    return out;
+  }
+
   // Keyboard shortcuts — mirror Google Docs where possible. Browser-native
   // ones (Ctrl+B/I/U/Z) are handled by contenteditable itself; the rest we
   // wire here. Tab inside a table → next cell.
@@ -436,7 +505,16 @@ export function renderRichText(f, v, set, opts = {}) {
     if (mod && e.shiftKey && k === '8') { e.preventDefault(); exec('insertUnorderedList'); return; }
     if (mod && e.shiftKey && (k === ',' || k === '<')) { e.preventDefault(); exec('subscript',   null, false); return; }
     if (mod && e.shiftKey && (k === '.' || k === '>')) { e.preventDefault(); exec('superscript', null, false); return; }
-    handleTableTab(e);
+    // Shift+F3 is the Word/PowerPoint shortcut for Change Case.
+    if (e.shiftKey && e.key === 'F3') { e.preventDefault(); cycleCase(); return; }
+    if (handleTableTab(e)) return;
+    // Tab indents, Shift+Tab outdents — but ONLY inside a list, where it nests
+    // the bullet. Everywhere else Tab has to stay the key that leaves the field,
+    // or the editor becomes a keyboard trap with no way out.
+    if (e.key === 'Tab' && !mod && isInsideTag('LI')) {
+      e.preventDefault();
+      exec(e.shiftKey ? 'outdent' : 'indent');
+    }
   });
 
   // ----- Active state highlight (B/I/U/lists/alignment/link/code glow when caret is inside) -----
@@ -929,10 +1007,13 @@ export function renderRichText(f, v, set, opts = {}) {
     sel.addRange(r);
   }
 
+  // Returns true when it CONSUMED the keystroke. Without a return value the
+  // caller cannot tell "this was not a Tab" from "I handled it", and every Tab
+  // in the editor would fall through to the list-indent branch as well.
   function handleTableTab(e) {
-    if (e.key !== 'Tab') return;
+    if (e.key !== 'Tab') return false;
     const cell = currentCell();
-    if (!cell) return;
+    if (!cell) return false;
     e.preventDefault();
     if (e.shiftKey) {
       let prev = cell.previousElementSibling;
@@ -942,7 +1023,7 @@ export function renderRichText(f, v, set, opts = {}) {
         if (prevRow) prev = prevRow.children[prevRow.children.length - 1];
       }
       if (prev) placeCaretIn(prev);
-      return;
+      return true;
     }
     let next = cell.nextElementSibling;
     if (!next) {
@@ -968,6 +1049,7 @@ export function renderRichText(f, v, set, opts = {}) {
       next = nextRow?.children[0];
     }
     if (next) placeCaretIn(next);
+    return true;
   }
 
   // ----- Markdown shortcuts (fire on space) -----

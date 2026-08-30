@@ -100,6 +100,13 @@ export function buildInlineToolbar(editor, onCommit, onExit) {
     btn('1.', t('rt.numberedList'), () => exec('insertOrderedList'),   'insertOrderedList'),
   );
 
+  // Indent / outdent — the pair that nests a bullet, which is the one thing a
+  // list on a slide always needs and the inline bar could not do.
+  tb.append(
+    btn(uiIconSvg('text-outdent'), t('rt.outdent'), () => exec('outdent')),
+    btn(uiIconSvg('text-indent'),  t('rt.indent'),  () => exec('indent')),
+  );
+
   // Clear, exit
   tb.append(sep());
   tb.append(btn(uiIconSvg('clear-format'), t('rt.clearFormat'), () => exec('removeFormat')));

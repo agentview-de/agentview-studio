@@ -19,6 +19,10 @@ const ALLOWED_STYLE_PROPS = new Set([
   'font-weight', 'font-style', 'font-size', 'font-family', 'line-height',
   'text-decoration', 'text-decoration-line',
   'max-width', 'width', 'height',
+  // Indent / outdent. execCommand('indent') with styleWithCSS emits margin-left
+  // on the block; without these two the sanitizer stripped it on save, so the
+  // indent survived until you reloaded and then silently did not.
+  'margin-left', 'padding-left',
 ]);
 
 // Per-tag attribute whitelists. Anything else on the element is dropped.
