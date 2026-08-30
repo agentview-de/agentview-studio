@@ -60,7 +60,7 @@ The **app** needs no npm. There are two ways to run the suites:
   | [`test/index.html`](test/index.html) | every suite the Node runner has, plus the DOM-only ones it skips (HTML escaping/sanitising, the plugin/schema round-trips) |
   | [`test/canvas-zorder.test.html`](test/canvas-zorder.test.html) | canvas z-order and hit-testing — needs the real editor stylesheet |
   | [`test/publish-e2e.test.html`](test/publish-e2e.test.html) | builds the real publish bundle and boots it in an iframe |
-  | [`test/plugin-resilience.test.html`](test/plugin-resilience.test.html) | all 34 plugins against hostile input, and every widget's inspector form built and torn down |
+  | [`test/plugin-resilience.test.html`](test/plugin-resilience.test.html) | all 38 plugins against hostile input, and every widget's inspector form built and torn down |
 
   The last two are on their own pages because they are slow and because they
   produce console output of their own (a missing vendor library, demo assets

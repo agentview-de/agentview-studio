@@ -34,7 +34,7 @@ const _state = {
     activeView: 'editor',     // 'editor' | 'displays' | 'admin'
     activeSlideId: null,
     selectedWidgetId: null,   // selected widget on the canvas (null = show Library)
-    libraryTab: 'widgets',    // 'widgets' | 'designs' | 'assets' | 'apis' | 'store'
+    libraryTab: 'widgets',    // 'widgets' | 'templates' | 'assets' | 'apis' | 'store'
     themePref: 'dark',        // 'system' | 'dark' | 'light' — editor chrome defaults dark
     // Right column collapsed? Persisted, so a narrow window stays the way you
     // left it — wired in views/editor.js.

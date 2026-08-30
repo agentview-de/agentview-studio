@@ -153,6 +153,17 @@ export default register({
     // New secondary lines size via cq units * the text-scale var inline, so
     // they need no stylesheet additions and track the tile like the rest.
     const subFont = 'calc(min(5cqw, 7cqh) * var(--bb-ds-text-scale, 1))';
+
+    // The count is sized off the widget height (.bb-ds-count is 58cqh), which
+    // is right when it is the only thing in the box and wrong the moment the
+    // optional lines are switched on: heading + unit + record + start date +
+    // a milestone badge is four more rows, and the safety board — the exact
+    // configuration this widget was built for — clipped its own number by
+    // 171 px. Every extra row buys its space back out of the count.
+    const extraRows = [c.heading, recordDays > 0, c.showDate, (Number(c.milestoneEvery) || 0) > 0]
+      .filter(Boolean).length;
+    root.style.setProperty('--bb-ds-count-cqh', `${Math.max(26, 58 - 8 * extraRows)}`);
+
     root.innerHTML = `
       ${slide.title ? `<h1 class="bb-h1">${escapeHtml(slide.title)}</h1>` : ''}
       ${c.heading ? `<div class="bb-ds-heading" data-field="heading textScale">${escapeHtml(c.heading)}</div>` : ''}

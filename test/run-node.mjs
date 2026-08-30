@@ -11,7 +11,7 @@ import { runAllConsole } from './runner.js';
 const suites = [
   // sanitize.test.js is intentionally absent — it asserts real DOM HTML safety
   // and only runs in the browser suite. plugin-resilience.test.js is absent for
-  // the same reason: it MOUNTS all 34 plugins into a real document. escape.test.js used to be excluded for
+  // the same reason: it MOUNTS all 38 plugins into a real document. escape.test.js used to be excluded for
   // the same reason, but only ONE of its cases needs a DOM (it self-skips now):
   // escapeHtml is the single escape implementation for the whole app, so its
   // tests belong in the run everybody actually executes.
@@ -81,6 +81,12 @@ const suites = [
   './display-capabilities.test.js',
   // Design catalog + the icon derived from each design rects.
   './designs.test.js',
+  // The slide-set template catalog. Pure: buildPlaylist takes an injectable
+  // plugin lookup, so the whole store's content is checkable headlessly.
+  './templates.test.js',
+  // Pure logic of the four widgets the template catalog needed: the queue
+  // board, the leaderboard, the opening-hours clock and the steps panel.
+  './new-widgets.test.js',
   // Player front door: only a real playlist may be applied or cached.
   './playlist-response.test.js',
   // Day-parting re-check: cursor bookkeeping when the visible set changes.

@@ -47,7 +47,7 @@ const PAGES = [
   // Builds the real publish bundle and boots it — the only check that the
   // artefact those pieces produce actually plays.
   { name: 'publish end-to-end', path: '/test/publish-e2e.test.html' },
-  // Mounts all 34 plugins at once and lets them settle: their <img>/<video>
+  // Mounts all 38 plugins at once and lets them settle: their <img>/<video>
   // sources try to load for real (relative demo URLs resolve against /test/ and
   // 404) and a widget whose vendor library is absent says so. That is the point
   // of the page, not a smell.

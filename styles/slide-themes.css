@@ -6,6 +6,18 @@
    widget on a 4K display gets sensibly sized fonts; a full-slide widget on a
    small display still looks bold. */
 
+/* The display/heading face. It is also declared in styles/tokens.css — but only
+   the ADMIN app loads that file. The player (display.html) and the published
+   bundle load fonts.css + slide-themes.css and nothing else, so on a real screen
+   `--bb-display` was undefined — and an undefined custom property inside a
+   `font:` SHORTHAND makes the whole declaration invalid at computed-value time.
+   Every `.bb-h1`, `.bb-kpi-value`, `.bb-ds-count`, `.bb-cd-grid b`, `.bb-prog-pct`
+   and the calendar's headings therefore rendered at the browser default 16px/400
+   on the display while looking correct in the editor. Declaring it here (same
+   value as tokens.css, which loads first and is overridden by an identical
+   value) is what makes the two hosts agree. */
+:root { --bb-display: "Inter Tight", "Inter", system-ui, sans-serif; }
+
 /* Universal border-box inside any slide. The admin app sets this globally via
    studio.css, but the player (display.html) only loads slide-themes.css — so
    without this reset, .bb-slide's padding adds OUTSIDE its 100% box, the
@@ -39,11 +51,21 @@
    theme without needing per-theme overrides. Colours come from currentColor
    and the theme's --bb-st-accent, so every theme inherits sensible defaults. */
 .bb-slide-text .bb-body h2 {
-  font: 700 calc(clamp(20px, 4.6cqmin, 56px) * var(--bb-text-text-scale, 1))/1.25 var(--bb-st-font, inherit);
+  /* Longhands, not the `font:` shorthand: the family falls back to `inherit`,
+     and `inherit` is only valid as a longhand value — inside the shorthand it
+     invalidated the whole declaration whenever no brand font was set, which is
+     most of the time. The heading then rendered at body size, weight 400. */
+  font-weight: 700;
+  font-size: calc(clamp(20px, 4.6cqmin, 56px) * var(--bb-text-text-scale, 1));
+  line-height: 1.25;
+  font-family: var(--bb-st-font, inherit);
   margin: .4em 0 .3em;
 }
 .bb-slide-text .bb-body h3 {
-  font: 600 calc(clamp(18px, 4cqmin, 44px) * var(--bb-text-text-scale, 1))/1.25 var(--bb-st-font, inherit);
+  font-weight: 600;
+  font-size: calc(clamp(18px, 4cqmin, 44px) * var(--bb-text-text-scale, 1));
+  line-height: 1.25;
+  font-family: var(--bb-st-font, inherit);
   margin: .35em 0 .25em;
 }
 .bb-slide-text .bb-body blockquote {
@@ -1920,7 +1942,11 @@
 /* Days since */
 .bb-slide-dayssince { text-align: center; }
 .bb-ds-heading { font-size: calc(min(8cqw, 12cqh) * var(--bb-ds-text-scale, 1)); text-transform: uppercase; letter-spacing: .1em; opacity: .75; }
-.bb-ds-count { font: 800 calc(min(42cqw, 58cqh) * var(--bb-ds-text-scale, 1)) var(--bb-display); line-height: 1; color: var(--bb-st-accent); font-variant-numeric: tabular-nums; }
+/* 58cqh is the height budget when the count is ALONE in the box; days-since.js
+   lowers --bb-ds-count-cqh once the heading / record / date / milestone rows are
+   switched on, because those rows have to come out of somewhere and the count
+   was simply clipping instead. */
+.bb-ds-count { font: 800 calc(min(42cqw, calc(var(--bb-ds-count-cqh, 58) * 1cqh)) * var(--bb-ds-text-scale, 1)) var(--bb-display); line-height: 1; color: var(--bb-st-accent); font-variant-numeric: tabular-nums; }
 .bb-ds-unit { font: 700 calc(min(8cqw, 12cqh) * var(--bb-ds-text-scale, 1)) var(--bb-display); text-transform: uppercase; letter-spacing: .12em; opacity: .8; }
 .bb-ds-date { font-size: calc(min(5cqw, 7cqh) * var(--bb-ds-text-scale, 1)); opacity: .6; margin-top: .4em; }
 .bb-ds-empty { opacity: .5; padding: 24px; font-family: var(--bb-font, Inter, sans-serif); }

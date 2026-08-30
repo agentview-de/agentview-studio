@@ -22,7 +22,7 @@ screens — all from a single static HTML app.
 
 agentView Studio is a visual editor **and** player for the
 [agentView](https://agentview.de) digital-signage platform. You compose slides on a
-zoomable free canvas using 33 widget types, schedule them with day-parting, and deploy
+zoomable free canvas using 37 widget types, schedule them with day-parting, and deploy
 to one screen, a whole group, or a hand-picked set — then a built-in **Admin** console
 runs the organisation behind the screens (approvals, audit, webhooks, members, licenses).
 
@@ -41,10 +41,11 @@ no `npm install` to run it. Serve the folder and open `index.html`.
 | | |
 |---|---|
 | 🎨 **Free-canvas editor** | A three-column Keynote-style shell: slide rail · zoomable canvas · inspector & library. Drop widgets anywhere, drag/resize with snap guides, live previews. |
-| 🧩 **33 widget types** | From plain text and Markdown to live weather, charts, maps, RSS, currency tickers, QR codes, video, PDF and IP-camera streams — see the [full catalog](#-widget-catalog). |
+| 🧩 **37 widget types** | From plain text and Markdown to live weather, charts, maps, RSS, currency tickers, QR codes, queue boards, leaderboards, opening hours, video, PDF and IP-camera streams — see the [full catalog](#-widget-catalog). |
 | ▦ **Designs, not fixed zones** | Six layouts (Fullscreen · Split 50/50 · Split 70/30 · Main + ticker · 2×2 grid · Header + main) **stamp editable widgets** onto the canvas — then move them freely. No locked zones. |
 | 📺 **Displays dashboard** | Screens grouped by native agentView **groups** (categories), each card showing online state and the slideshow currently running. |
 | 🚀 **One-click publish** | Deploy to one display, a whole group, or a hand-picked set. The playlist is bundled into a self-contained player and pushed live in seconds. |
+| 🏬 **Template store** | 26 complete, industry-specific slide sets — bistro, practice, citizen office, workshop, hotel, school, gym, sales floor — plus the blank start. Live previews, bilingual content, one click to load. |
 | 🛠 **Admin console** | A third view beside Editor & Displays — a 9-tab owner console: approvals · audit log · webhooks · API keys · members · licenses · connectivity · brand kit · version history. |
 | ⏰ **Day-parting & scheduling** | Per slide: days of week · time windows · date ranges. The player evaluates visibility every minute and skips slides outside their window. |
 | 🪄 **Drop any file → slideshow** | PDF, multiple images, `.csv`, `.xlsx`, `.docx`, `.pptx`, `.ics`, `.json` — auto-detected and imported as the right widgets. (Drop a media URL for video / streams.) |
@@ -161,7 +162,7 @@ agentview-studio/              ← this repository (standalone, no build, no npm
 - **Free-canvas widget model.** A slide is a container; every element is a positioned
   widget with a percent rect (`slide.widgets[]`). Designs are just generators that stamp
   widgets — so the player has **one** render path and there is no separate layout engine.
-- **Plugins over a megaswitch.** Each of the 33 widget types is a tiny plugin with a
+- **Plugins over a megaswitch.** Each of the 37 widget types is a tiny plugin with a
   declarative schema (the inspector auto-builds the form) and one `render()`/`dispose()`.
   Adding a 34th means a single new file in `shared/plugins/`.
 - **Same render in editor and screen.** A `widgetAsSlide()` adapter feeds each widget to
@@ -182,18 +183,44 @@ agentview-studio/              ← this repository (standalone, no build, no npm
 
 ## 🧩 Widget catalog
 
-33 widget types, organised into four library groups:
+37 widget types, organised into four library groups:
 
 | Group | Widgets |
 |---|---|
-| **Basic** | Announcement · Markdown · Quote · Code Block · News Ticker · Icon / Symbol · Greeting · Menu / Pricelist |
+| **Basic** | Announcement · Markdown · Quote · Code Block · News Ticker · Icon / Symbol · Greeting · **Steps / Process** · Menu / Pricelist |
 | **Media** | Image · Image Gallery (Ken Burns) · Video · YouTube / Vimeo · PDF Document · Audio Visualizer · Web Page (iframe) · Embed / Web · Live Stream / IP Camera |
-| **Data** | Chart · KPI Cards · Live JSON Viewer · Data Table · Progress / Goal · Map · QR Code · Calendar |
-| **Live** | Clock · World Clock · Countdown · Days Since · Currency Ticker · Live Weather · RSS Feed · News with Photos |
+| **Data** | Chart · KPI Cards · Live JSON Viewer · Data Table · **Leaderboard** · **Queue / Now Serving** · Progress / Goal · Map · QR Code · Calendar |
+| **Live** | Clock · World Clock · **Opening Hours** · Countdown · Days Since · Currency Ticker · Live Weather · RSS Feed · News with Photos |
+
+The four in bold are the ones the template catalog needed and the widget set did
+not have: a call board for anywhere people wait to be served, a ranked list that
+derives its own order, a week of opening hours that knows whether it is open
+right now, and a numbered process that can walk its own highlight.
 
 ---
 
 ## 🧰 What you can do
+
+### Start from a template — or from nothing
+
+On first run Studio asks one question: blank slide set, or a ready-made one?
+The **Template store** (⋯ menu → *New from template*, `⌘/Ctrl+K`, or the Library's
+*Templates* tab) holds **26 complete slide sets** plus the blank start, filtered by
+industry and searchable by name, industry or widget ("queue", "Wartezimmer",
+"menu"). Every card shows a **real preview** — the same plugin `render()` the
+canvas and the player use, laid out at the design size and scaled down — so you
+pick a composition you have actually seen. *Look inside* walks every slide of a
+set before you commit.
+
+Loading a set replaces the current playlist (undoable with `⌘/Ctrl+Z`); *Add to
+current set* appends its slides instead. Nothing is locked afterwards: a template
+is ordinary slides and widgets, editable down to the last rect.
+
+Content is authored in **both languages** and built in whichever the UI is set
+to, so a German bakery gets "Es bedient sich Nummer", not "Now serving".
+Templates ship **photo-free** — an image widget with no URL shows the placeholder
+and the asset picker is one click away — and browsing the store contacts no
+third party: network widgets render a stand-in rather than fetching.
 
 ### Build a slideshow on the canvas
 
@@ -362,7 +389,7 @@ npm run check      # lint + i18n + test
 The DOM-dependent tests live on four pages under `test/`, each of which also runs
 by opening it in any browser: `index.html` (everything the Node runner has plus the
 DOM-only suites), `canvas-zorder.test.html`, `publish-e2e.test.html` (builds the real
-publish bundle and boots it) and `plugin-resilience.test.html` (all 34 plugins against
+publish bundle and boots it) and `plugin-resilience.test.html` (all 38 plugins against
 hostile input; every inspector form built and torn down). See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow and coding conventions.
 

@@ -42,6 +42,11 @@ export const UI_ICONS = {
   redo:              '<polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/>',
   expand:            '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/>',
   'chevron-down':    '<polyline points="6 9 12 15 18 9"/>',
+  'chevron-left':    '<polyline points="15 18 9 12 15 6"/>',
+  // Four panes — the template store's gallery, and the shape of the thing it
+  // shows. Not a "layout" icon: the designs picker already draws its own
+  // rects (shared/designs.js), so this one never has to stand for a layout.
+  grid:              '<rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>',
   // An A with a cross: strip the styling off the letter, not the letter itself.
   'clear-format':    '<path d="M3 20l6-14 3.4 8"/><line x1="5.6" y1="14" x2="11.4" y2="14"/><line x1="15" y1="14" x2="22" y2="21"/><line x1="22" y1="14" x2="15" y2="21"/>',
   // The highlight bar with a stroke through it — one shape, one negation.
