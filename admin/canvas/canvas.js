@@ -521,7 +521,14 @@ function buildFrame(slide, widget) {
   // lock was set and therefore where a person looks to undo it.
   if (widget.locked) frameEl.classList.add('avs-frame-locked');
 
-  const teardown = makeInteractive(frameEl, {
+  // A locked widget gets NO pointer interaction wired at all.
+  //
+  // `pointer-events: none` already stops a real pointer reaching the frame, but
+  // defending a data property in the stylesheet alone is thin: the keyboard
+  // nudge has always had an explicit `if (widget.locked) return`, and the two
+  // paths disagreeing is the kind of gap that becomes a bug the moment a
+  // selector changes. Not wiring the handlers makes the lock structural.
+  const teardown = widget.locked ? () => {} : makeInteractive(frameEl, {
     getStageRect: () => stage.getBoundingClientRect(),
     getRect: () => widget.rect,
     getRotation: () => widget.rotation ?? 0,

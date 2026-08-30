@@ -47,6 +47,11 @@
       try {
         await import('./canvas-zorder.test.js');
         await import('./rail-css.test.js');
+        // Interaction regressions (multi-select, grouping, lock/hide, master).
+        // Same page because they need the same two things: real layout and the
+        // real editor stylesheet. Imported LAST so it mounts its canvas after
+        // the suites above have finished with theirs.
+        await import('./editor-interaction.test.js');
         const summary = await runAll('#test-results');
         document.title = (summary.fail === 0 ? '✓ ' : '✗ ') + document.title;
       } catch (e) {

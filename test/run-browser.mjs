@@ -25,7 +25,7 @@ const PAGES = [
   { name: 'browser suite', path: '/test/index.html', expect: /fake Error: boom|widget render failed/i },
   // The page that loads the editor's own stylesheet: z-order and hit-testing,
   // and anything else only real CSS can answer.
-  { name: 'editor CSS', path: '/test/canvas-zorder.test.html' },
+  { name: 'editor CSS + interaction', path: '/test/canvas-zorder.test.html' },
   // Opens real dialogs — they fade for 200 ms and hold the page inert while
   // they are up, which is more than the shared page's budget can absorb.
   // The declared line is Chrome saying the finding out loud: the sandboxed
