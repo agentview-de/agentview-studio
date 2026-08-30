@@ -1656,3 +1656,28 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
    cursor says it on every widget the click could land on. */
 body.avs-fmt-armed .avs-widget-frame { cursor: copy; }
 body.avs-fmt-armed .avs-stage { cursor: default; }
+
+/* ---------- Animation order pane ---------- */
+.avs-bo-head { display: flex; align-items: center; gap: var(--bb-sp-3); margin-bottom: var(--bb-sp-3); }
+.avs-bo-step { display: flex; align-items: center; gap: 6px; font-size: var(--bb-text-xs); color: var(--bb-ink-muted); }
+.avs-bo-step input { width: 76px; }
+.avs-bo-unit { color: var(--bb-ink-quiet); }
+.avs-bo-head .bb-btn { margin-left: auto; }
+.avs-bo-head .bb-btn + .bb-btn { margin-left: 0; }
+.avs-bo-list { max-height: 46vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.avs-bo-empty { padding: 10px 4px; font-size: var(--bb-text-xs); color: var(--bb-ink-quiet); }
+.avs-bo-row {
+  display: grid; grid-template-columns: 22px 18px 1fr 120px 92px; align-items: center; gap: var(--bb-sp-3);
+  padding: 6px 8px; border-radius: var(--bb-r-sm);
+  background: var(--bb-bg-2); border: 1px solid var(--bb-border); cursor: grab;
+}
+.avs-bo-row.bb-dragging { opacity: .4; }
+/* A widget with no build is listed so you can give it one, but it is plainly
+   not part of the sequence — no number, and dimmed. */
+.avs-bo-off { opacity: .6; }
+.avs-bo-num { font-size: var(--bb-text-xs); font-weight: 700; color: var(--bb-accent); text-align: center; }
+.avs-bo-off .avs-bo-num { color: var(--bb-ink-faint); font-weight: 400; }
+.avs-bo-ic { display: flex; color: var(--bb-ink-muted); }
+.avs-bo-name { font-size: var(--bb-text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.avs-bo-row select, .avs-bo-row input { font-size: var(--bb-text-xs); }
+.avs-bo-warn { color: var(--bb-warn); }

@@ -44,6 +44,8 @@ const suites = [
   './text-case.test.js',
   // Format painter: what "make this look like that" carries, and what it does not.
   './format-painter.test.js',
+  // Build order: reading an animation sequence out of the delays and back.
+  './build-order.test.js',
   './migrate.test.js',
   // animations.test.js is pure logic (animation catalogs + schema round-trip);
   // it imports shared/animations.js + shared/slide-schema.js, neither of which

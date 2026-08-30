@@ -37,6 +37,7 @@ import { addWidget, applyActiveDesign, deleteSelected, duplicateSelected, select
 import { splitText } from './ai/smart-split.js';
 import { exportPlaylist, importPlaylist } from './playlist-io.js';
 import { openPrintExport } from './export-print.js';
+import { openBuildOrder } from './panels/build-order-panel.js';
 import { isEditingVariant, variantBannerLabel, exitVariantEdit } from './canvas/variant-ctx.js';
 import { openTemplateStore, openStartChooser, playlistIsPristine } from './ui/template-store.js';
 import { legalLinks } from './legal-links.js';
@@ -756,6 +757,7 @@ function registerAllCommands() {
   // so an action missing from it is invisible to anyone who searches there first.
   registerCommand({ label: t('sc.selectAll'), icon: uiIconSvg('copy'), keywords: 'select all widgets alles auswählen markieren', run: () => selectAllWidgets() });
   registerCommand({ label: t('fmt.copy'), icon: uiIconSvg('brush'), keywords: 'format painter formatting copy style formatierung übertragen pinsel', run: () => armFormatPainter() });
+  registerCommand({ label: t('build.title'), icon: uiIconSvg('play'), keywords: 'animation build order sequence animationen reihenfolge einblenden', run: () => openBuildOrder() });
   registerCommand({ label: t('arrange.group'), icon: uiIconSvg('arr-group'), keywords: 'group gruppieren zusammenfassen', run: () => groupSelection() });
   registerCommand({ label: t('arrange.ungroup'), icon: uiIconSvg('arr-ungroup'), keywords: 'ungroup gruppierung aufheben', run: () => ungroupSelection() });
   for (const [key, icon, mode] of [

@@ -41,6 +41,7 @@ no `npm install` to run it. Serve the folder and open `index.html`.
 | | |
 |---|---|
 | 🎨 **Free-canvas editor** | A three-column Keynote-style shell: slide rail · zoomable canvas · inspector & library. Drop widgets anywhere, drag/resize with snap guides, live previews. |
+| 🎬 **Animation order** | The slide's entrance builds as one ordered list: assign, drag to re-sequence, re-space evenly, play. It warns when the sequence outlasts the slide. Order IS the delay, so nothing about the schema changed. |
 | 🖌 **Format painter** | Pick the look up off one widget, click another to put it on — theme, colours, text size, alignment, background, build and loop. Position, content and identity never travel. |
 | 🖨 **Print / PDF** | Export the deck for someone who will not open the studio: one slide per page on a page cut to the slide's own shape, or a 2/4/6-up A4 handout with numbered captions. Uses the browser's own Save-as-PDF — no export server, no upload. |
 | 📑 **Slide master** | One set of widgets drawn behind every slide — a standing logo bar, a footer rule, a corner clock. Edit it from the rail, opt any single slide out. The player honours it, so it reaches the wall. |

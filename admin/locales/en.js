@@ -988,4 +988,15 @@ export const en = {
   "fmt.armed": "Formatting picked up — click a widget to paint it on. Esc cancels.",
   "fmt.done": "Formatting applied",
   "fmt.none": "Nothing changed — that widget already looks like this.",
+  // --- Animation order pane ---
+  "build.title": "Animation order",
+  "build.step": "Step between builds",
+  "build.restamp": "Re-space evenly",
+  "build.play": "Play",
+  "build.type": "Build",
+  "build.delay": "Starts at (ms)",
+  "build.empty": "This slide has no widgets yet.",
+  "build.none": "No widget on this slide has an entrance build.",
+  "build.total": "The sequence finishes after {s}s — the slide runs {d}s.",
+  "build.totalOver": "The sequence finishes after {s}s, but the slide only runs {d}s.",
 };

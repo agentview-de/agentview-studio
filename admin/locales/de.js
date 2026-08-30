@@ -996,4 +996,15 @@ export const de = {
   "fmt.armed": "Formatierung aufgenommen — Widget anklicken, um sie zu übertragen. Esc bricht ab.",
   "fmt.done": "Formatierung übertragen",
   "fmt.none": "Nichts geändert — dieses Widget sieht schon so aus.",
+  // --- Animation order pane ---
+  "build.title": "Animationsreihenfolge",
+  "build.step": "Abstand zwischen Effekten",
+  "build.restamp": "Gleichmäßig verteilen",
+  "build.play": "Abspielen",
+  "build.type": "Effekt",
+  "build.delay": "Startet bei (ms)",
+  "build.empty": "Auf dieser Folie liegt noch nichts.",
+  "build.none": "Kein Widget dieser Folie hat einen Einblend-Effekt.",
+  "build.total": "Die Abfolge endet nach {s}s — die Folie läuft {d}s.",
+  "build.totalOver": "Die Abfolge endet erst nach {s}s, die Folie läuft aber nur {d}s.",
 };
