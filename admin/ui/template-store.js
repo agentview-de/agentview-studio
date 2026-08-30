@@ -152,9 +152,29 @@ export function openTemplateStore(opts = {}) {
     bodyEl.replaceChildren();
 
     if (!list.length) {
-      const empty = document.createElement('p');
-      empty.className = 'avs-muted';
-      empty.textContent = t('tplStore.none');
+      // A dead end needs a way out of itself. The old empty state was one grey
+      // sentence, which also let the dialog collapse from full height to a
+      // sliver — the box jumping around is what makes a no-match feel like a
+      // fault rather than an answer. This keeps the height and hands back the
+      // one action that fixes it.
+      const empty = document.createElement('div');
+      empty.className = 'avs-tplstore-empty';
+      empty.innerHTML = `
+        <span class="avs-tplstore-empty-icon" aria-hidden="true">${uiIconSvg('search', 30)}</span>
+        <p class="avs-tplstore-empty-title">${escapeHtml(t('tplStore.none'))}</p>
+        <p class="avs-tplstore-empty-hint">${escapeHtml(t('tplStore.noneHint'))}</p>`;
+      const reset = document.createElement('button');
+      reset.type = 'button';
+      reset.className = 'bb-btn bb-btn-secondary';
+      reset.textContent = t('tplStore.noneReset');
+      reset.addEventListener('click', () => {
+        query = '';
+        search.value = '';
+        activeCat = 'all';
+        renderGrid();
+        search.focus();
+      });
+      empty.appendChild(reset);
       bodyEl.appendChild(empty);
       return;
     }
@@ -186,7 +206,10 @@ export function openTemplateStore(opts = {}) {
       const slides = buildSlides(tpl, { lang: lang() });
       card._slides = slides;
       const pl = { canvas: tpl.canvas, defaults: tpl.defaults };
-      if (slides[0]) disposers.add(lazySlideThumb(preview, slides[0], pl));
+      // 'contain': the card box is a grid cell and must not take the slide's
+      // shape. Portrait sets letterbox into it, which also reads as “this one
+      // is portrait” at a glance.
+      if (slides[0]) disposers.add(lazySlideThumb(preview, slides[0], pl, { fit: 'contain' }));
     }
 
     const types = templateWidgetTypes(tpl).slice(0, 6);
@@ -252,8 +275,14 @@ export function openTemplateStore(opts = {}) {
       holder.className = 'avs-tpldetail-slide';
       stage.replaceChildren(holder);
       // Measured after insertion: the stage is flex-sized, so clientWidth is
-      // only meaningful once it is in the document.
-      stageDispose = renderSlideThumb(holder, slides[i], pl, { width: holder.clientWidth || stage.clientWidth });
+      // only meaningful once it is in the document. `contain` fits the slide
+      // into that box whatever its aspect — a portrait set otherwise scaled to
+      // the modal's width and ran off the bottom of the screen.
+      stageDispose = renderSlideThumb(holder, slides[i], pl, {
+        width: holder.clientWidth || stage.clientWidth,
+        fit: 'contain',
+        maxHeight: holder.clientHeight || stage.clientHeight,
+      });
       rail.querySelectorAll('.avs-tplrail-item').forEach((el, j) => {
         el.classList.toggle('avs-on', j === i);
         el.setAttribute('aria-selected', j === i ? 'true' : 'false');

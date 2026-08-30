@@ -197,6 +197,8 @@ export const en = {
   'tplStore.all': 'All',
   'tplStore.count': '{n} templates',
   'tplStore.none': 'No template matches that.',
+  'tplStore.noneHint': 'Try a shorter word, or a widget name like “menu”, “queue” or “countdown”.',
+  'tplStore.noneReset': 'Show all templates',
   'tplStore.slides': '{n} slides',
   'tplStore.slideN': 'Slide {n}',
   'tplStore.blankMeta': 'Start from nothing',

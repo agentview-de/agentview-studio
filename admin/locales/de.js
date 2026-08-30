@@ -205,6 +205,8 @@ export const de = {
   'tplStore.all': 'Alle',
   'tplStore.count': '{n} Vorlagen',
   'tplStore.none': 'Dazu passt keine Vorlage.',
+  'tplStore.noneHint': 'Versuche ein kürzeres Wort oder einen Widget-Namen wie „Menü“, „Warteschlange“ oder „Countdown“.',
+  'tplStore.noneReset': 'Alle Vorlagen zeigen',
   'tplStore.slides': '{n} Folien',
   'tplStore.slideN': 'Folie {n}',
   'tplStore.blankMeta': 'Bei null anfangen',

@@ -47,6 +47,7 @@ export const UI_ICONS = {
   // shows. Not a "layout" icon: the designs picker already draws its own
   // rects (shared/designs.js), so this one never has to stand for a layout.
   grid:              '<rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>',
+  search:            '<circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.2" y1="15.2" x2="21" y2="21"/>',
   // An A with a cross: strip the styling off the letter, not the letter itself.
   'clear-format':    '<path d="M3 20l6-14 3.4 8"/><line x1="5.6" y1="14" x2="11.4" y2="14"/><line x1="15" y1="14" x2="22" y2="21"/><line x1="22" y1="14" x2="15" y2="21"/>',
   // The highlight bar with a stroke through it — one shape, one negation.

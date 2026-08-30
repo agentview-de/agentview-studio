@@ -1194,6 +1194,14 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
   background: color-mix(in srgb, currentColor 7%, transparent);
   border-radius: clamp(6px, 1.6cqmin, 18px);
 }
+/* Same hatch as the blank-template card, so an empty media slot reads as a
+   place to put something rather than as a failure to load. The stripe is sized
+   in cq so it stays proportionate however far the stage is scaled down. */
+.avs-thumb-offline-media {
+  background:
+    repeating-linear-gradient(45deg, transparent 0 2cqmin, color-mix(in srgb, currentColor 13%, transparent) 2cqmin 4cqmin),
+    color-mix(in srgb, currentColor 6%, transparent);
+}
 .avs-thumb-offline-icon  { font-size: clamp(16px, 18cqmin, 120px); line-height: 1; }
 .avs-thumb-offline-icon svg { display: block; width: 1em; height: 1em; }
 .avs-thumb-offline-label { font-size: clamp(10px, 7cqmin, 48px); font-weight: 600; line-height: 1.2; }
@@ -1232,6 +1240,17 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 .avs-tplstore-cat-icon { font-size: var(--bb-text-md); line-height: 1; }
 
 .avs-tplstore-body { min-height: 0; overflow: auto; padding-right: 2px; }
+/* Holds the dialog's height instead of letting a no-match collapse it. */
+.avs-tplstore-empty {
+  min-height: 320px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--bb-sp-3); text-align: center; padding: var(--bb-sp-8);
+  color: var(--bb-ink-muted);
+}
+.avs-tplstore-empty-icon { color: var(--bb-ink-faint); }
+.avs-tplstore-empty-title { margin: 0; font-size: var(--bb-text-lg); font-weight: 600; color: var(--bb-ink); }
+.avs-tplstore-empty-hint { margin: 0 0 var(--bb-sp-3); font-size: var(--bb-text-sm); max-width: 42ch; }
+
 .avs-tplstore-grid {
   display: grid; gap: var(--bb-sp-8);
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -1246,16 +1265,18 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
   transition: border-color var(--bb-trans-fast);
 }
 .avs-tplcard:hover { border-color: color-mix(in srgb, var(--avs-tpl-accent) 55%, transparent); }
+/* One box for every card, whatever shape the template is. The grid is a
+   comparison surface: cards have to line up, and a card whose height is
+   dictated by its content cannot. Portrait sets letterbox inside it. */
 .avs-tplcard-preview {
-  display: block; width: 100%; padding: 0; border: 0; cursor: pointer;
+  display: block; width: 100%; aspect-ratio: 16 / 9; padding: 0; border: 0; cursor: pointer;
   background: var(--bb-bg-0); position: relative; overflow: hidden;
   border-bottom: 1px solid var(--bb-border);
 }
 .avs-tplcard-preview:focus-visible { outline: 2px solid var(--bb-accent); outline-offset: -2px; }
-/* The blank card has nothing to preview - give it the same box so the grid
-   keeps one rhythm instead of one short card at the front. */
+/* The blank card has nothing to preview - it gets the same box (above) plus
+   the hatch, so the grid keeps one rhythm instead of one odd card at the front. */
 .avs-tplcard-blank .avs-tplcard-preview {
-  aspect-ratio: 16 / 9;
   display: flex; align-items: center; justify-content: center;
   color: var(--bb-ink-faint);
   background:
@@ -1286,8 +1307,15 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 .avs-tpldetail-titles h5 { margin: 0 0 2px; font-size: var(--bb-text-2xl); font-weight: 650; }
 .avs-tpldetail-titles p { margin: 0; font-size: var(--bb-text-sm); line-height: 1.45; }
 .avs-tpldetail-cta { display: flex; gap: var(--bb-sp-3); flex: 0 0 auto; }
-.avs-tpldetail-stage { width: 100%; }
-.avs-tpldetail-slide { width: 100%; border-radius: var(--bb-r-md); overflow: hidden; }
+/* A viewport, not a column that grows to whatever it is given. Scaled on width
+   alone a 1080x1920 door sign came out ~2000 px tall inside the modal: the
+   slide ran off the bottom of the screen and the rail that switches slides went
+   with it. Capped here and letterboxed by the renderer's `contain` fit, so any
+   canvas shape is visible whole with its controls still on screen. */
+.avs-tpldetail-stage { width: 100%; height: min(44vh, 400px); }
+.avs-tpldetail-slide {
+  width: 100%; height: 100%; border-radius: var(--bb-r-md); overflow: hidden;
+}
 .avs-tpldetail-rail { display: flex; gap: var(--bb-sp-3); flex-wrap: wrap; }
 .avs-tplrail-item {
   display: inline-flex; align-items: center; gap: var(--bb-sp-3);

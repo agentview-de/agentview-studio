@@ -33,7 +33,14 @@ import { t } from '../i18n.js';
 // live lives here.
 function offlineStandIn(host, widget, plugin) {
   const el = document.createElement('div');
-  el.className = 'avs-thumb-offline';
+  // A media stand-in and a live-data stand-in mean different things and should
+  // not look identical. "A picture goes here" is an invitation and gets the
+  // same hatch the blank-template card uses; "a live feed goes here" is a
+  // statement of fact and stays a plain tinted panel. Before this, a template
+  // built around the user's own photo showed in the store as an empty grey
+  // rectangle and read as a broken card rather than an offer.
+  el.className = 'avs-thumb-offline'
+    + (plugin?.group === 'media' ? ' avs-thumb-offline-media' : '');
   el.innerHTML = `
     <span class="avs-thumb-offline-icon">${widgetIcon(widget.type, escapeHtml(plugin?.icon ?? '◻'), '1em')}</span>
     <span class="avs-thumb-offline-label">${escapeHtml(plugin?.label ?? widget.type)}</span>`;
@@ -49,15 +56,26 @@ function offlineStandIn(host, widget, plugin) {
  * @param {object} playlist     read for canvas size + default theme
  * @param {object} [opts]
  * @param {number} [opts.width] override the measured width (px)
+ * @param {'width'|'contain'} [opts.fit]
+ *        'width' (default) scales to the host's width and gives the host
+ *        whatever height that implies — right when the caller wants the slide's
+ *        own shape. 'contain' keeps the host's existing box and fits the slide
+ *        inside it, centred. Use it wherever the box is part of a LAYOUT: a
+ *        1080×1920 door sign scaled on width alone came out 652 px tall in a
+ *        grid of 204 px cards, stretched its whole row, and pushed its own
+ *        title and buttons off the card.
  * @returns {() => void} dispose — MUST be called; plugins hold timers
  */
 export function renderSlideThumb(host, slide, playlist, opts = {}) {
   const { w: cw, h: ch } = resolveCanvas(playlist?.canvas);
-  const width = opts.width || host.clientWidth || 320;
-  const scale = width / cw;
-
   host.classList.add('avs-thumb-host');
-  host.style.height = `${Math.round(ch * scale)}px`;
+  const width = opts.width || host.clientWidth || 320;
+  // Read the box BEFORE writing a height to it, or 'contain' would measure the
+  // height it set on the previous render and shrink a little every time.
+  const boxH = opts.fit === 'contain' ? (opts.maxHeight || host.clientHeight || 0) : 0;
+  const scale = boxH ? Math.min(width / cw, boxH / ch) : width / cw;
+
+  host.style.height = `${Math.round(boxH || ch * scale)}px`;
   host.replaceChildren();
 
   const stage = document.createElement('div');
@@ -67,6 +85,11 @@ export function renderSlideThumb(host, slide, playlist, opts = {}) {
   stage.style.width = `${cw}px`;
   stage.style.height = `${ch}px`;
   stage.style.transform = `scale(${scale})`;
+  // transform-origin is 0 0, so centring is a plain offset of the leftover box.
+  if (boxH) {
+    stage.style.left = `${Math.round((width - cw * scale) / 2)}px`;
+    stage.style.top = `${Math.round((boxH - ch * scale) / 2)}px`;
+  }
   host.appendChild(stage);
 
   const bg = document.createElement('div');

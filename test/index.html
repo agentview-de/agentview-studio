@@ -37,6 +37,9 @@
       './escape.test.js',
       './safe-url.test.js',
       './sanitize.test.js',
+      // Browser-only: the thumbnail renderer's box arithmetic needs a laid-out
+      // element. No app stylesheet needed — every number it asserts is inline.
+      './slide-thumb.test.js',
       './schema.test.js',
       './round-trip.test.js',
       './migrate.test.js',
