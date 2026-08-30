@@ -9,7 +9,7 @@
 
 import { get as getPlugin } from '../shared/plugins/registry.js';
 import '../shared/plugins/all.js';
-import { migratePlaylist, applyWidgetMigrations, resolveBrandKit, resolveCanvas } from '../shared/slide-schema.js';
+import { migratePlaylist, applyWidgetMigrations, resolveBrandKit, resolveCanvas, visibleWidgets, masterWidgetsFor } from '../shared/slide-schema.js';
 import { mountWidget, widgetSlotZ } from '../shared/widget-host.js';
 import { applySlideBackground, applySlideContrast, applyWidgetBg } from '../shared/background.js';
 import { applyErrorFallback } from '../shared/error-fallback.js';
@@ -397,7 +397,14 @@ async function renderSlide(slide) {
   }
   const variantWidgets = resolveSlideWidgets(slide, { lang: DISPLAY_LANG, abIdx });
   const resolvedWidgets = applyBindingsToWidgets(variantWidgets, state.slotData);
-  const widgets = [...resolvedWidgets].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
+  // The slide master goes in with the slide's own widgets and is then sorted
+  // like everything else — masterWidgetsFor has already pushed its z below the
+  // slide's, so one sort puts the master behind without a second render pass.
+  const withMaster = [...masterWidgetsFor(state.playlist, slide), ...resolvedWidgets];
+  // Hidden widgets are dropped HERE, at the last step before rendering, so the
+  // filter runs after variant resolution and binding — a widget hidden inside a
+  // language variant is hidden too. Same predicate the editor uses.
+  const widgets = visibleWidgets(withMaster).sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
   for (const w of widgets) {
     const slot = document.createElement('div');
     slot.className = 'bb-widget';

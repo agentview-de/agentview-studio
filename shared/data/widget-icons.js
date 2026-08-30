@@ -10,6 +10,10 @@ export const WIDGET_ICONS = {
   code: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
   ticker: '<rect x="2" y="9" width="20" height="6" rx="1"/><line x1="6" y1="12" x2="14" y2="12"/>',
   icon: '<circle cx="7" cy="7" r="3.5"/><rect x="13" y="3.5" width="7.5" height="7.5" rx="1"/><path d="M8.5 21l3.5-6 3.5 6z"/>',
+  // A square, a circle and a triangle overlapping — the universal "draw a shape"
+  // mark. Not a single rectangle: that reads as a frame/container, which is what
+  // the image and iframe icons already say.
+  shape: '<rect x="2.5" y="7" width="11" height="11" rx="1.5"/><circle cx="16" cy="8.5" r="5.2"/><path d="M13.5 21.5 17.5 14l4 7.5z"/>',
   menu: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1" fill="currentColor" stroke="none"/>',
   image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
   'image-gallery': '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',

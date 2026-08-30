@@ -34,6 +34,15 @@ const _state = {
     activeView: 'editor',     // 'editor' | 'displays' | 'admin'
     activeSlideId: null,
     selectedWidgetId: null,   // selected widget on the canvas (null = show Library)
+    // Multi-selection. `selectedWidgetId` stays the PRIMARY — the last one you
+    // touched, the one the inspector shows and the one "match size" measures
+    // against — and this is the whole set including it. Invariant, enforced by
+    // the canvas: it always contains selectedWidgetId, and is empty exactly when
+    // selectedWidgetId is null. Every caller outside the canvas still writes
+    // only selectedWidgetId; the canvas normalises the set from it, so no
+    // existing call site had to learn about multi-selection.
+    // Array (not Set) so it survives the JSON snapshot/persist round-trip.
+    selectedWidgetIds: [],
     libraryTab: 'widgets',    // 'widgets' | 'templates' | 'assets' | 'apis' | 'store'
     themePref: 'dark',        // 'system' | 'dark' | 'light' — editor chrome defaults dark
     // Right column collapsed? Persisted, so a narrow window stays the way you
@@ -52,6 +61,21 @@ const _state = {
     editorPreviewLang: null,
     // v3: which abVariant index being previewed (null = default)
     editorPreviewAbIdx: null,
+    // Editing the slide MASTER rather than a slide. Stripped on persist (below)
+    // for the same reason the variant pointers are: a reload should land you on
+    // a slide, not in a mode you have to notice you are in.
+    editingMaster: false,
+    // Canvas view aids. Persisted (they are a working preference, not document
+    // content) and deliberately OUTSIDE the playlist: a grid you turned on to
+    // line something up is yours, not something to ship to a colleague who
+    // opens the file.
+    //   snap    master switch for all snapping (Alt suspends it for one drag)
+    //   grid    quantise step in percent; 0 = off
+    //   showGrid  paint the grid, independently of snapping to it
+    //   margin  safe-area inset in percent; 0 = off. Adds snap lines and, with
+    //           showMargin, a visible frame — the TV-overscan guide signage
+    //           needs and slide editors for paper do not have.
+    view: { snap: true, grid: 0, showGrid: false, margin: 0, showMargin: false },
   },
   meta: {
     autoSaveAt: 0,
@@ -359,6 +383,7 @@ export function persist() {
     delete uiClean._variantStash;
     uiClean.editorPreviewLang = null;
     uiClean.editorPreviewAbIdx = null;
+    uiClean.editingMaster = false;
     localStorage.setItem(LS_UI, JSON.stringify(uiClean));
     if (_state.meta.saveError) { _state.meta.saveError = null; emit('save-state', null); }
     return true;

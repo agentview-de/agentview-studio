@@ -36,9 +36,18 @@ async function mount(type, content) {
 }
 
 // `custom` is the designer widget: its content IS author-supplied markup, and
-// an author who supplies none has asked for an empty box. Every other widget
-// owns its own rendering and owes the reader an explanation.
-const AUTHORED = new Set(['custom']);
+// an author who supplies none has asked for an empty box.
+//
+// `shape` is exempt for the opposite reason: a coloured box IS its content. It
+// has nothing to explain and nothing to fetch — an empty content object still
+// paints a rectangle in the slide accent, which is exactly what the reader
+// asked for. It escapes the sweep only because the two most-used shapes are
+// drawn with CSS rather than SVG (see shared/data/shapes.js for why), so the
+// `graphic` probe below can't see them; the assertion that it paints is in
+// test/shapes.test.js and /tools/shape-sheet.html.
+//
+// Every other widget owns its own rendering and owes the reader an explanation.
+const AUTHORED = new Set(['custom', 'shape']);
 
 describe('nothing to show is something to say', () => {
   for (const p of listPlugins()) {

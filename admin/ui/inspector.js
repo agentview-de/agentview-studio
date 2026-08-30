@@ -8,7 +8,7 @@
 
 import {
   renderLocation, renderDatetime, renderTimezone, renderDuration, renderCurrency, renderTable, renderFeed, renderFeedList,
-  renderTheme, renderPlace, renderIcon, renderCalendarEvents, renderRichText,
+  renderTheme, renderPlace, renderIcon, renderShape, renderCalendarEvents, renderRichText,
 } from './field-controls.js';
 import { renderAlign } from './field-controls/align.js';
 import { searchableSelect } from './field-controls/_combo.js';
@@ -41,6 +41,7 @@ registerControl('rich-text', renderRichText);
 registerControl('theme', renderTheme);
 registerControl('place', renderPlace);
 registerControl('icon', renderIcon);
+registerControl('shape', renderShape);
 registerControl('align', renderAlign);
 
 // Collapse-state persistence (loadCollapsed / saveCollapsed) is shared with the
@@ -62,7 +63,7 @@ function sectionKeyFor(f) {
 // wrap-everything behavior verbatim.
 const HEAVY_FIELD_TYPES = new Set([
   'rich-text', 'table', 'list', 'feed-list', 'calendar-events',
-  'markdown', 'code', 'textarea', 'location', 'icon', 'theme',
+  'markdown', 'code', 'textarea', 'location', 'icon', 'shape', 'theme',
 ]);
 
 export function buildForm({ schema, value, onChange, assetPicker, assetsPicker, codePicker, formKey, defaults, autoFold, tierFilter }) {

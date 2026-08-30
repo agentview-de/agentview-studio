@@ -23,9 +23,15 @@ export function addHandles(frameEl, rotateTitle = '') {
 // Wire interaction on a frame. Callbacks get percent rects.
 //   getStageRect() -> DOMRect of the (scaled) stage
 //   getRect()      -> current { x, y, w, h }
-//   onChange(rect, phase)  phase: 'move' | 'end'
-//   onSelect()
-export function makeInteractive(frameEl, { getStageRect, getRect, getRotation, onChange, onSelect, onRotate }) {
+//   onChange(rect, phase, mode, opts)  phase: 'move' | 'end';
+//                      opts.noSnap is true while Alt is held (snapping off)
+//   onSelect(event)  — the pointerdown, so the caller can read shift/meta
+//   onTap()          — pointer released without moving anything. A drag and a
+//                      click are different intents on a multi-selection (drag
+//                      the group vs. narrow the selection to this one), and
+//                      `click` fires for both, so the distinction is made here
+//                      where the movement is already known.
+export function makeInteractive(frameEl, { getStageRect, getRect, getRotation, onChange, onSelect, onTap, onRotate }) {
   let mode = null;        // 'move' | dir | 'rotate'
   let startRect = null;
   let startRot = 0;
@@ -56,7 +62,7 @@ export function makeInteractive(frameEl, { getStageRect, getRect, getRotation, o
     startRect = { ...getRect() };
     startRot = getRotation?.() ?? 0;
     startX = e.clientX; startY = e.clientY;
-    onSelect?.();
+    onSelect?.(e);
     e.preventDefault();
     e.stopPropagation();
     window.addEventListener('pointermove', onMove);
@@ -86,7 +92,10 @@ export function makeInteractive(frameEl, { getStageRect, getRect, getRotation, o
       const dx = ((e.clientX - startX) / sr.width) * 100;
       const dy = ((e.clientY - startY) / sr.height) * 100;
       const cr = clampRect({ ...startRect, x: startRect.x + dx, y: startRect.y + dy });
-      onChange?.(cr, 'move', mode);
+      // The modifier state has to travel WITH the event: holding Alt suspends
+      // snapping for the rest of the drag, and the caller has no other way to
+      // know — it sees a rect, not a keyboard.
+      onChange?.(cr, 'move', mode, { noSnap: e.altKey });
       showBadge(cr);
       return;
     }
@@ -97,7 +106,7 @@ export function makeInteractive(frameEl, { getStageRect, getRect, getRotation, o
       dxPx: e.clientX - startX, dyPx: e.clientY - startY,
       deg: startRot, stageW: sr.width, stageH: sr.height,
     }));
-    onChange?.(cr, 'move', mode);
+    onChange?.(cr, 'move', mode, { noSnap: e.altKey });
     showBadge(cr);
   }
 
@@ -112,6 +121,7 @@ export function makeInteractive(frameEl, { getStageRect, getRect, getRotation, o
       // selected widget should NOT register as a move (no-op undo entry).
       const cur = clampRect(getRect());
       if (startRect && !rectsEqual(startRect, cur)) onChange?.(cur, 'end', mode);
+      else onTap?.();
     }
     hideBadge();
     mode = null; startRect = null;

@@ -19,7 +19,8 @@ import { SLIDE_TRANSITIONS, WIDGET_BUILDS, AMBIENT_EFFECTS, BUILD_DEFAULT_MS } f
 import {
   setWidgetGeometry, setWidgetRotation, refreshWidget, applyTheme, setCanvasSize, fitWidgetToRatio,
   deleteSelected, duplicateSelected, setWidgetBackground, setSlideBackground,
-  applyActiveDesign, previewWidgetBuild, applyWidgetLoop,
+  applyActiveDesign, previewWidgetBuild, applyWidgetLoop, setEditingMaster,
+  renderSlide as canvasRenderSlide,
   isLivePreview, enableLivePreview, disableLivePreview,
 } from '../canvas/canvas.js';
 import { renderScheduleEditor } from '../ui/schedule-editor.js';
@@ -35,6 +36,7 @@ import { openTemplateContentEditor } from './template-editor.js';
 import { slots as slotsApi } from '../api.js';
 import { escapeHtml as esc } from '../../shared/utils/escape.js';
 import { alignRect } from '../canvas/widget-frame.js';
+import { activeSlide, isEditingMaster } from '../active-slide.js';
 import { usesNetwork } from '../../shared/plugin-network.js';
 
 // Lazy slot-slug cache for the binding-inspector datalist. Populated on first
@@ -61,10 +63,6 @@ on('slots.changed', () => { _slotSlugCache = null; });
 // now — see admin/ui/brand-kit-form.js (brandKitGrid / readBrandKitGrid).
 
 
-function activeSlide() {
-  const pl = state.playlist;
-  return pl?.slides.find(s => s.id === state.ui.activeSlideId) ?? pl?.slides[0] ?? null;
-}
 
 // ---------- Slide settings (top strip) ----------
 // The strip is now a single compact button — the actual controls (name,
@@ -75,6 +73,18 @@ function activeSlide() {
 export function mountSlideSettings(host) {
   host.classList.add('avs-slide-settings');
   const render = () => {
+    // While the master is being edited there is no slide to configure: a
+    // duration or a schedule on the master would be a setting that looks like
+    // it does something and does not.
+    if (isEditingMaster()) {
+      host.innerHTML = `<div class="avs-master-banner">
+        <strong>${esc(t('master.editing'))}</strong>
+        <span>${esc(t('master.editingHint'))}</span>
+        <button class="bb-btn" id="ss-master-done" type="button">${esc(t('master.done'))}</button>
+      </div>`;
+      host.querySelector('#ss-master-done').addEventListener('click', () => setEditingMaster(false));
+      return;
+    }
     const slide = activeSlide();
     if (!slide) { host.innerHTML = `<div class="avs-inspector-empty">${t('insp.noSlide')}</div>`; return; }
     const name = slide.name?.trim() || t('insp.slideName');
@@ -89,7 +99,10 @@ export function mountSlideSettings(host) {
   // Redraw the trigger on any playlist mutation (notify fires on the full path,
   // so this also catches `playlist.slides.<i>.name` edits from the settings
   // modal) and on slide switches.
-  subscribe('ui', p => { if (p === 'ui.activeSlideId') render(); });
+  // editingMaster matters as much as activeSlideId: both change WHICH slide this
+  // strip is describing, and one of them changes it to something that has no
+  // duration or schedule to describe at all.
+  subscribe('ui', p => { if (p === 'ui.activeSlideId' || p === 'ui.editingMaster') render(); });
   subscribe('playlist', () => render());
   render();
 }
@@ -115,6 +128,13 @@ function buildSlideSettingsBody(slide) {
           ${SLIDE_TRANSITIONS.map(x => `<option value="${x.id}" ${(slide.transition ?? 'fade') === x.id ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}
         </select>
       </label>
+    </div>
+    <div class="bb-form-group">
+      <label class="avs-ss-check">
+        <input type="checkbox" id="sm-master" ${slide.noMaster ? '' : 'checked'}>
+        <span>${t('master.useOnSlide')}</span>
+      </label>
+      <p class="bb-form-help">${t('master.useOnSlideHelp')}</p>
     </div>
     <div class="bb-form-group">
       <label>${t('insp.canvasSize')}</label>
@@ -175,6 +195,13 @@ function buildSlideSettingsBody(slide) {
 
   box.querySelector('#sm-name').addEventListener('input', e => { slide.name = e.target.value; commit('slide-name'); });
   box.querySelector('#sm-dur').addEventListener('input', e => { slide.duration = +e.target.value || 10; commit('slide-duration'); });
+  box.querySelector('#sm-master').addEventListener('change', e => {
+    // Stored as an OPT-OUT so the common case writes nothing: a playlist with no
+    // master, or one where every slide uses it, carries no `noMaster` keys at all.
+    if (e.target.checked) delete slide.noMaster; else slide.noMaster = true;
+    commit('slide-master');
+    canvasRenderSlide();
+  });
   box.querySelector('#sm-tx').addEventListener('change', e => { slide.transition = e.target.value; commit('slide-transition'); });
   // Canvas size: presets set both dims; the number fields allow any custom size;
   // the fit select controls how the player maps the design onto a mismatched

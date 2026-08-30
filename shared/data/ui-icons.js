@@ -91,6 +91,9 @@ export const UI_ICONS = {
   tablet:            '<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="10.5" y1="18.5" x2="13.5" y2="18.5"/>',
   tv:                '<rect x="2" y="7" width="20" height="14" rx="2"/><polyline points="7 3 12 7 17 3"/>',
   eye:               '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>',
+  // The struck-through eye: the SAME eye with a slash, so the pair reads as one
+  // control in two states rather than as two unrelated icons.
+  'eye-off':         '<path d="M9.9 5.2A10.9 10.9 0 0 1 12 5c7 0 11 7 11 7a20 20 0 0 1-3.2 4.2M6.6 6.6A20 20 0 0 0 1 12s4 7 11 7a10.8 10.8 0 0 0 5.4-1.4"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><line x1="2" y1="2" x2="22" y2="22"/>',
   lock:              '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   unlock:            '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>',
   more:              '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
@@ -138,6 +141,31 @@ export const UI_ICONS = {
   'check-circle':    '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
   'x-circle':        '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>',
   alert:             '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  // Object-arrange icons. Deliberately NOT the align-left/center/right trio
+  // above: those are TEXT alignment (four ragged lines of type) and they are
+  // already in this file for the inspector's text controls. These show two BOXES
+  // snapping to a rule, which is what the button does — reusing the type icons
+  // would put the same picture on two controls that do different things.
+  'arr-left':     '<line x1="3" y1="3" x2="3" y2="21"/><rect x="6" y="5" width="15" height="5" rx="1"/><rect x="6" y="14" width="9" height="5" rx="1"/>',
+  'arr-hcenter':  '<line x1="12" y1="3" x2="12" y2="21"/><rect x="4.5" y="5" width="15" height="5" rx="1"/><rect x="7.5" y="14" width="9" height="5" rx="1"/>',
+  'arr-right':    '<line x1="21" y1="3" x2="21" y2="21"/><rect x="3" y="5" width="15" height="5" rx="1"/><rect x="9" y="14" width="9" height="5" rx="1"/>',
+  'arr-top':      '<line x1="3" y1="3" x2="21" y2="3"/><rect x="5" y="6" width="5" height="15" rx="1"/><rect x="14" y="6" width="5" height="9" rx="1"/>',
+  'arr-vmiddle':  '<line x1="3" y1="12" x2="21" y2="12"/><rect x="5" y="4.5" width="5" height="15" rx="1"/><rect x="14" y="7.5" width="5" height="9" rx="1"/>',
+  'arr-bottom':   '<line x1="3" y1="21" x2="21" y2="21"/><rect x="5" y="3" width="5" height="15" rx="1"/><rect x="14" y="9" width="5" height="9" rx="1"/>',
+  // Distribute: three boxes with the WHITESPACE between them called out, since
+  // even gaps (not even centres) is what the action produces.
+  'arr-dist-h':   '<rect x="2" y="7" width="4" height="10" rx="1"/><rect x="10" y="7" width="4" height="10" rx="1"/><rect x="18" y="7" width="4" height="10" rx="1"/><line x1="7.5" y1="12" x2="8.5" y2="12"/><line x1="15.5" y1="12" x2="16.5" y2="12"/>',
+  'arr-dist-v':   '<rect x="7" y="2" width="10" height="4" rx="1"/><rect x="7" y="10" width="10" height="4" rx="1"/><rect x="7" y="18" width="10" height="4" rx="1"/><line x1="12" y1="7.5" x2="12" y2="8.5"/><line x1="12" y1="15.5" x2="12" y2="16.5"/>',
+  // Match size: a small box growing to a big one's dimension.
+  'arr-match-w':  '<rect x="2" y="4" width="20" height="6" rx="1"/><rect x="2" y="14" width="12" height="6" rx="1"/><polyline points="16 15 19 17 16 19"/>',
+  'arr-match-h':  '<rect x="4" y="2" width="6" height="20" rx="1"/><rect x="14" y="2" width="6" height="12" rx="1"/><polyline points="15 16 17 19 19 16"/>',
+  // Group: two boxes inside one dashed frame. Ungroup: the same two with
+  // the frame broken open, so the pair reads as one action and its undo.
+  // Stacked sheets — the slide MASTER (and the Layers panel's own header):
+  // one thing drawn under all the others.
+  layers:         '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+  'arr-group':    '<rect x="2" y="2" width="20" height="20" rx="2" stroke-dasharray="3 3"/><rect x="5" y="5" width="7" height="7" rx="1"/><rect x="12" y="12" width="7" height="7" rx="1"/>',
+  'arr-ungroup':  '<polyline points="2 7 2 2 7 2"/><polyline points="17 2 22 2 22 7"/><polyline points="22 17 22 22 17 22"/><polyline points="7 22 2 22 2 17"/><rect x="5" y="5" width="7" height="7" rx="1"/><rect x="12" y="12" width="7" height="7" rx="1"/>',
 };
 
 // Full <svg> markup for a chrome icon, or '' when the id is unknown — callers

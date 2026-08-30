@@ -12,6 +12,11 @@
 //   slides: [Slide, ...],
 //   metadata: { createdAt, updatedAt },
 //
+//   master?: Slide,                 v3 — the SLIDE MASTER: widgets drawn on every slide
+//                                        that has not opted out. A Slide-shaped object so
+//                                        every editor surface that takes a slide (canvas,
+//                                        inspector, layers, thumbnail) works on it unchanged.
+//                                        Only `widgets` is meaningful; the rest is ignored.
 //   brandKit?: BrandKit,            v3 — overrides theme CSS vars (cascade: Org→Playlist→Slide)
 //   versionsSlot?: string,          v3 — slug of sidecar history slot (e.g. "{name}-history")
 //   syncAnchor?: { epochMs, slideMs[] },  v3 — set by publish-flow for math-based multi-display sync
@@ -21,6 +26,9 @@
 // {
 //   id, name?, duration, theme?, transition?, design?, schedule?, widgets[],
 //
+//   noMaster?: boolean,             v3 — skip the playlist master on THIS slide. A full-bleed
+//                                        photo slide wants nothing over it; every other slide
+//                                        keeps the standing logo bar.
 //   brandKit?: BrandKitOverride,    v3 — per-slide brand override
 //   langs?: { [lang]: { widgets[] } },  v3 — language variants; player picks by display.lang
 //   abVariants?: [{ weight, widgets[], label? }],  v3 — A/B variants; player picks weighted-random
@@ -32,6 +40,22 @@
 //
 //   rotation?: number,                   v3 — container rotation in degrees (CSS `rotate`;
 //                                              rotates the whole widget box around its centre)
+//   hidden?: boolean,                    v3 — kept in the playlist, rendered nowhere.
+//                                              Honoured by the PLAYER as well as the editor
+//                                              (see visibleWidgets below): a widget you hid
+//                                              while designing must not appear on the wall.
+//   locked?: boolean,                    v3 — editor-only. The widget still renders
+//                                              everywhere; it just cannot be picked up or
+//                                              dragged by accident on the canvas.
+//   group?: string,                      v3 — group id. Widgets sharing one are selected,
+//                                              moved, scaled and stacked as a single object
+//                                              in the EDITOR. Deliberately a flat tag rather
+//                                              than a container widget: the player renders a
+//                                              flat widget list, and a nesting container would
+//                                              have forced a second render path for a concept
+//                                              that only exists while you are editing. The
+//                                              player ignores the field entirely, so a grouped
+//                                              playlist plays on any existing display.
 //   bindings?: { [fieldPath]: { slot, jsonPath?, fallback? } },  v3 — slot-bound fields
 //   anim?: { type, delay?, duration? },  v3 — entrance build (see shared/animations.js)
 //   loop?: string,                       v3 — ambient loop id (float/pulse/kenburns/…)
@@ -111,6 +135,7 @@ const rnd = () => Math.random().toString(36).slice(2, 10);
 export const newSlideId = () => 'slide_' + rnd();
 export const newPlaylistId = () => 'pl_' + rnd();
 export const newWidgetId = () => 'w_' + rnd();
+export const newGroupId = () => 'g_' + rnd();
 
 const FULL_RECT = { x: 0, y: 0, w: 100, h: 100 };
 
@@ -133,6 +158,11 @@ export function createWidget(type, partial = {}) {
     // Container rotation (degrees). Only persisted when it actually rotates the
     // box, so unrotated widgets stay clean in the JSON (same policy as anim/loop).
     ...(Number.isFinite(+partial.rotation) && +partial.rotation % 360 !== 0 && { rotation: +partial.rotation }),
+    // Editor-only grouping tag; see the Widget shape above. Omitted when empty so
+    // an ungrouped widget stays clean in the JSON, like anim/loop/rotation.
+    ...(typeof partial.group === 'string' && partial.group && { group: partial.group }),
+    ...(partial.hidden === true && { hidden: true }),
+    ...(partial.locked === true && { locked: true }),
     ...(partial.title != null && { title: partial.title }),
     ...(partial.background && { background: partial.background }),
     ...(partial.contentVersion != null && { contentVersion: partial.contentVersion }),
@@ -145,6 +175,70 @@ export function createWidget(type, partial = {}) {
   };
 }
 
+// The ONE rule for "does this widget get rendered?", shared by the player, the
+// editor canvas and the slide-rail thumbnail.
+//
+// It lives here rather than being spelled out three times because the three have
+// to agree: a widget hidden in the editor that still played on the wall would be
+// the worst kind of bug — invisible to the person who hid it, and only visible to
+// the audience. The README's promise that the editor and the screen run the same
+// render path is only true if the filter in front of it is the same too.
+export const isWidgetVisible = w => !!w && w.hidden !== true;
+export const visibleWidgets = list => (list ?? []).filter(isWidgetVisible);
+
+// Where the master sits in the stack.
+//
+// Master content is background: a standing logo bar, a footer rule, a corner
+// clock. PowerPoint and Keynote both put it behind, and so does this — a master
+// element that could land on top of the slide's own content would turn every
+// master into a thing you have to check each slide against.
+//
+// But "behind" has a FLOOR. The slide's background layer is pinned at z-index
+// -9999 (`.avs-slide-bg` / `.bb-slide-bg`, and the player copies that number
+// deliberately so the canvas and the screen stack identically). A master pushed
+// below that is not behind the slide, it is behind the wallpaper: invisible, on
+// the wall as well as on the canvas.
+//
+// So the master is mapped into a BAND between the two rather than offset by a
+// large negative number. The band is assigned by index after sorting, which
+// makes it impossible for a master widget to escape either end no matter what z
+// somebody typed into the inspector.
+export const MASTER_Z_FLOOR = -9999;   // the background layer; see the CSS
+export const MASTER_Z_BASE = -5000;    // first master widget lands here
+export const MASTER_Z_ROOM = 1000;     // how many master widgets get their own level
+
+// The master widgets that belong under `slide`, ready to render: [] when the
+// playlist has no master, when it is empty, or when this slide opted out.
+//
+// Shared by the player, the editor canvas and the rail thumbnail, for the same
+// reason visibleWidgets is: three surfaces showing three different answers to
+// "what is on this slide" is the bug, not the inconsistency.
+export function masterWidgetsFor(playlist, slide) {
+  if (!playlist?.master || slide?.noMaster === true) return [];
+  const widgets = playlist.master.widgets;
+  if (!Array.isArray(widgets) || !widgets.length) return [];
+  // Sorted by their OWN z, then re-stamped into the band. The copies are what
+  // get the band z; the master's stored widgets keep their real z, because the
+  // editor edits the master as an ordinary slide where 0 means 0.
+  return [...widgets]
+    .sort((a, b) => (a.z ?? 0) - (b.z ?? 0))
+    .map((w, i) => ({ ...w, z: MASTER_Z_BASE + Math.min(i, MASTER_Z_ROOM - 1) }));
+}
+
+// The master as an editable Slide. Created on first use so a playlist that never
+// touches the feature carries no `master` key at all — an empty master in every
+// exported file would be noise in a format people read.
+export function ensureMaster(playlist) {
+  if (!playlist) return null;
+  if (!playlist.master) playlist.master = createSlide({ id: 'master', name: 'Master' });
+  if (!Array.isArray(playlist.master.widgets)) playlist.master.widgets = [];
+  return playlist.master;
+}
+
+export function hasMaster(playlist) {
+  return !!playlist?.master?.widgets?.length;
+}
+
 export function createSlide(partial = {}) {
   return {
     id: partial.id ?? newSlideId(),
@@ -155,6 +249,7 @@ export function createSlide(partial = {}) {
     ...(partial.design && { design: partial.design }),
     ...(partial.schedule && { schedule: partial.schedule }),
     ...(partial.background && { background: partial.background }),
+    ...(partial.noMaster === true && { noMaster: true }),
     ...(partial.brandKit && { brandKit: partial.brandKit }),
     ...(partial.langs && Object.keys(partial.langs).length && { langs: partial.langs }),
     ...(partial.abVariants?.length && { abVariants: partial.abVariants }),

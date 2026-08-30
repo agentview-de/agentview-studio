@@ -15,4 +15,5 @@ export { renderFeedList } from './feed-list.js';
 export { renderRichText } from './rich-text.js';
 export { renderTheme } from './theme.js';
 export { renderIcon } from './icon.js';
+export { renderShape } from './shape.js';
 export { renderPlace } from './place.js';

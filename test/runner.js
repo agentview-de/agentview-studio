@@ -59,6 +59,21 @@ export function expect(actual) {
         throw new AssertionError(`expected ${fmt(actual)} NOT to contain ${fmt(needle)}`);
       }
     },
+    // The negatives of toBe/toEqual, spelled the way notToContain already is.
+    // "this operation CHANGED something" and "the copy is not the original
+    // object" are ordinary things to assert, and without these a test has to
+    // reach for a hand-rolled comparison — which is the one place a test can
+    // quietly stop testing anything.
+    notToBe(expected) {
+      if (Object.is(actual, expected)) {
+        throw new AssertionError(`expected ${fmt(actual)} NOT to be ${fmt(expected)}`);
+      }
+    },
+    notToEqual(expected) {
+      if (deepEqual(actual, expected)) {
+        throw new AssertionError(`expected ${fmt(actual)} NOT to deeply equal ${fmt(expected)}`);
+      }
+    },
     toMatch(re) {
       if (!(re instanceof RegExp)) throw new AssertionError('.toMatch() needs a RegExp');
       if (!re.test(String(actual))) {

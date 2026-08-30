@@ -6,7 +6,7 @@
 
 import { state, commit, subscribe } from '../store.js';
 import { get as getPlugin } from '../../shared/plugins/registry.js';
-import { createWidget, resolveCanvas } from '../../shared/slide-schema.js';
+import { createWidget, resolveCanvas, newGroupId, visibleWidgets, masterWidgetsFor, ensureMaster } from '../../shared/slide-schema.js';
 import { mountWidget, widgetSlotZ } from '../../shared/widget-host.js';
 import { isStored, offlineSlugFor } from '../../shared/offline-data.js';
 import { getOfflinePreview, setOfflinePreview } from '../offline-preview.js';
@@ -16,6 +16,7 @@ import { applySlideBackground, applySlideContrast, applyWidgetBg, isPainted } fr
 import { playBuildOnce, applyLoop, clearLoop, isLoop } from '../../shared/animations.js';
 import { addHandles, makeInteractive, clampRect } from './widget-frame.js';
 import { clampZoom, fitTransform, centerTransform, zoomAroundPoint, widgetTransform, computeSnap } from './canvas-math.js';
+import { alignRects, distributeRects, matchSize, moveRects, scaleRects, boundsOf } from './arrange.js';
 import { usesNetwork } from '../../shared/plugin-network.js';
 import {
   isLivePreview, enableLivePreview, disableLivePreview, resetLivePreviews,
@@ -27,11 +28,13 @@ import { open as openPalette } from '../ui/command-palette.js';
 import { openModal } from '../ui/modal.js';
 import { mountBackgroundEditor } from '../panels/background-editor.js';
 import { pickAsset } from '../ui/asset-library.js';
-import { t, tx } from '../i18n.js';
+import { t } from '../i18n.js';
 import { escapeHtml } from '../../shared/utils/escape.js';
 import { widgetIcon } from '../../shared/data/widget-icons.js';
 import { uiIconSvg } from '../../shared/data/ui-icons.js';
 import { fieldOwns } from '../shortcuts.js';
+import { activeSlide, isEditingMaster } from '../active-slide.js';
+import { widgetName } from '../widget-name.js';
 
 const BASE_W = 1600, BASE_H = 900;          // 16:9 design space
 
@@ -55,6 +58,9 @@ export function mountCanvas(host, { onSelect } = {}) {
         <button class="avs-iconbtn" data-z="in" title="${t('canvas.zoomIn')}">+</button>
         <button class="avs-chip" data-z="fit">${t('canvas.fit')}</button>
       </div>
+      <button class="avs-chip avs-view-btn" id="avs-view-btn" aria-haspopup="true" aria-expanded="false">
+        ${uiIconSvg('grid', 13)}<span>${t('view.title')}</span>
+      </button>
       <div class="avs-canvas-hint">${t('canvas.hint')}</div>
     </div>
     <div class="avs-canvas-scroller">
@@ -74,6 +80,10 @@ export function mountCanvas(host, { onSelect } = {}) {
   host.querySelector('[data-z="out"]').addEventListener('click', () => setZoom(zoom / 1.2));
   host.querySelector('[data-z="reset"]').addEventListener('click', () => { setZoom(1); center(); });
   host.querySelector('[data-z="fit"]').addEventListener('click', zoomToFit);
+  host.querySelector('#avs-view-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    openViewMenu(e.currentTarget);
+  });
 
   // Wheel: pan by default, zoom with ctrl/meta (around cursor).
   viewport.addEventListener('wheel', e => {
@@ -96,7 +106,15 @@ export function mountCanvas(host, { onSelect } = {}) {
   viewport.addEventListener('pointerdown', e => {
     // Only treat as a deselect when no widget frame was hit. Clicks inside a
     // frame are handled by `makeInteractive` (selects that widget instead).
-    if (!e.target.closest('.avs-widget-frame')) selectWidget(null);
+    // The group frame's handles are NOT inside a widget frame, so without this
+    // the pointerdown that starts a group resize would clear the selection first
+    // and the resize would have nothing left to resize.
+    if (e.target.closest('.avs-widget-frame, .avs-group-frame')) return;
+    // Shift/ctrl-drag on empty canvas ADDS to the selection instead of
+    // replacing it, so a marquee can be used to extend a hand-picked set.
+    const additive = !!(e.shiftKey || e.metaKey || e.ctrlKey);
+    if (!additive) selectWidget(null);
+    if (e.button === 0) startMarquee(e, additive);
   });
   // Double-click on empty stage → add a text widget at the click point.
   stage.addEventListener('dblclick', e => {
@@ -166,7 +184,9 @@ export function mountCanvas(host, { onSelect } = {}) {
     const sr = stage.getBoundingClientRect();
     const pt = { x: ((e.clientX - sr.left) / sr.width) * 100, y: ((e.clientY - sr.top) / sr.height) * 100 };
     if (frameEl?.dataset.id) {
-      selectWidget(frameEl.dataset.id);
+      // Right-clicking INSIDE a multi-selection keeps it: the menu you want is
+      // the one for the group you just built, not for one of its members.
+      if (!selectedIds().includes(frameEl.dataset.id)) selectWidget(frameEl.dataset.id);
       openContextMenu(e.clientX, e.clientY, widgetMenuItems(frameEl.dataset.id));
     } else {
       selectWidget(null);
@@ -179,6 +199,10 @@ export function mountCanvas(host, { onSelect } = {}) {
   // so dragging never re-runs plugins. Structural changes (add/remove/design/
   // undo) call renderSlide() explicitly.
   subscribe('ui', p => { if (p === 'ui.activeSlideId') renderSlide(); });
+  // Everyone outside this module still writes only `selectedWidgetId`; this is
+  // what keeps `selectedWidgetIds` consistent with those writes. See the block
+  // comment above selectWidget() for the invariant it enforces.
+  subscribe('ui', p => { if (p === 'ui.selectedWidgetId') normalizeSelection(); });
   // Canvas pixel size follows the playlist's canvas { w, h }. Re-applied on any
   // playlist change, but only when the dimensions actually differ (see
   // applyCanvasSizeFromState) so normal edits don't disturb zoom/pan.
@@ -194,11 +218,6 @@ export function mountCanvas(host, { onSelect } = {}) {
   return { renderSlide, refreshWidget, zoomToFit, setCanvasSize, dispose };
 }
 
-function activeSlide() {
-  const pl = state.playlist;
-  if (!pl) return null;
-  return pl.slides.find(s => s.id === state.ui.activeSlideId) ?? pl.slides[0] ?? null;
-}
 
 export function setCanvasSize(w, h) {
   canvasW = Math.max(1, Math.round(+w)) || BASE_W;
@@ -225,6 +244,10 @@ function teardownFrames() {
 export function renderSlide() {
   if (!stage) return;
   teardownFrames();
+  // The group frame lives in the stage, so replaceChildren() takes it with it.
+  // Dropping the reference here is what stops drawSelectionBounds from reusing a
+  // detached node (which would leave the selection with invisible handles).
+  groupTeardown?.(); groupTeardown = null; groupFrame = null;
   stage.replaceChildren();
   guides.replaceChildren();
   const slide = activeSlide();
@@ -239,7 +262,22 @@ export function renderSlide() {
   applySlideBackground(slideBg, slide.background);
   applySlideContrast(stage, slide.background);
   stage.appendChild(slideBg);
-  const widgets = [...(slide.widgets ?? [])].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
+  // The slide master, drawn beneath the slide's own widgets and NOT editable
+  // here. Seeing it is the point — you are designing over a standing logo bar,
+  // and a canvas that hid it would let you put a headline straight through it.
+  // Editing it here is not: two ways to change the same widget, one of which
+  // silently edits every other slide, is how a master becomes a thing people
+  // are afraid of.
+  if (!isEditingMaster()) {
+    for (const w of visibleWidgets(masterWidgetsFor(state.playlist, slide))
+      .sort((a, b) => (a.z ?? 0) - (b.z ?? 0))) {
+      buildMasterGhost(slide, w);
+    }
+  }
+  // Hidden widgets get no frame at all — the same rule the player follows, so
+  // the canvas keeps showing exactly what the screen will. The Layers panel is
+  // where a hidden widget stays reachable.
+  const widgets = visibleWidgets(slide.widgets).sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
   for (const w of widgets) buildFrame(slide, w);
   if (!widgets.length) {
     const empty = document.createElement('div');
@@ -247,6 +285,9 @@ export function renderSlide() {
     empty.textContent = t('canvas.emptySlide');
     stage.appendChild(empty);
   }
+  // The overlays live in the stage, so replaceChildren() above took them with
+  // it — they have to be re-created with every render, not just when toggled.
+  applyViewAids();
   reflectSelection();
 }
 
@@ -288,6 +329,39 @@ const NUDGE_COARSE = 5;
 // per pointermove.
 const NUDGE_COMMIT_MS = 400;
 
+// A master widget on an ordinary slide: the real plugin render, at the real
+// position, with no frame chrome and no pointer events. It is the same
+// mountWidget the editable frames use, so what you see over the master is
+// exactly what the screen will show — the alternative (a grey placeholder box)
+// would let a light logo bar look dark while you chose the text colour over it.
+function buildMasterGhost(slide, widget) {
+  const el = document.createElement('div');
+  el.className = 'avs-master-ghost';
+  el.dataset.id = 'master:' + widget.id;
+  setGeo(el, widget.rect, widget.rotation ?? 0);
+  el.style.zIndex = frameZ(widget);
+
+  const bg = document.createElement('div');
+  bg.className = 'avs-widget-bg';
+  applyWidgetBg(bg, widget);
+  el.appendChild(bg);
+
+  const content = document.createElement('div');
+  content.className = 'avs-widget-content';
+  el.appendChild(content);
+  stage.appendChild(el);
+
+  // Network widgets on the master follow the same privacy gate as anywhere else
+  // — a logo bar with a live clock must not fetch just because it is a master.
+  const plugin = getPlugin(widget.type);
+  const dispose = (usesNetwork(plugin, content) && !isLivePreview(widget.id))
+    ? mountPrivacyPlaceholder(content, widget, plugin)
+    : mountWidget(widget, slide, content, { mode: 'preview', t: k => k });
+  // Tracked in `frames` like any other so teardownFrames() disposes it; the id
+  // is prefixed so it can never collide with a real widget's.
+  frames.set(el.dataset.id, { frameEl: el, dispose });
+}
+
 function buildFrame(slide, widget) {
   const frameEl = document.createElement('div');
   frameEl.className = 'avs-widget-frame';
@@ -302,7 +376,7 @@ function buildFrame(slide, widget) {
   frameEl.tabIndex = 0;
   frameEl.setAttribute('role', 'button');
   const plugin = getPlugin(widget.type);
-  frameEl.setAttribute('aria-label', `${tx(plugin?.label) ?? widget.type}${widget.title ? ' · ' + widget.title : ''}`);
+  frameEl.setAttribute('aria-label', widgetName(widget));
   frameEl.addEventListener('focus', () => selectWidget(widget.id));
 
   let nudgeTimer = 0;
@@ -318,15 +392,36 @@ function buildFrame(slide, widget) {
     if (fieldOwns(e)) return;
     e.preventDefault();
     e.stopPropagation();
+    // Locked means locked on the keyboard too. The frame stays focusable so Tab
+    // can still reach it (and a screen reader can still announce it); it just
+    // does not move.
+    if (widget.locked) return;
+    // Shift is the coarse step. It is NOT an "extend selection" modifier here:
+    // a nudge always moves whatever is selected, and shift-arrow has meant
+    // "move further" on this canvas since before multi-select existed.
     const step = e.shiftKey ? NUDGE_COARSE : NUDGE;
     const r = widget.rect;
     // Alt resizes from the bottom-right instead of moving — the other half of
     // arranging something, and the only part a pointer-less user could not do.
-    const next = e.altKey
-      ? clampRect({ ...r, w: r.w + dir[0] * step, h: r.h + dir[1] * step })
-      : clampRect({ ...r, x: r.x + dir[0] * step, y: r.y + dir[1] * step });
-    widget.rect = next;
-    setGeo(frameEl, next, widget.rotation ?? 0);
+    if (e.altKey) {
+      // Resize stays single-widget: growing six widgets by the same percentage
+      // from their own corners pulls the arrangement apart rather than scaling it.
+      widget.rect = clampRect({ ...r, w: r.w + dir[0] * step, h: r.h + dir[1] * step });
+      setGeo(frameEl, widget.rect, widget.rotation ?? 0);
+    } else if (selectionCount() > 1 && selectedIds().includes(widget.id)) {
+      // Nudge the whole selection as a block — same group clamp as a group drag.
+      const sel = selectedWidgets();
+      const moved = moveRects(sel.map(w => w.rect), dir[0] * step, dir[1] * step);
+      sel.forEach((w, i) => {
+        w.rect = clampRect(moved[i]);
+        const f = frames.get(w.id);
+        if (f) setGeo(f.frameEl, w.rect, w.rotation ?? 0);
+      });
+      drawSelectionBounds();
+    } else {
+      widget.rect = clampRect({ ...r, x: r.x + dir[0] * step, y: r.y + dir[1] * step });
+      setGeo(frameEl, widget.rect, widget.rotation ?? 0);
+    }
     clearTimeout(nudgeTimer);
     nudgeTimer = setTimeout(() => commit('move-widget'), NUDGE_COMMIT_MS);
   });
@@ -351,7 +446,9 @@ function buildFrame(slide, widget) {
   // innerHTML, not textContent: the icon is SVG markup. The label text is still
   // escaped — it comes from the plugin registry today, but this is the one place
   // a widget's own name could reach the DOM later.
-  label.innerHTML = `${widgetIcon(widget.type, escapeHtml(plugin?.icon ?? '◻'), 11)}<span>${escapeHtml(tx(plugin?.label) ?? widget.type)}</span>`;
+  // The NAME, not the plugin's label: a widget renamed in the Layers panel has
+  // to be called that here too, or the rename looks like it did not work.
+  label.innerHTML = `${widgetIcon(widget.type, escapeHtml(plugin?.icon ?? '◻'), 11)}<span>${escapeHtml(widgetName(widget))}</span>`;
   frameEl.appendChild(label);
 
   addHandles(frameEl, t('canvas.rotate'));
@@ -384,16 +481,113 @@ function buildFrame(slide, widget) {
     dispose = mountWidget(widget, slide, content, { mode: 'preview', t: k => k });
   }
 
+  // Where every widget in the selection sat when the drag began — INCLUDING this
+  // one. Both halves matter:
+  //
+  //   others  — re-reading them mid-drag would compound each frame's own
+  //             movement into the next delta.
+  //   primary — the delta has to be measured from the drag's START, not from the
+  //             widget's live rect. Against the live rect each event's delta is
+  //             an INCREMENT, so the final 'end' event (whose rect IS the live
+  //             rect) has a delta of zero — which re-applied the followers'
+  //             original positions and snapped the group back the instant you
+  //             let go, while the widget under the pointer stayed put.
+  let groupStart = null;
+  // Did the pointerdown that started this gesture carry shift/ctrl/cmd? The tap
+  // handler needs to know: a plain click on a member of a multi-selection
+  // narrows the selection to it, but a SHIFT-click just added it — collapsing
+  // there would undo the add on the same gesture that made it, so shift-click
+  // could never build a selection of more than one.
+  let downAdditive = false;
+  // Was this widget ALREADY part of a multi-selection when the pointer went
+  // down? The tap handler needs the state from BEFORE the click, not after:
+  // clicking a grouped widget expands the selection to the whole group, and a
+  // check made afterwards sees that expansion and immediately narrows it away —
+  // so a group could be selected, but never for longer than one frame.
+  let downWasInSelection = false;
+
+  // A locked widget still renders — it is only the pointer that stops reaching
+  // it. Selecting it stays possible from the Layers panel, which is where the
+  // lock was set and therefore where a person looks to undo it.
+  if (widget.locked) frameEl.classList.add('avs-frame-locked');
+
   const teardown = makeInteractive(frameEl, {
     getStageRect: () => stage.getBoundingClientRect(),
     getRect: () => widget.rect,
     getRotation: () => widget.rotation ?? 0,
-    onSelect: () => selectWidget(widget.id),
-    onChange: (rect, phase, mode) => {
-      const snapped = snap(rect, widget.id, mode);
+    onSelect: (e) => {
+      const additive = !!(e?.shiftKey || e?.metaKey || e?.ctrlKey);
+      downAdditive = additive;
+      downWasInSelection = selectionCount() > 1 && selectedIds().includes(widget.id);
+      // Pressing on a widget that is ALREADY part of a multi-selection must not
+      // collapse the selection — otherwise a group can never be dragged, because
+      // the pointerdown that starts the drag would have thrown the group away.
+      // The collapse happens on release instead, if nothing moved (onTap).
+      if (!additive && selectionCount() > 1 && selectedIds().includes(widget.id)) {
+        // Promote to primary without changing membership, so the inspector and
+        // "match size" follow the widget you actually grabbed.
+        setSelection([...selectedIds().filter(id => id !== widget.id), widget.id]);
+      } else {
+        selectWidget(widget.id, { additive });
+      }
+      groupStart = selectionCount() > 1
+        ? {
+          primary: { ...widget.rect },
+          others: selectedWidgets().filter(w => w.id !== widget.id).map(w => ({ id: w.id, rect: { ...w.rect } })),
+        }
+        : null;
+    },
+    onTap: () => {
+      // A drag that ends exactly where it began reports no change, so the 'end'
+      // phase never fires and the guides it painted would stay on screen until
+      // the next render. Snapping back to the position you started from is a
+      // perfectly ordinary way for a drag to end.
+      guides.replaceChildren();
+      groupStart = null;
+      // Released without moving: NOW narrow the selection to the one widget under
+      // the pointer. Click to pick one, drag to move them all — and a shift-click
+      // is neither, it is an add, so it keeps what it just built.
+      //
+      // `exact` is what lets you reach INSIDE a group: without it the narrowing
+      // would immediately re-expand to the whole group and the second click
+      // would do nothing at all.
+      if (downAdditive || !downWasInSelection) return;
+      selectWidget(widget.id, { exact: true });
+    },
+    onChange: (rect, phase, mode, opts = {}) => {
+      // A group drag moves as a block: no snapping (a snap line computed for one
+      // member would silently shift every other one relative to it) and the
+      // delta is clamped against the group's bounding box in moveRects, so the
+      // arrangement survives reaching the slide edge intact.
+      if (groupStart?.others.length && mode === 'move') {
+        // The delta is measured from where the PRIMARY started, never from its
+        // live rect — see the note on groupStart above for the bug that caused.
+        const moved = moveRects(
+          [groupStart.primary, ...groupStart.others.map(g => g.rect)],
+          rect.x - groupStart.primary.x, rect.y - groupStart.primary.y,
+        );
+        // moveRects clamps the whole block, so the primary's own rect comes back
+        // adjusted too — take it from the result rather than from the pointer.
+        // clampRect here only ROUNDS (moveRects already guaranteed the block is
+        // in bounds); running it keeps group drags writing the same 0.1 %-tidy
+        // numbers into the JSON as every other path.
+        widget.rect = clampRect(moved[0]);
+        setGeo(frameEl, widget.rect, widget.rotation ?? 0);
+        groupStart.others.forEach((g, i) => {
+          const w = activeSlide()?.widgets.find(x => x.id === g.id);
+          const f = frames.get(g.id);
+          if (!w || !f) return;
+          w.rect = clampRect(moved[i + 1]);
+          setGeo(f.frameEl, w.rect, w.rotation ?? 0);
+        });
+        drawSelectionBounds();
+        if (phase === 'end') { groupStart = null; commit('move-widget'); }
+        return;
+      }
+      const snapped = snap(rect, widget.id, mode, opts);
       widget.rect = snapped;
       setGeo(frameEl, snapped, widget.rotation ?? 0);
-      if (phase === 'end') { guides.replaceChildren(); commit('move-widget'); }
+      if (phase === 'end') { guides.replaceChildren(); groupStart = null; commit('move-widget'); }
     },
     onRotate: (deg, phase) => {
       if (phase === 'end') { commit('rotate-widget'); return; }
@@ -551,16 +745,314 @@ export function applyTheme() {
 }
 
 // ---- selection ----
-function selectWidget(id) {
-  state.ui.selectedWidgetId = id;
-  reflectSelection();
-  onSelectCb?.(id);
+//
+// Two pieces of state, one invariant: `selectedWidgetId` is the PRIMARY (the one
+// the inspector shows, the one "match size" measures against) and
+// `selectedWidgetIds` is the whole set including it. The set is empty exactly
+// when the primary is null.
+//
+// Everything OUTSIDE this module — the slide rail, undo, cloud-load, the
+// inspector's back button, main.js's Escape — still writes only
+// `selectedWidgetId`, exactly as it did when there was no multi-selection. The
+// normaliser wired in mountCanvas turns any such write into a single-selection,
+// so none of those call sites had to learn a second concept.
+export function selectedIds() {
+  return [...(state.ui.selectedWidgetIds ?? [])];
 }
-function reflectSelection() {
-  const sel = state.ui.selectedWidgetId;
-  for (const [id, { frameEl }] of frames) {
-    frameEl.classList.toggle('avs-frame-selected', id === sel);
+export function selectionCount() {
+  return (state.ui.selectedWidgetIds ?? []).length;
+}
+
+// Set the whole selection at once. `ids` is ordered; the LAST one becomes the
+// primary — it is the one the pointer just touched.
+function setSelection(ids) {
+  const slide = activeSlide();
+  const live = new Set((slide?.widgets ?? []).map(w => w.id));
+  const next = [...new Set(ids)].filter(id => live.has(id));
+  state.ui.selectedWidgetIds = next;
+  const primary = next.length ? next[next.length - 1] : null;
+  // Assign the primary LAST: its subscriber is what swaps the right column, and
+  // it must read a set that is already correct.
+  if (state.ui.selectedWidgetId !== primary) state.ui.selectedWidgetId = primary;
+  reflectSelection();
+  onSelectCb?.(primary);
+}
+
+// Widgets sharing a `group` tag select as one object. Expanding at the SELECTION
+// boundary (rather than teaching every action about groups) is what keeps the
+// rest of this file group-agnostic: drag, nudge, align, delete and z-order all
+// operate on "the selection", and the selection is already the whole group by
+// the time they see it.
+function expandGroups(ids) {
+  const slide = activeSlide();
+  if (!slide) return [...ids];
+  const byId = new Map(slide.widgets.map(w => [w.id, w]));
+  const groups = new Set();
+  for (const id of ids) {
+    const g = byId.get(id)?.group;
+    if (g) groups.add(g);
   }
+  if (!groups.size) return [...ids];
+  const out = [...ids];
+  for (const w of slide.widgets) {
+    if (w.group && groups.has(w.group) && !out.includes(w.id)) out.push(w.id);
+  }
+  // The clicked widget stays LAST so it remains the primary — you grabbed it,
+  // so it is the one the inspector and "match size" should follow.
+  const last = ids[ids.length - 1];
+  return [...out.filter(x => x !== last), last];
+}
+
+// `additive` (shift / ctrl / cmd-click) toggles one widget in and out of the set
+// instead of replacing it. `exact` skips group expansion — the second click on
+// an already-selected group, which reaches inside it for one member (the
+// PowerPoint rule: click selects the group, click again selects within it).
+function selectWidget(id, { additive = false, exact = false } = {}) {
+  const target = !id ? [] : exact ? [id] : expandGroups([id]);
+  if (!additive || !id) { setSelection(target); return; }
+  const cur = selectedIds();
+  // Shift-clicking a group adds or removes it WHOLE. Removing one member of a
+  // group from a selection while leaving its siblings in would produce a
+  // selection that no click could ever reproduce.
+  const alreadyIn = target.every(t => cur.includes(t));
+  const next = alreadyIn
+    ? cur.filter(x => !target.includes(x))
+    : [...cur.filter(x => !target.includes(x)), ...target];
+  setSelection(next);
+}
+
+// ---- grouping ----
+// The group tag is EDITOR-ONLY (see the Widget shape in shared/slide-schema.js):
+// the player renders a flat widget list and ignores it, so grouping can never
+// change what a screen shows.
+export function groupSelection() {
+  const sel = selectedWidgets();
+  if (sel.length < 2) return false;
+  // Groups do not nest. Grouping a selection that already contains groups
+  // flattens them into one — the alternative is a tree the canvas would have to
+  // walk on every click, for a gain nobody asked for. Ungroup then gives back
+  // loose widgets, which is what "ungroup" means everywhere else.
+  const id = newGroupId();
+  for (const w of sel) w.group = id;
+  commit('group-widgets');
+  // Re-publish the same selection so the store notifies: the Arrange panel has
+  // to swap its Group button for Ungroup, and nothing else changed that it
+  // could have noticed.
+  setSelection(selectedIds());
+  return true;
+}
+export function ungroupSelection() {
+  const sel = selectedWidgets();
+  const grouped = sel.filter(w => w.group);
+  if (!grouped.length) return false;
+  for (const w of grouped) delete w.group;
+  commit('ungroup-widgets');
+  setSelection(selectedIds());
+  return true;
+}
+// Is the whole selection one group? Drives the Group/Ungroup buttons' state.
+export function selectionGroupState() {
+  const sel = selectedWidgets();
+  if (!sel.length) return 'none';
+  const groups = new Set(sel.map(w => w.group ?? ''));
+  if (groups.size === 1 && !groups.has('')) return 'grouped';
+  return sel.length > 1 ? 'groupable' : 'none';
+}
+
+export function selectAllWidgets() {
+  const slide = activeSlide();
+  // Locked widgets are excluded on purpose: "select all" followed by a nudge
+  // would otherwise move the very background you locked to stop moving.
+  // Hidden ones are excluded because they have no frame to select.
+  setSelection((slide?.widgets ?? []).filter(w => !w.locked && !w.hidden).map(w => w.id));
+}
+
+// The Layers panel's way in. It selects by id without going through a frame, so
+// it can reach a widget the canvas cannot: one that is locked (no pointer
+// events) or buried under three others. Group expansion still applies — a
+// grouped row selects its group, exactly as clicking it on the canvas would.
+export function setSelectionFromLayers(id, { additive = false } = {}) {
+  selectWidget(id, { additive });
+}
+
+// Keep the set honest when someone sets the primary from outside this module.
+// Called from a `ui.selectedWidgetId` subscriber, so it must be a no-op in the
+// normal case or it would fight setSelection above (and recurse).
+function normalizeSelection() {
+  const primary = state.ui.selectedWidgetId;
+  const cur = state.ui.selectedWidgetIds ?? [];
+  if (!primary) { if (cur.length) { state.ui.selectedWidgetIds = []; reflectSelection(); } return; }
+  if (cur.length && cur[cur.length - 1] === primary) return;   // already consistent
+  // An outside write names one widget; that is a single-selection by definition.
+  state.ui.selectedWidgetIds = [primary];
+  reflectSelection();
+}
+
+function reflectSelection() {
+  const set = new Set(state.ui.selectedWidgetIds ?? []);
+  const primary = state.ui.selectedWidgetId;
+  for (const [id, { frameEl }] of frames) {
+    frameEl.classList.toggle('avs-frame-selected', set.has(id));
+    // Only the primary shows resize + rotate handles. Eight handles on every
+    // member of a six-widget selection is a field of dots you cannot aim at,
+    // and dragging one of them would be ambiguous anyway.
+    frameEl.classList.toggle('avs-frame-primary', id === primary && set.size <= 1);
+    frameEl.classList.toggle('avs-frame-multi', set.has(id) && set.size > 1);
+  }
+  drawSelectionBounds();
+}
+
+// A dashed box around the whole selection — the thing that makes a multi-
+// selection read as ONE object you can drag, rather than as several widgets
+// that happen to be outlined at the same time. Drawn in the guides layer
+// (already above every frame and already pointer-transparent).
+function drawSelectionBounds() {
+  if (!stage) return;
+  const sel = selectedWidgets();
+  const b = sel.length > 1 ? boundsOf(sel.map(w => w.rect)) : null;
+  if (!b) { groupFrame?.remove(); groupFrame = null; groupTeardown?.(); groupTeardown = null; return; }
+  // Reuse the frame across selection changes: rebuilding it would tear down the
+  // pointer handlers mid-drag the first time a resize crosses another widget.
+  if (!groupFrame) {
+    groupFrame = document.createElement('div');
+    groupFrame.className = 'avs-group-frame';
+    groupFrame.innerHTML = '<span class="avs-selection-count"></span>';
+    addHandles(groupFrame);
+    // Above every widget frame (which sit at z-index 1000 when selected) so its
+    // handles are always the ones you hit.
+    groupFrame.style.zIndex = '1500';
+    stage.appendChild(groupFrame);
+    groupTeardown = makeGroupInteractive();
+  }
+  groupFrame.style.left = b.x + '%'; groupFrame.style.top = b.y + '%';
+  groupFrame.style.width = b.w + '%'; groupFrame.style.height = b.h + '%';
+  groupFrame.querySelector('.avs-selection-count').textContent =
+    t('canvas.selectedCount', { n: sel.length });
+}
+
+// Resizing the SELECTION's bounding box, carrying every member proportionally —
+// what makes a group behave like one object instead of several that happen to be
+// selected. The move case is deliberately NOT handled here: the frame has
+// `pointer-events: none` on its body, so a drag that starts anywhere but a
+// handle falls through to the widget underneath and takes the group with it (see
+// the group-drag branch in buildFrame). That keeps ONE implementation of "move
+// the selection" rather than two that can disagree.
+let groupFrame = null;
+let groupTeardown = null;
+
+function makeGroupInteractive() {
+  let startBounds = null;
+  let startRects = null;
+
+  return makeInteractive(groupFrame, {
+    getStageRect: () => stage.getBoundingClientRect(),
+    getRect: () => boundsOf(selectedWidgets().map(w => w.rect)) ?? { x: 0, y: 0, w: 1, h: 1 },
+    getRotation: () => 0,
+    onSelect: () => {
+      const sel = selectedWidgets();
+      startBounds = boundsOf(sel.map(w => w.rect));
+      startRects = sel.map(w => ({ id: w.id, rect: { ...w.rect } }));
+    },
+    onChange: (rect, phase, mode) => {
+      // Only the handles resize; a body drag never reaches here.
+      if (mode === 'move' || !startBounds) return;
+      const scaled = scaleRects(startRects.map(r => r.rect), startBounds, rect);
+      startRects.forEach((sr, i) => {
+        const w = activeSlide()?.widgets.find(x => x.id === sr.id);
+        const f = frames.get(sr.id);
+        if (!w || !f) return;
+        w.rect = clampRect(scaled[i]);
+        setGeo(f.frameEl, w.rect, w.rotation ?? 0);
+      });
+      drawSelectionBounds();
+      if (phase === 'end') { startBounds = null; commit('resize-group'); }
+    },
+    // A rotation handle on a group would have to rotate each member about the
+    // GROUP's centre, which needs per-widget offset maths the flat percent-rect
+    // model cannot express. CSS hides the handle; this is the belt to that
+    // braces, so a stray event can never write a rotation nobody can undo.
+    onRotate: () => {},
+  });
+}
+
+// The widgets in the current selection, in selection order (primary LAST) —
+// except for the arrange helpers, which want the primary FIRST (see arrangeList).
+function selectedWidgets() {
+  const slide = activeSlide();
+  if (!slide) return [];
+  const byId = new Map(slide.widgets.map(w => [w.id, w]));
+  return selectedIds().map(id => byId.get(id)).filter(Boolean);
+}
+
+// ---- marquee (rubber-band) selection ----
+//
+// Drag on empty canvas to sweep up everything the band TOUCHES. Touch, not
+// full containment: on a slide where widgets are usually edge-to-edge, a
+// containment rule means you have to drag past the slide border to catch the
+// widget on it — which is exactly where the band stops being draggable.
+//
+// The band is drawn in the guides layer (already on top of every frame and
+// already pointer-transparent) in the stage's own percent space, so it lines up
+// with the widgets at any zoom or pan.
+const MARQUEE_MIN_PX = 4;   // below this it was a click, not a drag
+
+function startMarquee(downEvent, additive) {
+  const sr = stage.getBoundingClientRect();
+  const base = additive ? selectedIds() : [];
+  const toPct = (cx, cy) => ({
+    x: ((cx - sr.left) / sr.width) * 100,
+    y: ((cy - sr.top) / sr.height) * 100,
+  });
+  const start = toPct(downEvent.clientX, downEvent.clientY);
+  let band = null;
+  let moved = false;
+
+  const onMove = (e) => {
+    if (!moved) {
+      moved = Math.abs(e.clientX - downEvent.clientX) > MARQUEE_MIN_PX
+           || Math.abs(e.clientY - downEvent.clientY) > MARQUEE_MIN_PX;
+      if (!moved) return;
+      band = document.createElement('div');
+      band.className = 'avs-marquee';
+      guides.appendChild(band);
+    }
+    const cur = toPct(e.clientX, e.clientY);
+    const r = {
+      x: Math.min(start.x, cur.x), y: Math.min(start.y, cur.y),
+      w: Math.abs(cur.x - start.x), h: Math.abs(cur.y - start.y),
+    };
+    band.style.left = r.x + '%'; band.style.top = r.y + '%';
+    band.style.width = r.w + '%'; band.style.height = r.h + '%';
+    // Touching one member of a group sweeps up the whole group: a band that
+    // caught two thirds of a grouped header would otherwise let you drag those
+    // two away from the third.
+    const hits = expandGroups((activeSlide()?.widgets ?? [])
+      .filter(w => !w.locked && !w.hidden && intersects(r, w.rect))
+      .map(w => w.id));
+    setSelection([...base, ...hits]);
+  };
+  const onUp = () => {
+    window.removeEventListener('pointermove', onMove);
+    band?.remove();
+  };
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp, { once: true });
+}
+
+const intersects = (a, b) =>
+  a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+
+// ---- slide master ----
+// Switching modes is a full re-render: the canvas is now showing a different
+// widget array, and the selection named widgets that are no longer on it.
+export function setEditingMaster(on) {
+  const want = !!on;
+  if (!!state.ui.editingMaster === want) return;
+  if (want) ensureMaster(state.playlist);
+  selectWidget(null);
+  state.ui.editingMaster = want;
+  renderSlide();
+  zoomToFit();
 }
 
 // ---- add widget ----
@@ -594,6 +1086,18 @@ export function addWidget(type, content) {
 // Largest z among a slide's widgets (0 when empty) — the base for "insert on top".
 const maxZ = slide => (slide?.widgets ?? []).reduce((m, w) => Math.max(m, w.z ?? 0), 0);
 
+// Fresh group ids for a batch about to be inserted: old id -> new id, one new id
+// per distinct old one. Duplicating a group has to produce a NEW group (a copy
+// that silently joined the original would move the originals when you dragged
+// it), and duplicating two different groups at once has to keep them two.
+function remapGroups(sources) {
+  const map = new Map();
+  for (const w of sources) {
+    if (w.group && !map.has(w.group)) map.set(w.group, newGroupId());
+  }
+  return map;
+}
+
 // Build a widget for INSERTION from a source widget (duplicate / paste /
 // composite). Carries content/title/background/anim/loop/rotation, clamps the
 // target rect, and stamps contentVersion to the plugin's current version when the
@@ -602,11 +1106,16 @@ const maxZ = slide => (slide?.widgets ?? []).reduce((m, w) => Math.max(m, w.z ??
 // (structuredClone throws DataCloneError on a Proxy); pass false when the source
 // is already a plain object (a saved composite). ONE place owns this now — it was
 // hand-written three times (duplicate / paste / composite) with subtle drift.
-function widgetForInsert(source, { rect, z, clone = true }) {
+function widgetForInsert(source, { rect, z, clone = true, group }) {
   const c = clone ? (v => (v == null ? v : JSON.parse(JSON.stringify(v)))) : (v => v);
   return createWidget(source.type ?? 'text', {
     rect: clampRect(rect ?? { x: 30, y: 30, w: 40, h: 30 }),
     z,
+    // `group` is passed in already REMAPPED by the caller (see remapGroups) —
+    // never copied straight from the source, or a duplicated group would join
+    // the original instead of becoming a group of its own, and moving the copy
+    // would drag the widgets you copied it from along with it.
+    ...(group && { group }),
     content: c(source.content ?? {}),
     title: source.title,
     background: c(source.background),
@@ -646,67 +1155,140 @@ export function applyActiveDesign(designId) {
   selectWidget(null);
 }
 
-// Remove / duplicate the currently selected widget.
+// Remove / duplicate the current selection. All of these act on the WHOLE
+// selection: with one widget selected they behave exactly as they always did.
 export function deleteSelected() {
   const slide = activeSlide();
-  const id = state.ui.selectedWidgetId;
-  if (!slide || !id) return;
-  slide.widgets = slide.widgets.filter(w => w.id !== id);
+  const ids = new Set(selectedIds());
+  if (!slide || !ids.size) return;
+  slide.widgets = slide.widgets.filter(w => !ids.has(w.id));
   commit('delete-widget');
   renderSlide();
   selectWidget(null);
 }
 export function duplicateSelected() {
   const slide = activeSlide();
-  const id = state.ui.selectedWidgetId;
-  const w = slide?.widgets.find(x => x.id === id);
-  if (!w) return;
-  const copy = widgetForInsert(w, {
-    rect: { ...w.rect, x: w.rect.x + 3, y: w.rect.y + 3 },
-    z: maxZ(slide) + 1,
+  const sel = selectedWidgets();
+  if (!slide || !sel.length) return;
+  let z = maxZ(slide);
+  const groups = remapGroups(sel);
+  const copies = sel.map(w => {
+    z += 1;
+    return widgetForInsert(w, {
+      rect: { ...w.rect, x: w.rect.x + 3, y: w.rect.y + 3 }, z,
+      group: w.group ? groups.get(w.group) : undefined,
+    });
   });
-  slide.widgets.push(copy);
+  slide.widgets.push(...copies);
   commit('duplicate-widget');
   renderSlide();
-  selectWidget(copy.id);
+  // Select the copies, not the originals — you duplicated in order to move the
+  // new ones somewhere.
+  setSelection(copies.map(c => c.id));
 }
 
 // ---- z-order ----
+// The selection keeps its INTERNAL stacking order when it moves as a block: the
+// widgets are re-stamped in their existing z order, so raising three widgets
+// above everything else doesn't shuffle them against each other.
 export function bringToFront() {
   const slide = activeSlide();
-  const w = slide?.widgets.find(x => x.id === state.ui.selectedWidgetId);
-  if (!w) return;
-  w.z = maxZ(slide) + 1;
-  commit('z-front'); renderSlide(); selectWidget(w.id);
+  const sel = selectedWidgets();
+  if (!slide || !sel.length) return;
+  let z = maxZ(slide);
+  for (const w of [...sel].sort((a, b) => (a.z ?? 0) - (b.z ?? 0))) w.z = ++z;
+  commit('z-front'); renderSlide(); reflectSelection();
 }
 export function sendToBack() {
   const slide = activeSlide();
-  const w = slide?.widgets.find(x => x.id === state.ui.selectedWidgetId);
-  if (!w) return;
-  w.z = slide.widgets.reduce((m, x) => Math.min(m, x.z ?? 0), 0) - 1;
-  commit('z-back'); renderSlide(); selectWidget(w.id);
+  const sel = selectedWidgets();
+  if (!slide || !sel.length) return;
+  let z = slide.widgets.reduce((m, x) => Math.min(m, x.z ?? 0), 0);
+  // Descending, decrementing: the last one written gets the lowest z, so the
+  // group's own order survives going to the back too.
+  for (const w of [...sel].sort((a, b) => (b.z ?? 0) - (a.z ?? 0))) w.z = --z;
+  commit('z-back'); renderSlide(); reflectSelection();
+}
+
+// ---- arrange (align / distribute / match size) ----
+//
+// The arrange math is pure and lives in ./arrange.js. These wrap it: read the
+// selection's rects, hand them over, write the results back, one undo entry.
+//
+// The list is ordered PRIMARY FIRST — matchSize measures against the first rect,
+// and the primary is the one you clicked last, i.e. the one whose size you were
+// looking at when you decided the others should match it.
+function arrangeList() {
+  const sel = selectedWidgets();
+  return sel.length > 1 ? [sel[sel.length - 1], ...sel.slice(0, -1)] : sel;
+}
+
+function applyArrange(widgets, rects, label) {
+  let changed = false;
+  widgets.forEach((w, i) => {
+    const r = rects[i];
+    if (!r) return;
+    if (w.rect.x !== r.x || w.rect.y !== r.y || w.rect.w !== r.w || w.rect.h !== r.h) changed = true;
+    setWidgetGeometry(w.id, r);
+  });
+  drawSelectionBounds();
+  // A no-op arrange (already aligned) must not push an undo entry — the same
+  // rule a click-without-drag follows.
+  if (changed) commit(label);
+  return changed;
+}
+
+export function alignSelection(mode) {
+  const list = arrangeList();
+  if (list.length < 2) return false;
+  return applyArrange(list, alignRects(list.map(w => w.rect), mode), 'align-widgets');
+}
+export function distributeSelection(axis) {
+  const list = arrangeList();
+  if (list.length < 3) return false;
+  return applyArrange(list, distributeRects(list.map(w => w.rect), axis), 'distribute-widgets');
+}
+export function matchSelectionSize(dim) {
+  const list = arrangeList();
+  if (list.length < 2) return false;
+  return applyArrange(list, matchSize(list.map(w => w.rect), dim), 'match-size');
 }
 
 // ---- copy / paste (across slides) ----
+// The clipboard holds an ARRAY, always — copying one widget is the one-element
+// case. Pasting keeps the copied widgets' relative positions, so copying a
+// header + rule + caption onto the next slide reproduces the arrangement rather
+// than a stack of three widgets at the same spot.
 let clipboard = null;
 const cloneJson = v => (v == null ? v : JSON.parse(JSON.stringify(v)));
-export function hasClipboard() { return !!clipboard; }
+export function hasClipboard() { return !!clipboard?.length; }
 export function copySelected() {
-  const slide = activeSlide();
-  const w = slide?.widgets.find(x => x.id === state.ui.selectedWidgetId);
-  if (!w) return;
-  clipboard = cloneJson({ type: w.type, content: w.content, title: w.title, background: w.background, rect: w.rect, contentVersion: w.contentVersion, anim: w.anim, loop: w.loop, rotation: w.rotation });
+  const sel = selectedWidgets();
+  if (!sel.length) return;
+  clipboard = sel.map(w => cloneJson({
+    type: w.type, content: w.content, title: w.title, background: w.background,
+    rect: w.rect, contentVersion: w.contentVersion, anim: w.anim, loop: w.loop,
+    rotation: w.rotation, group: w.group,
+  }));
 }
 export function pasteWidget(point) {
   const slide = activeSlide();
-  if (!slide || !clipboard) return;
-  const c = clipboard;
-  const rect = point
-    ? { x: point.x - c.rect.w / 2, y: point.y - c.rect.h / 2, w: c.rect.w, h: c.rect.h }
-    : { ...c.rect, x: c.rect.x + 3, y: c.rect.y + 3 };
-  const copy = widgetForInsert(c, { rect, z: maxZ(slide) + 1 });
-  slide.widgets.push(copy);
-  commit('paste-widget'); renderSlide(); selectWidget(copy.id);
+  if (!slide || !clipboard?.length) return;
+  // Offset the whole clipboard by one delta, computed from its bounding box, so
+  // the group lands as a group. Without a point, the classic +3/+3 nudge makes
+  // the paste visible on top of the original instead of hiding behind it.
+  const b = boundsOf(clipboard.map(c => c.rect));
+  const dx = point ? point.x - b.w / 2 - b.x : 3;
+  const dy = point ? point.y - b.h / 2 - b.y : 3;
+  let z = maxZ(slide);
+  const groups = remapGroups(clipboard);
+  const copies = clipboard.map(c => widgetForInsert(c, {
+    rect: { ...c.rect, x: c.rect.x + dx, y: c.rect.y + dy },
+    z: ++z,
+    group: c.group ? groups.get(c.group) : undefined,
+  }));
+  slide.widgets.push(...copies);
+  commit('paste-widget'); renderSlide(); setSelection(copies.map(c => c.id));
 }
 
 // Add a text widget centered on a canvas point (context-menu "Add text here").
@@ -730,23 +1312,55 @@ async function openWidgetBgModal(id) {
 
 // ---- context-menu item builders ----
 function widgetMenuItems(id) {
-  return [
+  const n = selectionCount();
+  const multi = n > 1;
+  const items = [
     { label: t('ctx.duplicate'), icon: '⧉', run: () => duplicateSelected() },
     { label: t('ctx.copy'), icon: uiIconSvg('copy', 14), run: () => copySelected() },
-    { label: t('ctx.paste'), icon: uiIconSvg('upload', 14), disabled: !clipboard, run: () => pasteWidget() },
+    { label: t('ctx.paste'), icon: uiIconSvg('upload', 14), disabled: !hasClipboard(), run: () => pasteWidget() },
     { label: t('ctx.delete'), icon: uiIconSvg('trash', 14), run: () => deleteSelected() },
     { separator: true },
     { label: t('ctx.toFront'), icon: uiIconSvg('arrow-up', 14), run: () => bringToFront() },
     { label: t('ctx.toBack'), icon: uiIconSvg('arrow-down', 14), run: () => sendToBack() },
-    { separator: true },
-    { label: t('ctx.background'), icon: uiIconSvg('image', 14), run: () => openWidgetBgModal(id) },
   ];
+  // The arrange actions only exist for a selection they can act on, so they are
+  // listed only when there IS one — a menu full of greyed-out rows teaches
+  // nothing about when they light up.
+  if (multi) {
+    items.push({ separator: true });
+    items.push({ label: t('arrange.group'), icon: uiIconSvg('arr-group', 14), run: () => groupSelection() });
+  }
+  if (selectionGroupState() === 'grouped') {
+    if (!multi) items.push({ separator: true });
+    items.push({ label: t('arrange.ungroup'), icon: uiIconSvg('arr-ungroup', 14), run: () => ungroupSelection() });
+  }
+  if (multi) {
+    items.push({ separator: true });
+    items.push({ label: t('arrange.alignLeft'), icon: uiIconSvg('arr-left', 14), run: () => alignSelection('left') });
+    items.push({ label: t('arrange.alignHCenter'), icon: uiIconSvg('arr-hcenter', 14), run: () => alignSelection('hcenter') });
+    items.push({ label: t('arrange.alignRight'), icon: uiIconSvg('arr-right', 14), run: () => alignSelection('right') });
+    items.push({ label: t('arrange.alignTop'), icon: uiIconSvg('arr-top', 14), run: () => alignSelection('top') });
+    items.push({ label: t('arrange.alignVMiddle'), icon: uiIconSvg('arr-vmiddle', 14), run: () => alignSelection('vmiddle') });
+    items.push({ label: t('arrange.alignBottom'), icon: uiIconSvg('arr-bottom', 14), run: () => alignSelection('bottom') });
+    if (n > 2) {
+      items.push({ separator: true });
+      items.push({ label: t('arrange.distributeH'), icon: uiIconSvg('arr-dist-h', 14), run: () => distributeSelection('h') });
+      items.push({ label: t('arrange.distributeV'), icon: uiIconSvg('arr-dist-v', 14), run: () => distributeSelection('v') });
+    }
+  }
+  items.push({ separator: true });
+  // A background is one widget's property; with several selected there is no
+  // single widget for the editor to open.
+  if (!multi) items.push({ label: t('ctx.background'), icon: uiIconSvg('image', 14), run: () => openWidgetBgModal(id) });
+  items.push({ label: t('ctx.selectAll'), icon: uiIconSvg('copy', 14), run: () => selectAllWidgets() });
+  return items;
 }
 function canvasMenuItems(pt) {
   return [
     { label: t('ctx.addText'), icon: uiIconSvg('type', 14), run: () => addTextAt(pt) },
     { label: t('ctx.addWidget'), icon: uiIconSvg('plus', 14), run: () => openPalette() },
-    { label: t('ctx.paste'), icon: uiIconSvg('upload', 14), disabled: !clipboard, run: () => pasteWidget(pt) },
+    { label: t('ctx.paste'), icon: uiIconSvg('upload', 14), disabled: !hasClipboard(), run: () => pasteWidget(pt) },
+    { label: t('ctx.selectAll'), icon: uiIconSvg('copy', 14), run: () => selectAllWidgets() },
     { separator: true },
     { label: t('ctx.slideBg'), icon: uiIconSvg('image', 14), run: () => document.getElementById('ss-bg')?.click() },
     { label: t('ctx.fit'), icon: '⤢', run: () => zoomToFit() },
@@ -758,21 +1372,140 @@ function canvasMenuItems(pt) {
 // AND centers. Move snaps all four edges + the widget center. Resize snaps
 // ONLY the edges actually being dragged (otherwise an east-resize that lands
 // near a snap line would yank x leftward).
-function snap(rect, selfId, mode) {
+function snap(rect, selfId, mode, opts = {}) {
   const slide = activeSlide();
   const self = slide?.widgets.find(w => w.id === selfId);
   const rotated = !!(self && (self.rotation ?? 0) % 360 !== 0);
-  const others = (slide?.widgets ?? []).filter(w => w.id !== selfId).map(w => w.rect);
-  // The math (snap lines, closest-wins, sequential passes, clamp) lives in the
-  // DOM-free canvas-math.js; here we just paint the guide lines it reports.
-  const { rect: snapped, vLines, hLines } = computeSnap({ rect, mode, rotated, others });
+  // Hidden widgets supply no snap lines: lining up with something invisible is
+  // a guide that appears out of nowhere and points at nothing.
+  const others = (slide?.widgets ?? [])
+    .filter(w => w.id !== selfId && !w.hidden)
+    .map(w => w.rect);
+  const v = viewSettings();
+  // The math (snap lines, spacing, size match, grid, clamp) lives in the DOM-free
+  // canvas-math.js; here we just paint what it reports.
+  const { rect: snapped, vLines, hLines, gapMarks } = computeSnap({
+    rect, mode, rotated, others,
+    grid: v.grid, margin: v.margin,
+    enabled: v.snap && !opts.noSnap,
+  });
   guides.replaceChildren();
   for (const x of vLines) drawGuideV(x);
   for (const y of hLines) drawGuideH(y);
+  for (const g of gapMarks ?? []) drawGapMark(g);
   return snapped;
 }
 function drawGuideV(x) { const g = document.createElement('div'); g.className = 'avs-guide avs-guide-v'; g.style.left = x + '%'; guides.appendChild(g); }
 function drawGuideH(y) { const g = document.createElement('div'); g.className = 'avs-guide avs-guide-h'; g.style.top = y + '%'; guides.appendChild(g); }
+
+// The end-capped span that says WHY something snapped where it did: "this gap
+// equals that one". A bare line would show the position without the reason,
+// which is the difference between a guide and a twitch.
+function drawGapMark({ axis, from, to, cross }) {
+  const el = document.createElement('div');
+  el.className = 'avs-gapmark avs-gapmark-' + axis;
+  const lo = Math.min(from, to), size = Math.abs(to - from);
+  if (axis === 'h') { el.style.left = lo + '%'; el.style.width = size + '%'; el.style.top = cross + '%'; }
+  else { el.style.top = lo + '%'; el.style.height = size + '%'; el.style.left = cross + '%'; }
+  guides.appendChild(el);
+}
+
+// The View menu. Built on the same context-menu primitive the canvas already
+// uses, so it inherits click-outside dismissal, Escape and keyboard traversal
+// rather than growing a second popover with its own half of those.
+//
+// Every row is a toggle or a choice with a tick, and the tick is drawn as the
+// item's icon — the primitive has no checkbox concept, and a "✓ Grid 5 %" row
+// reads the same as one.
+const GRID_STEPS = [0, 1, 2.5, 5, 10];
+const MARGIN_STEPS = [0, 3, 5, 10];
+
+function openViewMenu(anchorEl) {
+  const v = viewSettings();
+  const tick = on => (on ? uiIconSvg('check-circle', 14) : '');
+  const items = [
+    { label: t('view.snap'), icon: tick(v.snap), run: () => setViewSetting('snap', !v.snap) },
+    { separator: true },
+    ...GRID_STEPS.map(g => ({
+      label: g === 0 ? t('view.gridOff') : t('view.gridStep', { n: g }),
+      icon: tick(v.grid === g),
+      run: () => {
+        setViewSetting('grid', g);
+        // Choosing a grid size and then having to turn the grid ON is a step
+        // nobody wants; choosing "off" should stop drawing it too.
+        setViewSetting('showGrid', g > 0);
+      },
+    })),
+    { separator: true },
+    { label: t('view.showGrid'), icon: tick(v.showGrid), run: () => setViewSetting('showGrid', !v.showGrid) },
+    { separator: true },
+    ...MARGIN_STEPS.map(m => ({
+      label: m === 0 ? t('view.marginOff') : t('view.marginStep', { n: m }),
+      icon: tick(v.margin === m),
+      run: () => { setViewSetting('margin', m); setViewSetting('showMargin', m > 0); },
+    })),
+  ];
+  const r = anchorEl.getBoundingClientRect();
+  openContextMenu(r.left, r.bottom + 4, items);
+}
+
+// ---- view aids (grid / margins / snapping) ----
+// Read through a normaliser rather than straight off the store: `ui.view` comes
+// back from localStorage, where a hand-edited or older value can be anything,
+// and a NaN grid step quantises every rect to NaN.
+export function viewSettings() {
+  const v = state.ui?.view ?? {};
+  const num = (x, max) => {
+    const n = Number(x);
+    return Number.isFinite(n) && n > 0 ? Math.min(max, n) : 0;
+  };
+  return {
+    snap: v.snap !== false,
+    grid: num(v.grid, 50),
+    showGrid: !!v.showGrid,
+    margin: num(v.margin, 49),
+    showMargin: !!v.showMargin,
+  };
+}
+
+export function setViewSetting(key, value) {
+  const cur = state.ui.view ?? {};
+  state.ui.view = { ...cur, [key]: value };
+  applyViewAids();
+}
+
+// Paint (or remove) the grid and safe-area overlays. Both live in the stage
+// BEHIND every widget frame and are pointer-transparent, so neither can eat a
+// click meant for the slide.
+function applyViewAids() {
+  if (!stage) return;
+  const v = viewSettings();
+  let grid = stage.querySelector('.avs-grid-overlay');
+  if (v.showGrid && v.grid > 0) {
+    if (!grid) {
+      grid = document.createElement('div');
+      grid.className = 'avs-grid-overlay';
+      // After the slide background, before the frames.
+      stage.insertBefore(grid, stage.querySelector('.avs-widget-frame'));
+    }
+    // Percent-sized cells, so the grid means the same thing at every zoom and
+    // on every canvas size — the same reason widget rects are percentages.
+    // All four layers share the step; the 1px offsets in the stylesheet are what
+    // make the pair read as one line with a light and a dark side.
+    const step = `${v.grid}% ${v.grid}%`;
+    grid.style.backgroundSize = [step, step, step, step].join(', ');
+  } else grid?.remove();
+
+  let margin = stage.querySelector('.avs-margin-overlay');
+  if (v.showMargin && v.margin > 0) {
+    if (!margin) {
+      margin = document.createElement('div');
+      margin.className = 'avs-margin-overlay';
+      stage.insertBefore(margin, stage.querySelector('.avs-widget-frame'));
+    }
+    margin.style.inset = `${v.margin}%`;
+  } else margin?.remove();
+}
 
 // ---- zoom / pan ---- (math in canvas-math.js; these wire it to module state)
 function setZoom(z) { zoom = clampZoom(z); applyTransform(); }

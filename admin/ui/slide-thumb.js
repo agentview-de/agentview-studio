@@ -20,7 +20,7 @@
 
 import { mountWidget, widgetSlotZ } from '../../shared/widget-host.js';
 import { applySlideBackground, applySlideContrast, applyWidgetBg } from '../../shared/background.js';
-import { resolveCanvas } from '../../shared/slide-schema.js';
+import { resolveCanvas, visibleWidgets, masterWidgetsFor } from '../../shared/slide-schema.js';
 import { get as getPlugin } from '../../shared/plugins/registry.js';
 import { usesNetwork } from '../../shared/plugin-network.js';
 import { widgetIcon } from '../../shared/data/widget-icons.js';
@@ -99,7 +99,11 @@ export function renderSlideThumb(host, slide, playlist, opts = {}) {
   stage.appendChild(bg);
 
   const disposers = [];
-  const widgets = [...(slide?.widgets ?? [])].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
+  // The master belongs in the thumbnail for the same reason it belongs on the
+  // canvas: a rail of slides that all look emptier than they will be is a rail
+  // you cannot navigate by.
+  const withMaster = [...masterWidgetsFor(playlist, slide), ...(slide?.widgets ?? [])];
+  const widgets = visibleWidgets(withMaster).sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
   for (const w of widgets) {
     const plugin = getPlugin(w.type);
     const r = w.rect ?? { x: 0, y: 0, w: 100, h: 100 };

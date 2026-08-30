@@ -267,6 +267,17 @@ textarea { resize: vertical; min-height: 100px; }
 .bb-icon-sw.bb-sel { border-color: var(--bb-accent); color: var(--bb-ink); box-shadow: 0 0 0 2px color-mix(in srgb, var(--bb-accent) 30%, transparent); }
 .bb-icon-glyph svg { width: 22px; height: 22px; display: block; }
 
+/* Shape picker — same swatch language as the icon grid, but grouped by family
+   (basic · arrows · stars · callouts · lines) so the whole catalog stays
+   scannable without a search box. */
+.bb-shape-group-label { font-size: var(--bb-fs-xs, 11px); text-transform: uppercase; letter-spacing: .06em; color: var(--bb-ink-muted); margin: var(--bb-sp-3) 0 var(--bb-sp-2); }
+.bb-shape-group-label:first-child { margin-top: 0; }
+.bb-shape-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: var(--bb-sp-2); }
+.bb-shape-sw { display: flex; align-items: center; justify-content: center; aspect-ratio: 1; padding: 6px; background: var(--bb-bg-2); border: 1px solid var(--bb-border); border-radius: var(--bb-r-sm); color: var(--bb-ink-muted); transition: transform var(--bb-trans-fast), border-color var(--bb-trans-fast), box-shadow var(--bb-trans-fast); }
+.bb-shape-sw:hover { background: var(--bb-bg-3); color: var(--bb-ink); border-color: var(--bb-border-strong); }
+.bb-shape-sw.bb-sel { border-color: var(--bb-accent); color: var(--bb-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--bb-accent) 30%, transparent); }
+.bb-shape-glyph svg { width: 22px; height: 22px; display: block; }
+
 /* Library widget search */
 .avs-lib-search { width: 100%; margin-bottom: 12px; }
 

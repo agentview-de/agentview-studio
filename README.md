@@ -22,7 +22,7 @@ screens — all from a single static HTML app.
 
 agentView Studio is a visual editor **and** player for the
 [agentView](https://agentview.de) digital-signage platform. You compose slides on a
-zoomable free canvas using 37 widget types, schedule them with day-parting, and deploy
+zoomable free canvas using 38 widget types, schedule them with day-parting, and deploy
 to one screen, a whole group, or a hand-picked set — then a built-in **Admin** console
 runs the organisation behind the screens (approvals, audit, webhooks, members, licenses).
 
@@ -41,7 +41,11 @@ no `npm install` to run it. Serve the folder and open `index.html`.
 | | |
 |---|---|
 | 🎨 **Free-canvas editor** | A three-column Keynote-style shell: slide rail · zoomable canvas · inspector & library. Drop widgets anywhere, drag/resize with snap guides, live previews. |
-| 🧩 **37 widget types** | From plain text and Markdown to live weather, charts, maps, RSS, currency tickers, QR codes, queue boards, leaderboards, opening hours, video, PDF and IP-camera streams — see the [full catalog](#-widget-catalog). |
+| 📑 **Slide master** | One set of widgets drawn behind every slide — a standing logo bar, a footer rule, a corner clock. Edit it from the rail, opt any single slide out. The player honours it, so it reaches the wall. |
+| 📐 **Smart guides** | Snaps to edges and centres, to **even spacing** (drop a third card and it takes the gap the first two already have), and to another widget's **size** while resizing. Optional grid and TV-safe-area overlay. Hold `Alt` to switch it all off mid-drag. |
+| 🗂 **Layers panel** | Every widget on the slide, top of the stack first. Rename them, drag to restack, **lock** one so you stop picking up the background by accident, and **hide** one without deleting it — hidden means hidden on the screen too, not just in the editor. |
+| ▣ **Multi-select, group & arrange** | Marquee-drag, shift-click or `Ctrl/⌘+A` to pick several. Drag any of them to move the block, drag the selection's own handles to scale the whole layout, then align (6 ways), give them even gaps, or match their sizes. `Ctrl/⌘+G` makes it a lasting **group**. |
+| 🧩 **38 widget types** | From plain text, Markdown and **vector shapes** (40 of them — rectangles, arrows, stars, callouts, dividers) to live weather, charts, maps, RSS, currency tickers, QR codes, queue boards, leaderboards, opening hours, video, PDF and IP-camera streams — see the [full catalog](#-widget-catalog). |
 | ▦ **Designs, not fixed zones** | Six layouts (Fullscreen · Split 50/50 · Split 70/30 · Main + ticker · 2×2 grid · Header + main) **stamp editable widgets** onto the canvas — then move them freely. No locked zones. |
 | 📺 **Displays dashboard** | Screens grouped by native agentView **groups** (categories), each card showing online state and the slideshow currently running. |
 | 🚀 **One-click publish** | Deploy to one display, a whole group, or a hand-picked set. The playlist is bundled into a self-contained player and pushed live in seconds. |
@@ -49,7 +53,7 @@ no `npm install` to run it. Serve the folder and open `index.html`.
 | 🛠 **Admin console** | A third view beside Editor & Displays — a 9-tab owner console: approvals · audit log · webhooks · API keys · members · licenses · connectivity · brand kit · version history. |
 | ⏰ **Day-parting & scheduling** | Per slide: days of week · time windows · date ranges. The player evaluates visibility every minute and skips slides outside their window. |
 | 🪄 **Drop any file → slideshow** | PDF, multiple images, `.csv`, `.xlsx`, `.docx`, `.pptx`, `.ics`, `.json` — auto-detected and imported as the right widgets. (Drop a media URL for video / streams.) |
-| ⌨️ **Command palette + shortcuts** | `⌘/Ctrl+K` runs every action by name · undo/redo · `J`/`K` navigate slides · `D` duplicate · `Del` remove. |
+| ⌨️ **Command palette + shortcuts** | `⌘/Ctrl+K` runs every action by name · undo/redo · `J`/`K` navigate slides · `D` duplicate · `Del` remove · `⌘/Ctrl+A` select all. |
 | 🌗 **Themes** | 13 slide themes, two of them chosen by who is reading rather than by venue, + light/dark admin chrome. |
 | 🎬 **Motion** | 9 slide transitions, 10 per-widget entrance **builds** (fade-up · pop · reveal · blur · rise …), and 6 continuous ambient **loops** (float · pulse · sway · Ken Burns · glow · spin). All pure-CSS and `prefers-reduced-motion`-aware. |
 | 🎯 **Plugin architecture** | Every widget type is a small ES-module plugin with a declarative `schema()` and a `render()` that handles its own `dispose()`. The **same** plugin renders the editor preview and the live screen — no drift. |
@@ -162,9 +166,9 @@ agentview-studio/              ← this repository (standalone, no build, no npm
 - **Free-canvas widget model.** A slide is a container; every element is a positioned
   widget with a percent rect (`slide.widgets[]`). Designs are just generators that stamp
   widgets — so the player has **one** render path and there is no separate layout engine.
-- **Plugins over a megaswitch.** Each of the 37 widget types is a tiny plugin with a
+- **Plugins over a megaswitch.** Each of the 38 widget types is a tiny plugin with a
   declarative schema (the inspector auto-builds the form) and one `render()`/`dispose()`.
-  Adding a 34th means a single new file in `shared/plugins/`.
+  Adding another means a single new file in `shared/plugins/`.
 - **Same render in editor and screen.** A `widgetAsSlide()` adapter feeds each widget to
   its plugin, so editor previews and the live player share the exact same code — no drift.
 - **Publish-bundler instead of a build step.** Locally the player is clean ES modules. At
@@ -183,19 +187,28 @@ agentview-studio/              ← this repository (standalone, no build, no npm
 
 ## 🧩 Widget catalog
 
-37 widget types, organised into four library groups:
+38 widget types, organised into four library groups:
 
 | Group | Widgets |
 |---|---|
-| **Basic** | Announcement · Markdown · Quote · Code Block · News Ticker · Icon / Symbol · Greeting · **Steps / Process** · Menu / Pricelist |
+| **Basic** | Announcement · Markdown · Quote · Code Block · News Ticker · Icon / Symbol · **Shape** · Greeting · **Steps / Process** · Menu / Pricelist |
 | **Media** | Image · Image Gallery (Ken Burns) · Video · YouTube / Vimeo · PDF Document · Audio Visualizer · Web Page (iframe) · Embed / Web · Live Stream / IP Camera |
 | **Data** | Chart · KPI Cards · Live JSON Viewer · Data Table · **Leaderboard** · **Queue / Now Serving** · Progress / Goal · Map · QR Code · Calendar |
 | **Live** | Clock · World Clock · **Opening Hours** · Countdown · Days Since · Currency Ticker · Live Weather · RSS Feed · News with Photos |
 
-The four in bold are the ones the template catalog needed and the widget set did
-not have: a call board for anywhere people wait to be served, a ranked list that
-derives its own order, a week of opening hours that knows whether it is open
-right now, and a numbered process that can walk its own highlight.
+Leaderboard, Queue / Now Serving, Opening Hours and Steps / Process are the ones the
+template catalog needed and the widget set did not have: a call board for anywhere
+people wait to be served, a ranked list that derives its own order, a week of opening
+hours that knows whether it is open right now, and a numbered process that can walk
+its own highlight.
+
+**Shape** is the primitive a slide editor is expected to have and this one did not:
+40 vector shapes across five families — rectangle / rounded / pill / ellipse and the
+polygons, seven arrows, stars and symbols, speech bubbles and banners, and divider
+lines. Solid or gradient fill, adjustable opacity for laying a tint over a photo,
+solid / dashed / dotted outline, shadow, and an optional centred label whose ink
+picks itself for contrast against the fill. Everything is sized in container-query
+units, so a shape looks the same on a 1080p panel and a 4K wall.
 
 ---
 
@@ -236,9 +249,29 @@ the text held stable across saccades, which is exactly what declines.
 
 1. Add a slide in the left **rail**.
 2. From the **Library** pick a widget, or apply a **Design** to stamp a starting arrangement.
-3. Drag and resize widgets on the **canvas** — snap guides align them. Scroll to pan,
+3. Drag and resize widgets on the **canvas**. Guides snap to slide edges and centres, to
+   other widgets' edges and centres, to **even spacing** between them, and to another
+   widget's size while resizing — hold `Alt` to suspend all of it for one drag. The
+   **View** menu adds an optional grid and a TV-safe-area frame. Scroll to pan,
    `⌘/Ctrl+scroll` to zoom, **Fit** to frame everything.
 4. Select a widget to open its **Inspector** (auto-generated form); the preview updates as you type.
+5. Select **several** — marquee-drag on empty canvas, shift-click, or `Ctrl/⌘+A` — and the right
+   column becomes **Arrange**: group, align, even gaps, match size, stacking order. Dragging any
+   member moves the whole block, clamped as one so the arrangement survives reaching the slide
+   edge; dragging the selection's own handles scales every member proportionally, so the layout
+   stays the layout.
+6. `Ctrl/⌘+G` turns the selection into a **group** that stays together: clicking any member
+   selects them all, and clicking a second time reaches one on its own. Grouping is an editor
+   concept — the player renders a flat widget list and ignores it, so a grouped playlist plays
+   on any existing display.
+7. The **Layers** panel under the slide rail lists everything on the slide, top of the stack
+   first. It is how you reach the widget buried under three others, and where you rename, lock
+   and hide. Locking is editor-only; hiding is not — a hidden widget is skipped by the player
+   too, so what you hide while designing never reaches the wall.
+8. **Master** at the top of the rail opens the slide master: widgets drawn behind *every*
+   slide. It shows through on the canvas as you design over it, but is not editable there —
+   two ways to change one widget, one of which silently edits every other slide, is how a
+   master becomes a thing people are afraid of. Any single slide can opt out in its settings.
 
 ### Find a slide in a long playlist
 
@@ -379,6 +412,12 @@ console needs **no backend of its own**, consistent with the single-file, no-ins
 | `P` | Publish |
 | `Shift + P` | Live preview |
 | `Shift + ?` | Show this shortcut list |
+| `Ctrl/⌘ + A` | Select every widget on the slide |
+| `Alt` (while dragging) | Suspend snapping for this drag |
+| `Ctrl/⌘ + G` | Group the selection |
+| `Ctrl/⌘ + Shift + G` | Ungroup |
+| `Shift + click` | Add a widget to / remove it from the selection |
+| Drag on empty canvas | Marquee-select everything the band touches |
 | `Esc` | Deselect widget (modals & palette close themselves) |
 
 ---
@@ -399,7 +438,7 @@ npm run check      # lint + i18n + test
 The DOM-dependent tests live on four pages under `test/`, each of which also runs
 by opening it in any browser: `index.html` (everything the Node runner has plus the
 DOM-only suites), `canvas-zorder.test.html`, `publish-e2e.test.html` (builds the real
-publish bundle and boots it) and `plugin-resilience.test.html` (all 38 plugins against
+publish bundle and boots it) and `plugin-resilience.test.html` (all 39 plugins against
 hostile input; every inspector form built and torn down). See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow and coding conventions.
 

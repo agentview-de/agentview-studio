@@ -33,7 +33,7 @@ import { mountAdmin, refreshAdmin } from './views/admin.js';
 import { openPublishPicker, publishLast, refreshRunning, openOfflineDataPanel, hasOfflineData } from './publish-flow.js';
 import { orgs as orgsApi } from './api.js';
 import { openPreview } from './preview-flow.js';
-import { addWidget, applyActiveDesign, deleteSelected, duplicateSelected, renderSlide as canvasRender, zoomToFit as canvasFit, resetLivePreviews } from './canvas/canvas.js';
+import { addWidget, applyActiveDesign, deleteSelected, duplicateSelected, selectAllWidgets, alignSelection, distributeSelection, groupSelection, ungroupSelection, renderSlide as canvasRender, zoomToFit as canvasFit, resetLivePreviews } from './canvas/canvas.js';
 import { splitText } from './ai/smart-split.js';
 import { exportPlaylist, importPlaylist } from './playlist-io.js';
 import { isEditingVariant, variantBannerLabel, exitVariantEdit } from './canvas/variant-ctx.js';
@@ -714,6 +714,11 @@ function showShortcuts() {
     ['K', t('sc.prevSlide')],
     ['Esc', t('sc.deselect')],
     ['Tab', t('sc.focusWidget')],
+    [kbd('mod+a'), t('sc.selectAll')],
+    [kbd('mod+g'), t('arrange.group')],
+    [kbd('mod+shift+g'), t('arrange.ungroup')],
+    [kbd('shift') + ' + ' + t('sc.click'), t('sc.addToSelection')],
+    [t('sc.drag'), t('sc.marquee')],
     ['← ↑ → ↓', t('sc.nudge')],
     [kbd('shift') + ' + ← ↑ → ↓', t('sc.nudgeCoarse')],
     [kbd('alt') + ' + ← ↑ → ↓', t('sc.resize')],
@@ -742,6 +747,25 @@ function registerAllCommands() {
   registerCommand({ label: t('menu.dataSlots'), icon: uiIconSvg('database'), run: () => slotInspector.open() });
   registerCommand({ label: t('menu.publicApis'), icon: uiIconSvg('plug'), run: () => publicApiBrowser.open(s => addWidget(s.type ?? 'live-json', s.content ?? {})) });
   registerCommand({ label: t('cmd.smartSplit'), icon: uiIconSvg('scissors'), run: () => promptSmartSplit() });
+  // Arrange, from the palette. The Arrange panel is where these are DISCOVERED,
+  // but once you know they exist, reaching for them without leaving the keyboard
+  // is the faster path — and the palette is the app's one search-by-name index,
+  // so an action missing from it is invisible to anyone who searches there first.
+  registerCommand({ label: t('sc.selectAll'), icon: uiIconSvg('copy'), keywords: 'select all widgets alles auswählen markieren', run: () => selectAllWidgets() });
+  registerCommand({ label: t('arrange.group'), icon: uiIconSvg('arr-group'), keywords: 'group gruppieren zusammenfassen', run: () => groupSelection() });
+  registerCommand({ label: t('arrange.ungroup'), icon: uiIconSvg('arr-ungroup'), keywords: 'ungroup gruppierung aufheben', run: () => ungroupSelection() });
+  for (const [key, icon, mode] of [
+    ['arrange.alignLeft', 'arr-left', 'left'],
+    ['arrange.alignHCenter', 'arr-hcenter', 'hcenter'],
+    ['arrange.alignRight', 'arr-right', 'right'],
+    ['arrange.alignTop', 'arr-top', 'top'],
+    ['arrange.alignVMiddle', 'arr-vmiddle', 'vmiddle'],
+    ['arrange.alignBottom', 'arr-bottom', 'bottom'],
+  ]) registerCommand({ label: t(key), icon: uiIconSvg(icon), keywords: 'align arrange ausrichten anordnen', run: () => alignSelection(mode) });
+  for (const [key, icon, axis] of [
+    ['arrange.distributeH', 'arr-dist-h', 'h'],
+    ['arrange.distributeV', 'arr-dist-v', 'v'],
+  ]) registerCommand({ label: t(key), icon: uiIconSvg(icon), keywords: 'distribute spacing arrange verteilen abstand', run: () => distributeSelection(axis) });
   registerCommand({ label: t('menu.export'), icon: uiIconSvg('download'), run: () => exportPlaylist() });
   registerCommand({ label: t('menu.import'), icon: uiIconSvg('upload'), run: () => importPlaylist({ ensureSlide, render: canvasRender }) });
   registerCommand({ label: t('menu.openCloud'), icon: uiIconSvg('cloud'), keywords: 'cloud agentview load open', run: () => handleMenu('cloud-open') });
@@ -772,6 +796,13 @@ function bindGlobalShortcuts() {
   // Only fires when an inspector is open AND nothing else is in front (modals,
   // popovers handle Escape themselves and stopPropagation before this runs).
   bindShortcut('escape', () => { if (state.ui.selectedWidgetId) state.ui.selectedWidgetId = null; });
+  // Select every widget on the slide. Bound on the editor view only — in
+  // Displays or Verwaltung, mod+A must stay the browser's "select all text".
+  bindShortcut('mod+a', () => { if (state.ui.activeView === 'editor') selectAllWidgets(); });
+  // The PowerPoint pair. mod+shift+g is bound before mod+g in spirit but the
+  // matcher is exact on modifiers, so the order here does not matter.
+  bindShortcut('mod+g', () => groupSelection());
+  bindShortcut('mod+shift+g', () => ungroupSelection());
 }
 
 function moveSlide(delta) {

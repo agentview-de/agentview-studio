@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <title>Shape sheet</title>
+  <!-- DEV TOOL — not part of the app. Renders every entry of the shape catalog
+       (shared/data/shapes.js) through the real `shape` plugin, in three boxes a
+       shape actually gets: a wide banner, a square tile and a tall column.
+       A shape catalog is the one thing you cannot review by reading the source —
+       a polygon that closes in the wrong order or a path that assumed a square
+       box only shows itself when drawn. Second row exercises fill/outline/label.
+       Open from the dev server: /tools/shape-sheet.html -->
+  <link rel="stylesheet" href="../styles/fonts.css" />
+  <link rel="stylesheet" href="../styles/tokens.css" />
+  <link rel="stylesheet" href="../styles/components.css" />
+  <link rel="stylesheet" href="../styles/slide-themes.css" />
+  <link rel="stylesheet" href="../styles/studio.css" />
+  <style>
+    body { margin: 0; background: #0b0b10; color: #eee; font: 12px/1.4 ui-sans-serif, system-ui, sans-serif; padding: 16px; }
+    h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #9aa; margin: 22px 0 8px; }
+    .row { display: flex; flex-wrap: wrap; gap: 14px; }
+    .cell { background: #16161f; border: 1px solid #2a2a38; border-radius: 8px; padding: 8px; }
+    .cell .cap { color: #8a8a9a; font-size: 10px; margin-bottom: 6px; font-family: ui-monospace, monospace; }
+    .box { position: relative; background: repeating-conic-gradient(#1c1c28 0% 25%, #22222f 0% 50%) 50% / 12px 12px; }
+    .wide { width: 220px; height: 84px; }
+    .square { width: 110px; height: 110px; }
+    .tall { width: 68px; height: 150px; }
+  </style>
+</head>
+<body>
+<div id="out">rendering…</div>
+<script type="module">
+import '../shared/plugins/all.js';
+import { get as getPlugin } from '../shared/plugins/registry.js';
+import { SHAPES, SHAPE_GROUPS } from '../shared/data/shapes.js';
+
+const plugin = getPlugin('shape');
+const out = document.getElementById('out');
+out.textContent = '';
+
+function mount(host, patch) {
+  const content = { ...plugin.defaults(), ...patch };
+  host.className = 'box ' + (patch.__box ?? 'square');
+  host.classList.add('bb-theme-minimal-dark');
+  plugin.render({ content }, host);
+}
+
+function cell(label, patch) {
+  const wrap = document.createElement('div');
+  wrap.className = 'cell';
+  const cap = document.createElement('div');
+  cap.className = 'cap';
+  cap.textContent = label;
+  const box = document.createElement('div');
+  wrap.append(cap, box);
+  mount(box, patch);
+  return wrap;
+}
+
+// `?group=arrow` renders one family only — the whole sheet is several screens
+// tall, and a screenshot of one family is the reviewable unit.
+const only = new URLSearchParams(location.search).get('group');
+
+// 1) Every shape in the catalog, at three aspect ratios.
+for (const g of SHAPE_GROUPS) {
+  if (only && g.id !== only) continue;
+  const ids = Object.keys(SHAPES).filter(id => SHAPES[id].group === g.id);
+  if (!ids.length) continue;
+  const h = document.createElement('h2');
+  h.textContent = g.label + ' (' + ids.length + ')';
+  out.append(h);
+  const row = document.createElement('div');
+  row.className = 'row';
+  for (const id of ids) {
+    for (const box of ['wide', 'square', 'tall']) {
+      row.append(cell(id + ' · ' + box, { shape: id, fill: '#8b5cf6', __box: box }));
+    }
+  }
+  out.append(row);
+}
+
+// 2) The styling controls, on one shape each, so a broken knob is obvious.
+if (!only || only === 'styles') {
+const h2 = document.createElement('h2');
+h2.textContent = 'Fill · outline · label · shadow';
+out.append(h2);
+const row2 = document.createElement('div');
+row2.className = 'row';
+const cases = [
+  ['solid fill',      { shape: 'rounded', fill: '#8b5cf6' }],
+  ['gradient 135°',   { shape: 'rounded', fill: '#8b5cf6', gradient: true, fill2: '#ec4899' }],
+  ['gradient 0°',     { shape: 'hexagon', fill: '#22c55e', gradient: true, fill2: '#0ea5e9', gradientAngle: 0 }],
+  ['fade to transp.', { shape: 'rect', fill: '#f59e0b', gradient: true, fill2: '' }],
+  ['45 % opacity',    { shape: 'rect', fill: '#f59e0b', fillOpacity: 45 }],
+  ['outline solid',   { shape: 'rounded', fillOpacity: 0, stroke: '#e5e7eb', strokeWidth: 1.5 }],
+  ['outline dashed',  { shape: 'ellipse', fillOpacity: 0, stroke: '#e5e7eb', strokeWidth: 1.5, strokeStyle: 'dashed' }],
+  ['outline dotted',  { shape: 'star-5', fillOpacity: 0, stroke: '#e5e7eb', strokeWidth: 1.5, strokeStyle: 'dotted' }],
+  ['svg + outline',   { shape: 'diamond', fill: '#0ea5e9', stroke: '#fff', strokeWidth: 1.2 }],
+  ['radius 0',        { shape: 'rounded', fill: '#8b5cf6', radius: 0 }],
+  ['radius 50',       { shape: 'rounded', fill: '#8b5cf6', radius: 50 }],
+  ['shadow soft',     { shape: 'rounded', fill: '#8b5cf6', shadow: 'soft' }],
+  ['shadow strong',   { shape: 'ellipse', fill: '#8b5cf6', shadow: 'strong' }],
+  ['shadow glow',     { shape: 'star-5', fill: '#f59e0b', shadow: 'glow' }],
+  ['label centre',    { shape: 'rounded', fill: '#8b5cf6', text: 'Step 1' }],
+  ['label on pale',   { shape: 'rounded', fill: '#fde68a', text: 'Readable?' }],
+  ['label top-left',  { shape: 'rect', fill: '#0ea5e9', text: 'TL', textAlign: 'left', textVAlign: 'top' }],
+  ['label big',       { shape: 'ellipse', fill: '#22c55e', text: '7', textScale: 220 }],
+  ['bubble + label',  { shape: 'callout-rect', fill: '#8b5cf6', text: 'Hi there', __box: 'wide' }],
+  ['line + arrow',    { shape: 'line-h', stroke: '#e5e7eb', strokeWidth: 1, __box: 'wide' }],
+  ['line both ends',  { shape: 'line-h', stroke: '#f59e0b', strokeWidth: 1.5, arrowStart: true, __box: 'wide' }],
+  ['line diagonal',   { shape: 'line-d', stroke: '#0ea5e9', strokeWidth: 1.2 }],
+  ['line dashed',     { shape: 'line-v', stroke: '#e5e7eb', strokeWidth: 1, strokeStyle: 'dashed', arrowEnd: false, __box: 'tall' }],
+  ['elbow',           { shape: 'line-elbow', stroke: '#22c55e', strokeWidth: 1.2 }],
+  ['frame',           { shape: 'frame', fill: '#8b5cf6' }],
+  ['theme accent',    { shape: 'rounded', fill: '', text: 'Auto ink' }],
+];
+for (const [label, patch] of cases) row2.append(cell(label, patch));
+out.append(row2);
+}
+
+// A mounted-then-disposed widget must leave nothing behind — the contract every
+// plugin signs, checked here because a shape has no timers to make it obvious.
+const probe = document.createElement('div');
+document.body.append(probe);
+const dispose = plugin.render({ content: plugin.defaults() }, probe);
+dispose();
+window.__shapeSheet = { shapes: Object.keys(SHAPES).length, disposeClean: probe.childElementCount === 0 };
+probe.remove();
+console.log('shape sheet', JSON.stringify(window.__shapeSheet));
+</script>
+</body>
+</html>

@@ -8,6 +8,7 @@ import './quote.js';
 import './code.js';
 import './ticker.js';
 import './icon.js';
+import './shape.js';
 import './greeting.js';
 import './steps.js';
 import './custom.js';

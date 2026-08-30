@@ -64,6 +64,7 @@ export const FIELD_TYPES = Object.freeze([
   'theme',            // visual swatch picker over slide themes
   'place',            // { name, lat, lng } via address search (no map)
   'icon',             // curated SVG symbol via visual picker
+  'shape',            // vector shape id (rect/arrow/star/line/…) via grouped visual picker
   'rich-text',        // HTML string via the WYSIWYG editor (text.js, quote.js)
   'calendar-events',  // array of events with one-time .ics import (calendar.js)
   'align',            // 'left'|'center'|'right' (or top/middle/bottom with vertical:true) via segmented buttons

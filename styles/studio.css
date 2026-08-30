@@ -289,6 +289,37 @@ button { font-family: inherit; }
 .avs-guide-v { top: 0; bottom: 0; width: 1px; }
 .avs-guide-h { left: 0; right: 0; height: 1px; }
 
+/* Marquee (rubber-band) selection + the dashed box around a multi-selection.
+   Both live in the guides layer, which is already above every frame and already
+   pointer-transparent, so neither can swallow the drag that is drawing it. */
+.avs-marquee {
+  position: absolute;
+  border: 1px solid var(--bb-accent);
+  background: color-mix(in srgb, var(--bb-accent) 12%, transparent);
+  border-radius: 2px;
+}
+/* The multi-selection's own frame: a dashed box around the whole selection with
+   its own resize handles. The BODY is pointer-transparent on purpose — a drag
+   that starts anywhere but a handle falls through to the widget underneath and
+   moves the group through the ordinary widget-drag path, so "move the
+   selection" has one implementation rather than two. */
+.avs-group-frame {
+  position: absolute;
+  border: 1px dashed color-mix(in srgb, var(--bb-accent) 75%, transparent);
+  border-radius: 3px;
+  pointer-events: none;
+}
+.avs-group-frame .avs-handle { display: block; pointer-events: auto; }
+/* No group rotation: rotating members about the GROUP's centre needs per-widget
+   offset maths the flat percent-rect model cannot express. */
+.avs-group-frame .avs-rotate-handle { display: none; }
+.avs-selection-count {
+  position: absolute; top: -9px; left: -1px;
+  padding: 1px 6px; border-radius: 999px;
+  background: var(--bb-accent); color: #fff;
+  font-size: 10px; font-weight: 700; line-height: 16px; white-space: nowrap;
+}
+
 .avs-widget-frame {
   position: absolute; outline: 1px solid transparent; cursor: move;
   transition: outline-color var(--bb-trans-fast);
@@ -305,6 +336,9 @@ button { font-family: inherit; }
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--bb-accent) 30%, transparent);
 }
 .avs-frame-selected { outline: 2px solid var(--bb-accent); z-index: 1000 !important; }
+/* A member of a multi-selection reads as selected but is not the one being
+   resized: thinner outline, and the handle rules below keep its handles off. */
+.avs-frame-multi { outline-width: 1.5px; outline-style: dashed; }
 .avs-widget-content { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .avs-widget-label {
   position: absolute; top: 0; left: 0; transform: translateY(-100%);
@@ -319,6 +353,10 @@ button { font-family: inherit; }
 
 .avs-handle { position: absolute; width: 11px; height: 11px; background: #fff; border: 1.5px solid var(--bb-accent); border-radius: 2px; display: none; z-index: 1001; }
 .avs-frame-selected .avs-handle { display: block; }
+/* Eight handles on every member of a six-widget selection is a field of dots
+   you cannot aim at, and dragging one would be ambiguous anyway — so a
+   multi-selection shows none of them and moves as a block instead. */
+.avs-frame-multi .avs-handle { display: none; }
 .avs-handle-nw { top: -6px; left: -6px; cursor: nwse-resize; }
 .avs-handle-n  { top: -6px; left: 50%; margin-left: -6px; cursor: ns-resize; }
 .avs-handle-ne { top: -6px; right: -6px; cursor: nesw-resize; }
@@ -344,6 +382,7 @@ button { font-family: inherit; }
 }
 .avs-rotate-handle:active { cursor: grabbing; }
 .avs-frame-selected .avs-rotate-handle { display: block; }
+.avs-frame-multi .avs-rotate-handle { display: none; }
 
 /* ---------- Right panel ---------- */
 .avs-col-right { overflow-y: auto; }
@@ -572,6 +611,11 @@ button { font-family: inherit; }
   animation: bb-pop-in var(--bb-trans-fast) both;
 }
 .avs-context-menu .avs-menu-item { display: flex; align-items: center; gap: var(--bb-sp-5); width: 100%; padding: 8px 10px; }
+/* Let the menu GROW to its longest label instead of wrapping it. min-width above
+   is a floor, not a ceiling, and the open() call already clamps the result into
+   the viewport — so a two-word label reading over two lines was only ever a
+   missing declaration. */
+.avs-context-menu .avs-menu-item > span:last-child { white-space: nowrap; }
 .avs-context-menu .avs-menu-item:disabled { opacity: .4; cursor: default; }
 .avs-context-menu .avs-menu-item:disabled:hover { background: transparent; }
 .avs-menu-ic { display: inline-flex; width: 18px; justify-content: center; font-size: var(--bb-text-md); flex: 0 0 auto; }
@@ -1353,3 +1397,168 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
   .avs-tpldetail-cta { width: 100%; }
   .avs-tpldetail-cta .bb-btn { flex: 1; }
 }
+
+/* ---- Arrange panel (right column, several widgets selected) ----
+   The third state of the right column, beside Library and Inspector. Icon
+   buttons in rows of three so the six alignment actions read as a 2×3 block
+   that mirrors the geometry they perform. */
+.avs-arrange-panel { padding: var(--bb-sp-4); gap: var(--bb-sp-2); overflow-y: auto; }
+.avs-arrange-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--bb-sp-2); }
+.avs-arrange-head strong { font-size: var(--bb-text-sm); }
+.avs-arrange-head span { font-size: var(--bb-text-xs); color: var(--bb-ink-muted); line-height: 1.4; }
+.avs-arrange-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--bb-ink-muted); margin-top: var(--bb-sp-3);
+}
+.avs-arrange-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--bb-sp-2); }
+.avs-arrange-wide { grid-template-columns: repeat(2, 1fr); }
+.avs-arrange-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 6px; background: var(--bb-bg-2); color: var(--bb-ink);
+  border: 1px solid var(--bb-border); border-radius: var(--bb-r-sm);
+  transition: background var(--bb-trans-fast), border-color var(--bb-trans-fast);
+}
+.avs-arrange-btn:hover:not(:disabled) { background: var(--bb-bg-3); border-color: var(--bb-border-strong); }
+.avs-arrange-btn:disabled { opacity: .4; cursor: not-allowed; }
+.avs-arrange-btn-wide { justify-content: flex-start; padding-left: 10px; font-size: var(--bb-text-xs); }
+.avs-arrange-clear {
+  margin-top: var(--bb-sp-4); padding: 8px; width: 100%;
+  background: transparent; color: var(--bb-ink-muted);
+  border: 1px solid var(--bb-border); border-radius: var(--bb-r-sm);
+  font-size: var(--bb-text-xs);
+}
+.avs-arrange-clear:hover { color: var(--bb-ink); border-color: var(--bb-border-strong); }
+.avs-arrange-note {
+  font-size: 11px; line-height: 1.45; color: var(--bb-ink-muted);
+  padding: var(--bb-sp-2) 0 0;
+}
+
+/* ---------- Layers panel (left column, under the slide rail) ----------
+   Both halves of the column scroll independently: a long playlist must not
+   push the layers list off the bottom, and a slide with fifteen widgets must
+   not push the slide rail out of reach. The rail keeps the flexible share and
+   the layers list caps out, because you scan the rail and you act on layers. */
+.avs-rail-slot { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.avs-layers-slot { flex: 0 0 auto; border-top: 1px solid var(--bb-glass-border); }
+.avs-layers { display: flex; flex-direction: column; max-height: 42vh; }
+.avs-layers-closed { max-height: none; }
+.avs-layers-head {
+  display: flex; align-items: center; gap: var(--bb-sp-3);
+  padding: 10px 14px; width: 100%; background: transparent; border: 0;
+  color: var(--bb-ink-quiet); text-align: left;
+}
+.avs-layers-head:hover { color: var(--bb-ink); }
+.avs-layers-caret { font-size: 10px; width: 10px; }
+.avs-layers-count {
+  margin-left: auto; font-size: var(--bb-text-xs); color: var(--bb-ink-quiet);
+  background: var(--bb-bg-2); border-radius: 999px; padding: 1px 7px;
+}
+.avs-layers-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 12px; }
+.avs-layers-closed .avs-layers-list { display: none; }
+.avs-layers-empty { padding: 6px 6px 10px; font-size: var(--bb-text-xs); color: var(--bb-ink-quiet); }
+.avs-layer {
+  display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: var(--bb-sp-3);
+  padding: 5px 6px; border-radius: var(--bb-r-sm); cursor: pointer;
+  border: 1px solid transparent; transition: var(--bb-trans-fast);
+}
+.avs-layer:hover { background: color-mix(in srgb, var(--bb-ink) 6%, transparent); }
+.avs-layer.avs-on { border-color: var(--bb-accent); background: color-mix(in srgb, var(--bb-accent) 12%, transparent); }
+.avs-layer.bb-dragging { opacity: .4; }
+.avs-layer-ic { display: flex; color: var(--bb-ink-muted); }
+.avs-layer-name {
+  font-size: var(--bb-text-xs); color: var(--bb-ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* A hidden layer is struck through AND dimmed: dimming alone reads as
+   "disabled", and the row is very much still usable. */
+.avs-layer-hidden .avs-layer-name { text-decoration: line-through; opacity: .55; }
+/* Grouped rows carry a tick of accent down their left edge, so a group reads as
+   a run rather than as neighbours that happen to be adjacent. */
+.avs-layer-grouped { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--bb-accent) 60%, transparent); }
+.avs-layer-tools { display: none; gap: 2px; }
+.avs-layer:hover .avs-layer-tools,
+.avs-layer.avs-on .avs-layer-tools,
+.avs-layer-marked .avs-layer-tools { display: flex; }
+.avs-layer-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: var(--bb-r-sm);
+  background: transparent; border: 0; color: var(--bb-ink-muted);
+}
+.avs-layer-btn:hover { background: var(--bb-bg-3, var(--bb-bg-2)); color: var(--bb-ink); }
+.avs-layer-btn[aria-pressed="true"] { color: var(--bb-accent); }
+.avs-layer-rename { grid-column: 2; width: 100%; font-size: var(--bb-text-xs); padding: 2px 5px; }
+
+/* A locked widget still renders; only the pointer stops reaching it. */
+.avs-frame-locked { pointer-events: none; }
+
+/* ---------- Canvas view aids ----------
+   Grid and safe-area overlays sit in the stage BEHIND every widget frame and
+   are pointer-transparent, so neither can swallow a click meant for the slide.
+   Both are sized in percent, so they mean the same thing at every zoom and on
+   every canvas size — the same reason widget rects are percentages. */
+.avs-grid-overlay {
+  position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  /* Two lines per axis, one light and one dark, offset by a pixel. A single
+     tinted line disappears against a slide background of the same value —
+     and slide backgrounds here are photographs and gradients, not paper. The
+     pair guarantees one of them contrasts whatever is underneath. */
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, .38) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, .38) 1px, transparent 1px),
+    linear-gradient(to right, rgba(0, 0, 0, .30) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, .30) 1px, transparent 1px);
+  background-position: 0 0, 0 0, 1px 0, 0 1px;
+}
+.avs-margin-overlay {
+  position: absolute; pointer-events: none; z-index: 1;
+  border: 1px dashed color-mix(in srgb, var(--bb-accent-2, var(--bb-accent)) 55%, transparent);
+}
+/* The end-capped span that explains a spacing snap: "this gap equals that one".
+   Drawn in the guides layer, above everything, in the second accent so it is
+   never mistaken for an alignment guide. */
+.avs-gapmark { position: absolute; background: var(--bb-accent-2); }
+.avs-gapmark-h { height: 2px; margin-top: -1px; }
+.avs-gapmark-v { width: 2px; margin-left: -1px; }
+.avs-gapmark::before, .avs-gapmark::after {
+  content: ""; position: absolute; background: var(--bb-accent-2);
+}
+.avs-gapmark-h::before, .avs-gapmark-h::after { top: -3px; width: 2px; height: 8px; }
+.avs-gapmark-h::before { left: 0; }
+.avs-gapmark-h::after { right: 0; }
+.avs-gapmark-v::before, .avs-gapmark-v::after { left: -3px; height: 2px; width: 8px; }
+.avs-gapmark-v::before { top: 0; }
+.avs-gapmark-v::after { bottom: 0; }
+
+.avs-view-btn { display: inline-flex; align-items: center; gap: 5px; }
+
+/* ---------- Slide master ----------
+   The master card sits ABOVE the slide list because that is where it sits in
+   the document: everything below inherits from it. */
+.avs-master-card {
+  display: flex; align-items: center; gap: var(--bb-sp-3);
+  margin: 0 12px 8px; padding: 8px 10px;
+  background: var(--bb-bg-2); border: 1px solid var(--bb-border);
+  border-radius: var(--bb-r-md); color: var(--bb-ink-quiet);
+  font-size: var(--bb-text-xs); text-align: left; width: calc(100% - 24px);
+}
+.avs-master-card:hover { color: var(--bb-ink); border-color: var(--bb-border-strong); }
+.avs-master-card.avs-on { border-color: var(--bb-accent); color: var(--bb-ink); background: color-mix(in srgb, var(--bb-accent) 12%, transparent); }
+.avs-master-ic { display: flex; }
+.avs-master-label { flex: 1; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.avs-master-count { font-size: var(--bb-text-xs); background: var(--bb-bg-3, var(--bb-bg-1)); border-radius: 999px; padding: 1px 7px; }
+
+/* Master content on an ordinary slide: the real render, at the real position,
+   with no chrome and no pointer events. Editing it here is deliberately
+   impossible — two ways to change one widget, one of which silently edits every
+   other slide, is how a master becomes a thing people are afraid of. */
+.avs-master-ghost { position: absolute; pointer-events: none; }
+.avs-master-ghost .avs-widget-content { position: absolute; inset: 0; overflow: hidden; }
+.avs-master-ghost .avs-widget-bg { position: absolute; inset: 0; }
+/* Master blocks in the rail thumbnail read as background, not as this slide's. */
+.avs-thumb-master { opacity: .45; }
+
+.avs-master-banner { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; }
+.avs-master-banner strong { font-size: var(--bb-text-sm); }
+.avs-master-banner span { font-size: var(--bb-text-xs); color: var(--bb-ink-muted); line-height: 1.45; }
+.avs-master-banner .bb-btn { align-self: flex-start; margin-top: 4px; }
+.avs-ss-check { display: flex; align-items: center; gap: 8px; font-size: var(--bb-text-sm); }

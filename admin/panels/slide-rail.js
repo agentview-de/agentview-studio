@@ -8,11 +8,13 @@ import { get as getPlugin } from '../../shared/plugins/registry.js';
 import { describeSchedule } from '../../shared/scheduler-core.js';
 import { makeReorderable } from '../ui/drag-drop.js';
 import { openContextMenu } from '../ui/context-menu.js';
+import { setEditingMaster } from '../canvas/canvas.js';
+import { isEditingMaster } from '../active-slide.js';
 import { getLocale, t, tx } from '../i18n.js';
 import { uiIconSvg } from '../../shared/data/ui-icons.js';
 import { widgetIcon } from '../../shared/data/widget-icons.js';
 import { escapeHtml } from '../../shared/utils/escape.js';
-import { walkAllWidgets } from '../../shared/slide-schema.js';
+import { walkAllWidgets, masterWidgetsFor, isWidgetVisible } from '../../shared/slide-schema.js';
 import { announce } from '../ui/toast.js';
 
 // Below this many slides a search box is clutter; above it, scrolling a flat
@@ -43,6 +45,11 @@ export function mountSlideRail(host) {
              placeholder="${t('rail.filter')}" aria-label="${t('rail.filter')}">
       <span class="avs-rail-filter-count" id="avs-rail-count" role="status" aria-live="polite"></span>
     </div>
+    <button class="avs-master-card" id="avs-master-card" type="button" aria-pressed="false">
+      <span class="avs-master-ic">${uiIconSvg('layers', 14)}</span>
+      <span class="avs-master-label">${t('master.title')}</span>
+      <span class="avs-master-count" id="avs-master-count"></span>
+    </button>
     <div class="avs-rail-list" id="avs-rail-list"></div>`;
 
   const list = host.querySelector('#avs-rail-list');
@@ -51,6 +58,25 @@ export function mountSlideRail(host) {
   list.setAttribute('role', 'listbox');
   list.setAttribute('aria-label', t('rail.slides'));
   host.querySelector('#avs-add-slide').addEventListener('click', addSlide);
+
+  // The master lives ABOVE the slides in the rail because that is where it sits
+  // in the document: everything below inherits from it. It is a toggle, not a
+  // slide — clicking it swaps what the canvas is editing, and clicking it again
+  // (or picking any slide) comes back.
+  const masterCard = host.querySelector('#avs-master-card');
+  const masterCount = host.querySelector('#avs-master-count');
+  masterCard.addEventListener('click', () => setEditingMaster(!isEditingMaster()));
+  const reflectMaster = () => {
+    const on = isEditingMaster();
+    masterCard.classList.toggle('avs-on', on);
+    masterCard.setAttribute('aria-pressed', String(on));
+    const n = state.playlist?.master?.widgets?.length ?? 0;
+    masterCount.textContent = n ? String(n) : '';
+    masterCard.title = n ? t('master.hint', { n }) : t('master.empty');
+  };
+  subscribe('ui', p => { if (p === 'ui.editingMaster') reflectMaster(); });
+  subscribe('playlist', reflectMaster);
+  reflectMaster();
 
   const filterBar = host.querySelector('#avs-rail-filterbar');
   const filterInput = host.querySelector('#avs-rail-filter');
@@ -197,10 +223,16 @@ function card(slide, index) {
   el.innerHTML = `
     <div class="avs-slide-index">${index + 1}</div>
     <div class="avs-rail-thumb bb-theme-${slide.theme ?? state.playlist?.defaults?.theme ?? 'minimal-dark'}">
-      ${(slide.widgets ?? []).map(w => {
+      ${[
+        // Master blocks first and dimmed: the rail should show that the slide
+        // is not as empty as its own widget list, without pretending the
+        // master's content belongs to it.
+        ...masterWidgetsFor(state.playlist, slide).map(w => [w, ' avs-thumb-master']),
+        ...(slide.widgets ?? []).map(w => [w, '']),
+      ].filter(([w]) => isWidgetVisible(w)).map(([w, cls]) => {
         const p = getPlugin(w.type);
         const r = w.rect ?? { x: 0, y: 0, w: 100, h: 100 };
-        return `<span class="avs-thumb-block" style="left:${r.x}%;top:${r.y}%;width:${r.w}%;height:${r.h}%;${w.rotation ? `transform:rotate(${w.rotation}deg);` : ''}">${widgetIcon(w.type, p?.icon ?? '◻', 14)}</span>`;
+        return `<span class="avs-thumb-block${cls}" style="left:${r.x}%;top:${r.y}%;width:${r.w}%;height:${r.h}%;${w.rotation ? `transform:rotate(${w.rotation}deg);` : ''}">${widgetIcon(w.type, p?.icon ?? '◻', 14)}</span>`;
       }).join('')}
     </div>
     <div class="avs-slide-meta">
@@ -220,6 +252,8 @@ function card(slide, index) {
     if (e.target.closest('[data-act]')) return;
     state.ui.activeSlideId = slide.id;
     state.ui.selectedWidgetId = null;
+  // Choosing a slide means you are no longer editing the master.
+  if (state.ui.editingMaster) setEditingMaster(false);
   });
   el.querySelector('[data-act="dup"]').addEventListener('click', () => duplicate(slide.id));
   el.querySelector('[data-act="del"]').addEventListener('click', () => remove(slide.id));
@@ -308,6 +342,8 @@ function insertAfter(id) {
   state.playlist.slides.splice(ix + 1, 0, s);
   state.ui.activeSlideId = s.id;
   state.ui.selectedWidgetId = null;
+  // Choosing a slide means you are no longer editing the master.
+  if (state.ui.editingMaster) setEditingMaster(false);
   commit('add-slide');
 }
 
@@ -324,6 +360,8 @@ function move(id, delta) {
 function rename(id) {
   state.ui.activeSlideId = id;
   state.ui.selectedWidgetId = null;
+  // Choosing a slide means you are no longer editing the master.
+  if (state.ui.editingMaster) setEditingMaster(false);
   setTimeout(() => { const inp = document.getElementById('ss-name'); inp?.focus(); inp?.select?.(); }, 60);
 }
 
@@ -333,6 +371,8 @@ function addSlide() {
   state.playlist.slides.push(s);
   state.ui.activeSlideId = s.id;
   state.ui.selectedWidgetId = null;
+  // Choosing a slide means you are no longer editing the master.
+  if (state.ui.editingMaster) setEditingMaster(false);
   commit('add-slide');
 }
 
@@ -363,6 +403,8 @@ function remove(id) {
   if (state.ui.activeSlideId === id) {
     state.ui.activeSlideId = state.playlist.slides[0]?.id ?? null;
     state.ui.selectedWidgetId = null;
+  // Choosing a slide means you are no longer editing the master.
+  if (state.ui.editingMaster) setEditingMaster(false);
   }
   commit('delete-slide');
 }

@@ -27,6 +27,17 @@ const suites = [
   // Admin Tab-Shell pure response helper (list-envelope unwrapping).
   './shell.test.js',
   './canvas-geo.test.js',
+  // Shape catalog geometry + the shape plugin's pure fill/schema logic. Pure
+  // data and pure predicates; the DRAWN result lives in /tools/shape-sheet.html.
+  './shapes.test.js',
+  // Align / distribute / match-size / group-move for a multi-widget
+  // selection. Pure geometry; the canvas wiring is exercised in the browser.
+  './arrange.test.js',
+  // Hide / lock / rename / restack — the Layers panel's model. Pure; the panel
+  // itself is DOM and lives in the browser suite.
+  './layers.test.js',
+  // The slide master: the resolver, and the ordering promise it rests on.
+  './master.test.js',
   './migrate.test.js',
   // animations.test.js is pure logic (animation catalogs + schema round-trip);
   // it imports shared/animations.js + shared/slide-schema.js, neither of which
@@ -72,6 +83,9 @@ const suites = [
   './weather-format.test.js',
   // Pure canvas viewport + snap math (zoom transforms, edge/centre snapping).
   './canvas-math.test.js',
+  // Smart guides: even spacing, size matching, margins, grid — and the order
+  // they run in, which is what decides whether the canvas feels helpful.
+  './smart-snap.test.js',
   // Pure table-markup builder used by the rich-text editor.
   './rich-text-table.test.js',
   // API client pure decisions: auth-header selection + URL/proxy resolution.
