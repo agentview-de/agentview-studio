@@ -1,6 +1,7 @@
 import { register } from './registry.js';
 import { mediaFitField, backgroundSizeValue } from '../media-fit.js';
 import { composeDispose } from '../plugin-contract.js';
+import { prefersReducedMotion } from '../animations.js';
 import { isSafeImgUrl, cssUrl } from '../safe-url.js';
 import { mediaPlaceholder } from '../media-placeholder.js';
 
@@ -142,7 +143,11 @@ export default register({
     const transMs = transition === 'cut' ? 0 : Math.max(100, Math.min(5000, Number(c.transitionMs) || 800));
     const showCaptions = c.showCaptions !== false;
     const perImageSec = Math.max(1, Number(c.perImageSec) || 5);
-    const kbActive = c.kenBurns !== false && transition !== 'slide';
+    // The Ken Burns pan/zoom is real movement and is dropped under
+    // prefers-reduced-motion; the cross-fade between photos stays, because an
+    // opacity change is not motion and a hard cut every few seconds is worse
+    // for the same viewer.
+    const kbActive = c.kenBurns !== false && transition !== 'slide' && !prefersReducedMotion();
     const kbIntensity = Object.hasOwn(KENBURNS_SCALES, c.kenBurnsIntensity ?? '') ? c.kenBurnsIntensity : 'medium';
     if (kbActive) ensureKenBurnsKeyframes();
 

@@ -37,6 +37,7 @@ import { addWidget, applyActiveDesign, deleteSelected, duplicateSelected, render
 import { splitText } from './ai/smart-split.js';
 import { exportPlaylist, importPlaylist } from './playlist-io.js';
 import { isEditingVariant, variantBannerLabel, exitVariantEdit } from './canvas/variant-ctx.js';
+import { openTemplateStore, openStartChooser, playlistIsPristine } from './ui/template-store.js';
 import { legalLinks } from './legal-links.js';
 import { escapeHtml as esc } from '../shared/utils/escape.js';
 import { wireTablist } from './ui/tablist.js';
@@ -551,7 +552,22 @@ async function maybeWelcome() {
   // reloads the page) re-shows the welcome in the new language rather than
   // suppressing it.
   try { localStorage.setItem('bb_intro_seen', '1'); } catch {}
-  if (choice !== 'connect') toast(t('firstRun.hint'), { kind: 'info', ttl: 9000 });
+  if (choice === 'connect') return;
+  await maybeStart();
+}
+
+// First-run fork right after the welcome: blank canvas, or a ready-made slide
+// set. Only offered while the deck is still pristine — a returning visitor whose
+// hydrated playlist already has work in it is never asked, because the honest
+// answer to "how would you like to start?" is "I already did".
+//
+// Reachable any time afterwards from the ⋯ menu ("New from template"), the
+// command palette and the library's Templates tab, so skipping it costs nothing.
+async function maybeStart() {
+  if (!playlistIsPristine()) { toast(t('firstRun.hint'), { kind: 'info', ttl: 9000 }); return; }
+  const applied = await openStartChooser();
+  if (applied) { ensureSlide(); canvasRender(); return; }
+  toast(t('firstRun.hint'), { kind: 'info', ttl: 9000 });
 }
 
 // ---------- Overflow menu ----------
@@ -560,6 +576,7 @@ async function openOverflow() {
   box.className = 'avs-menu';
   const items = [
     { k: 'new',         icon: 'file-plus', label: t('menu.newPlaylist') },
+    { k: 'templates',   icon: 'grid',      label: t('tplStore.menu') },
     { k: 'cloud-open',  icon: 'cloud',     label: t('menu.openCloud') },
     { k: 'import',      icon: 'upload',    label: t('menu.import') },
     { k: 'export',      icon: 'download',  label: t('menu.export') },
@@ -594,6 +611,7 @@ async function openOverflow() {
 
 function handleMenu(k) {
   if (k === 'new') { state.playlist = createPlaylist(); ensureSlide(); commit('new-playlist'); canvasRender(); }
+  else if (k === 'templates') openTemplateStore().then(applied => { if (applied) { ensureSlide(); canvasRender(); } });
   else if (k === 'cloud-open') cloudLoad.open().then(() => canvasRender());
   else if (k === 'export') exportPlaylist();
   else if (k === 'import') importPlaylist({ ensureSlide, render: canvasRender });
@@ -711,6 +729,7 @@ function registerAllCommands() {
   registerCommand({ label: t('pub.go'), icon: uiIconSvg('rocket'), run: () => openPublishPicker() });
   registerCommand({ label: t('preview.go'), icon: uiIconSvg('play'), run: () => openPreview() });
   registerCommand({ label: t('menu.newPlaylist'), icon: uiIconSvg('file-plus'), run: () => handleMenu('new') });
+  registerCommand({ label: t('tplStore.menu'), icon: uiIconSvg('grid'), keywords: 'template store vorlage folienset industry branche starter', run: () => handleMenu('templates') });
   // t('tb.undo') / t('tb.redo'), not the literals 'Undo' / 'Redo': these two were
   // the only untranslated commands in the palette, so a German user got two
   // English rows between "Veroeffentlichen" and "Design anwenden". Both keys

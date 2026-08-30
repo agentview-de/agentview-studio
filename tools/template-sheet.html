@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <title>Template contact sheet</title>
+  <!-- DEV TOOL — not part of the app. Renders every slide of every slide-set
+       template at a readable size so the catalog can be reviewed as a whole
+       instead of one slide at a time in the editor. Open it from the dev
+       server: /tools/template-sheet.html  ·  ?t=<template-id> for one set. -->
+  <link rel="stylesheet" href="../styles/fonts.css" />
+  <script src="../shared/vendor/marked.min.js"></script>
+  <script src="../shared/vendor/pdf.min.js"></script>
+  <script src="../shared/vendor/prism.min.js"></script>
+  <link rel="stylesheet" href="../shared/vendor/prism-tomorrow.min.css" />
+  <link rel="stylesheet" href="../styles/tokens.css" />
+  <link rel="stylesheet" href="../styles/components.css" />
+  <link rel="stylesheet" href="../styles/slide-themes.css" />
+  <link rel="stylesheet" href="../styles/studio.css" />
+  <style>
+    body { margin: 0; background: #0b0b10; color: #eee; font: 13px/1.4 Inter, system-ui, sans-serif; }
+    .sheet { padding: 16px 16px 60px; }
+    h2 { margin: 26px 0 4px; font-size: 17px; font-weight: 700; }
+    h2 small { font-weight: 400; opacity: .5; margin-left: 8px; font-size: 12px; }
+    .row { display: flex; flex-wrap: wrap; gap: 14px; }
+    .cell { border: 1px solid #23232e; border-radius: 8px; overflow: hidden; background: #000; }
+    .cap { font-size: 11px; opacity: .6; padding: 4px 6px; background: #14141c; border-top: 1px solid #23232e; }
+    .bad { outline: 2px solid #ef4444; }
+  </style>
+</head>
+<body>
+<div class="sheet" id="sheet">loading…</div>
+<script type="module">
+import '../shared/plugins/all.js';
+import '../shared/templates/all.js';
+import { listTemplates, buildSlides } from '../shared/templates/registry.js';
+import { localize } from '../shared/templates/lib.js';
+import { renderSlideThumb } from '../admin/ui/slide-thumb.js';
+
+const params = new URLSearchParams(location.search);
+const only = params.get('t');
+// Page through the catalog a few templates at a time: the whole sheet is
+// 15 000 px tall, which is fine to scroll and useless to screenshot.
+const skip = Number(params.get('skip')) || 0;
+const take = Number(params.get('take')) || 0;
+const lang = params.get('lang') === 'de' ? 'de' : 'en';
+const width = Number(params.get('w')) || 460;
+
+const sheet = document.getElementById('sheet');
+sheet.textContent = '';
+
+let shown = 0, seen = 0;
+for (const tpl of listTemplates()) {
+  if (only && tpl.id !== only) continue;
+  if (!only && tpl.category === 'blank') continue;
+  if (!only) {
+    if (seen++ < skip) continue;
+    if (take && shown >= take) break;
+    shown++;
+  }
+  const slides = buildSlides(tpl, { lang });
+  const h = document.createElement('h2');
+  h.innerHTML = `${localize(tpl.name, lang)} <small>${tpl.id} · ${tpl.category} · ${slides.length} slides</small>`;
+  sheet.appendChild(h);
+  const row = document.createElement('div');
+  row.className = 'row';
+  sheet.appendChild(row);
+  const pl = { canvas: tpl.canvas, defaults: tpl.defaults };
+  slides.forEach((s, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    const box = document.createElement('div');
+    box.style.width = width + 'px';
+    cell.appendChild(box);
+    const cap = document.createElement('div');
+    cap.className = 'cap';
+    cap.textContent = `${i + 1}. ${s.name || '—'} · ${s.theme} · ${s.duration}s`;
+    cell.appendChild(cap);
+    row.appendChild(cell);
+    renderSlideThumb(box, s, pl, { width });
+  });
+}
+window.__sheetReady = true;
+</script>
+</body>
+</html>

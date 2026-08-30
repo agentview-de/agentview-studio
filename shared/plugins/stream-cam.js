@@ -1,6 +1,7 @@
 import { register } from './registry.js';
 import { mediaFitField, objectFitValue } from '../media-fit.js';
 import { composeDispose } from '../plugin-contract.js';
+import { prefersReducedMotion } from '../animations.js';
 import { isSafeImgUrl } from '../safe-url.js';
 import { inlinedVendorUrl } from '../inline-vendor.js';
 import { mediaPlaceholder } from '../media-placeholder.js';
@@ -153,7 +154,9 @@ export default register({
         live.dataset.field = 'liveBadge badgePosition';
         live.style.cssText = pill + 'display:flex;align-items:center;gap:.4em;font:700 clamp(11px, 2cqmin, 28px) var(--bb-font, Inter, sans-serif);letter-spacing:.08em;';
         const dot = document.createElement('span');
-        dot.style.cssText = `width:.55em;height:.55em;border-radius:50%;background:${STATUS_COLORS.bad};animation:bb-stream-live-pulse 1.6s ease-in-out infinite;`;
+        // The dot still marks the stream as live; it just stops blinking.
+        const pulse = prefersReducedMotion() ? '' : 'animation:bb-stream-live-pulse 1.6s ease-in-out infinite;';
+        dot.style.cssText = `width:.55em;height:.55em;border-radius:50%;background:${STATUS_COLORS.bad};${pulse}`;
         live.append(dot, 'LIVE');
         wrap.appendChild(live);
       }

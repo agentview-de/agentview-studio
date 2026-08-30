@@ -24,12 +24,15 @@ import { createSlide, createWidget } from '../../shared/slide-schema.js';
 import { commit } from '../store.js';
 import { openModal } from '../ui/modal.js';
 import { loadInto } from '../cloud-load.js';
+import { openTemplateStore } from '../ui/template-store.js';
+import { renderSlide as canvasRenderSlide } from '../canvas/canvas.js';
 
 const TABS = [
-  { id: 'widgets', label: () => t('lib.widgets') },
-  { id: 'assets',  label: () => t('lib.assets') },
-  { id: 'apis',    label: () => t('lib.apis') },
-  { id: 'store',   label: () => t('library.store') },
+  { id: 'widgets',   label: () => t('lib.widgets') },
+  { id: 'templates', label: () => t('lib.templates') },
+  { id: 'assets',    label: () => t('lib.assets') },
+  { id: 'apis',      label: () => t('lib.apis') },
+  { id: 'store',     label: () => t('library.store') },
 ];
 
 // The latest mounted library's redraw fn + a once-only subscription, so saving
@@ -62,6 +65,7 @@ export function mountLibrary(host) {
     host.querySelectorAll('.avs-lib-tab').forEach(b => b.classList.toggle('avs-on', b.dataset.tab === tab));
     body.replaceChildren();
     if (tab === 'widgets') renderWidgets(body);
+    else if (tab === 'templates') renderTemplates(body);
     else if (tab === 'assets') renderAssets(body);
     else if (tab === 'apis') renderApis(body);
     else if (tab === 'store') renderStore(body);
@@ -413,6 +417,18 @@ function renderAssets(body) {
   body.appendChild(panel);
   assetLibrary.renderPanel(panel);
   assetLibrary.refresh();
+}
+
+// The Templates tab is a doorway, not a second store: the gallery needs the
+// width of a modal to show real previews, and a 300 px side panel cannot. So
+// this explains what is behind the door and opens it.
+function renderTemplates(body) {
+  body.innerHTML = `<p class="bb-form-help">${escapeHtml(t('tplStore.libLead'))}</p>`;
+  const btn = document.createElement('button');
+  btn.className = 'bb-btn bb-btn-primary';
+  btn.innerHTML = uiIconSvg('grid', 14) + escapeHtml(t('tplStore.libOpen'));
+  btn.addEventListener('click', () => openTemplateStore().then(applied => { if (applied) canvasRenderSlide(); }));
+  body.appendChild(btn);
 }
 
 function renderApis(body) {

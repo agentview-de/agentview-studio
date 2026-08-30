@@ -60,7 +60,7 @@ The **app** needs no npm. There are two ways to run the suites:
   | [`test/index.html`](test/index.html) | every suite the Node runner has, plus the DOM-only ones it skips (HTML escaping/sanitising, the plugin/schema round-trips) |
   | [`test/canvas-zorder.test.html`](test/canvas-zorder.test.html) | canvas z-order and hit-testing — needs the real editor stylesheet |
   | [`test/publish-e2e.test.html`](test/publish-e2e.test.html) | builds the real publish bundle and boots it in an iframe |
-  | [`test/plugin-resilience.test.html`](test/plugin-resilience.test.html) | all 34 plugins against hostile input, and every widget's inspector form built and torn down |
+  | [`test/plugin-resilience.test.html`](test/plugin-resilience.test.html) | all 38 plugins against hostile input, and every widget's inspector form built and torn down |
 
   The last two are on their own pages because they are slow and because they
   produce console output of their own (a missing vendor library, demo assets
@@ -85,6 +85,31 @@ running anything:
 node tools/import-graph.mjs .
 ```
 
+### Looking at the template catalog
+
+Three dev pages render the slide-set templates for real — open them from the dev
+server (`node server.mjs`), they are not part of the app:
+
+| Page | What it answers |
+|---|---|
+| `/tools/template-sheet.html` | *Does the catalog look right?* Every slide of every template as a contact sheet. `?t=<id>` for one set, `?skip=&take=` to page, `?lang=de`, `?w=` for cell width. |
+| `/tools/template-audit.html` | *Is anything clipped or too small?* Renders each slide at 1920×1080 and reports the biggest type as a share of slide height, plus overflow. `?lang=de`. |
+| `/tools/template-calibrate.html` | *What size SHOULD this be?* Binary-searches the largest `textScale` that still fits each widget's box — in **both** languages — capped at a per-widget-type target, and prints the patch table. |
+| `/tools/widget-audit.html` | *Is the WIDGET itself sound?* Mounts every registered widget with its own `defaults()` at three box sizes and reports three things: whether its type actually grows with the box (a `cq` coefficient that never clears its `clamp` floor renders the same pixel size everywhere), whether it overflows, and the worst contrast ratio on any ground it paints itself. `?theme=` to check another theme. |
+
+Signage type is not a matter of taste you can settle by squinting at a 40 % zoom:
+the catalog was once tuned by eye and most of it landed near 3 % of the slide
+height, which is a laptop size. `test/template-legibility.test.html` is the gate
+that keeps it honest. It runs two suites, both on real renders:
+
+- **templates** — fails if any slide clips in either language, if a ticker sets
+  type taller than its own strip, or if a slide's largest type drops below 4 %
+  of the slide height.
+- **widgets** — fails if any widget overflows a quarter tile or a half slide on
+  its own `defaults()`, or if text on a ground the widget paints itself falls
+  below WCAG AA. A widget you have just dragged onto a slide, before typing a
+  character, must not already be broken.
+
 ## Dev tooling (optional, dev-only)
 
 The shipped app stays dependency-free — but the repo carries a small **dev**
@@ -96,7 +121,7 @@ npm ci                                       # install the dev toolchain
 npm run lint                                 # ESLint flat config (eslint.config.js)
 npm test                                     # == node test/run-node.mjs
 npx playwright install --with-deps chromium  # one-time, for the browser runner
-npm run test:browser                         # drives all four browser pages headlessly in CI
+npm run test:browser                         # drives every browser page headlessly in CI
 npm run i18n                                 # every t() key present in both dictionaries
 npm run check                                # lint + i18n + headless tests in one shot
 ```

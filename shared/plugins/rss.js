@@ -8,6 +8,7 @@ import { isStored, dataModeField } from '../offline-data.js';
 import { refreshSecField, refreshIntervalMs } from '../refresh-field.js';
 import { localeField, safeLocale } from '../locale-field.js';
 import { ensureTickerKeyframes } from '../ticker-keyframes.js';
+import { prefersReducedMotion } from '../animations.js';
 import { dataModeNetwork } from '../plugin-network.js';
 
 // Map one <item>/<entry> node to the shape the widget renders. Shared by the
@@ -238,7 +239,12 @@ export default register({
       const approxPx = Math.max(240, cycleChars * 16);
       const speed = Math.max(20, Math.min(300, c.tickerSpeed ?? 80));
       const dur = Math.max(6, approxPx / speed);
-      tickerTrack.style.animation = `bb-ticker-scroll ${dur.toFixed(1)}s linear infinite`;
+      // A viewer who asked for reduced motion gets a still strip. It shows the
+      // headlines that fit rather than all of them — the honest trade for a
+      // marquee, and the same call the News Ticker widget makes.
+      tickerTrack.style.animation = prefersReducedMotion()
+        ? 'none'
+        : `bb-ticker-scroll ${dur.toFixed(1)}s linear infinite`;
     };
 
     const layout = () => {

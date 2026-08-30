@@ -5,6 +5,7 @@ import { composeDispose } from '../plugin-contract.js';
 import { liveSource } from '../live-source.js';
 import { refreshSecField, refreshIntervalMs } from '../refresh-field.js';
 import { sanitizeHtml } from '../sanitize-html.js';
+import { prefersReducedMotion } from '../animations.js';
 import { escapeHtml } from '../utils/escape.js';
 import { isRemoteUrl } from '../plugin-network.js';
 
@@ -184,8 +185,7 @@ export default register({
       ? md(c.body)
       : '<p style="opacity:.6;">Write Markdown in the inspector, headings, lists, <strong>bold</strong>, links and quotes are supported.</p>';
 
-    const reducedMotion = typeof window !== 'undefined'
-      && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    const reducedMotion = prefersReducedMotion();
     let stopScroll = null;
     let lastHtml = null;
     // Repaints idempotently: an unchanged poll result must NOT reset the

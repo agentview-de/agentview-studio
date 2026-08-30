@@ -61,7 +61,10 @@ function ensureFlashStyle() {
   st.id = FLASH_STYLE_ID;
   st.textContent =
     '@keyframes bb-json-flash { from { background: color-mix(in srgb, var(--bb-st-accent, currentColor) 35%, transparent); } to { background: transparent; } }\n' +
-    '.bb-j-chg { animation: bb-json-flash 1.5s ease-out; border-radius: 3px; }';
+    '.bb-j-chg { animation: bb-json-flash 1.5s ease-out; border-radius: 3px; }\n' +
+    // Same shape as icon.js's pulse guard: the value still updates, it just
+    // stops flashing for a viewer who asked for less motion.
+    '@media (prefers-reduced-motion: reduce) { .bb-j-chg { animation: none; } }';
   document.head.appendChild(st);
 }
 

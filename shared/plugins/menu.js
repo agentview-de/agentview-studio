@@ -5,6 +5,7 @@ import { composeDispose } from '../plugin-contract.js';
 import { currencySymbol } from '../data/currencies.js';
 import { isSafeImgUrl } from '../safe-url.js';
 import { escapeHtml, escapeAttr } from '../utils/escape.js';
+import { readableOn } from '../background.js';
 import { localeField, safeLocale } from '../locale-field.js';
 import { mediaPlaceholder } from '../media-placeholder.js';
 import { anyRemote } from '../plugin-network.js';
@@ -250,7 +251,11 @@ export default register({
       return `<span class="bb-menu-tags">${tags.map(t => {
         const b = badgeFor(t);
         if (!b) return '';
-        return `<span class="bb-menu-tag" style="background:${b.bg};color:#fff;" title="${escapeAttr(b.title)}">${escapeHtml(b.label)}</span>`;
+        // Ink derived from the badge colour, not a hard-coded white. Five of
+        // the eleven palette entries are light enough that white fails WCAG AA
+        // on them — "VG" was 3.3:1 and "NEW" on amber 2.1:1. These badges carry
+        // allergen and dietary information; unreadable is not a cosmetic bug.
+        return `<span class="bb-menu-tag" style="background:${b.bg};color:${readableOn(b.bg) ?? '#fff'};" title="${escapeAttr(b.title)}">${escapeHtml(b.label)}</span>`;
       }).join('')}</span>`;
     };
 
