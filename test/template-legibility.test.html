@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>agentView Studio · Template legibility</title>
+  <title>agentView Studio · Template &amp; widget legibility</title>
 
   <!-- Its own page because this suite is the only one that needs the app's REAL
        stylesheets to mean anything. Every type size in the catalog is a cqmin
@@ -54,6 +54,9 @@
       try {
         await document.fonts.ready;
         await import('./template-legibility.test.js');
+        // Same page, same reason: both suites need the app's real stylesheets
+        // and a laid-out render to mean anything.
+        await import('./widget-fitness.test.js');
         const summary = await runAll('#test-results');
         document.title = (summary.fail === 0 ? '✓ ' : '✗ ') + document.title;
       } catch (e) {

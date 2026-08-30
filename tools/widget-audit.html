@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <title>Widget audit</title>
+  <!-- DEV TOOL — not part of the app.
+       Mounts every registered widget with its own defaults() at three box sizes
+       and measures what a designer would otherwise have to notice by eye:
+
+         RESPONSIVE  does the type actually grow with the box? A widget whose
+                     cq coefficient never clears its clamp floor renders the
+                     same pixel size in a postage stamp and on a wall — which
+                     is what the News Ticker did for its whole life.
+         FITS        does the content stay inside the box at each size?
+         CONTRAST    every element that paints its OWN background is checked
+                     against its text colour (WCAG). Badges and pills are where
+                     `color: var(--bb-st-bg)` silently died on gradient themes.
+
+       Read window.__widgets for the raw rows.
+       Open from the dev server: /tools/widget-audit.html -->
+  <link rel="stylesheet" href="../styles/fonts.css" />
+  <script src="../shared/vendor/marked.min.js"></script>
+  <script src="../shared/vendor/pdf.min.js"></script>
+  <script src="../shared/vendor/prism.min.js"></script>
+  <link rel="stylesheet" href="../shared/vendor/prism-tomorrow.min.css" />
+  <link rel="stylesheet" href="../styles/tokens.css" />
+  <link rel="stylesheet" href="../styles/components.css" />
+  <link rel="stylesheet" href="../styles/slide-themes.css" />
+  <link rel="stylesheet" href="../styles/studio.css" />
+  <style>
+    body { margin: 0; background: #0b0b10; color: #eee; font: 12px/1.5 ui-monospace, monospace; }
+    #out { padding: 14px; white-space: pre; }
+    #rig { position: fixed; left: -20000px; top: 0; }
+    .bad { color: #ef6d72; }
+  </style>
+</head>
+<body>
+<div id="out">measuring…</div>
+<div id="rig"></div>
+<script type="module">
+import '../shared/plugins/all.js';
+import { list as listPlugins } from '../shared/plugins/registry.js';
+import { createSlide, createWidget } from '../shared/slide-schema.js';
+import { renderSlideThumb } from '../admin/ui/slide-thumb.js';
+import { usesNetwork } from '../shared/plugin-network.js';
+
+await document.fonts.ready;
+
+const rig = document.getElementById('rig');
+const out = document.getElementById('out');
+const W = 1920, H = 1080;
+const THEME = new URLSearchParams(location.search).get('theme') || 'minimal-dark';
+
+// Three boxes a widget realistically gets: a quarter tile, a half, and a slide.
+const BOXES = [
+  { name: 'small',  rect: { x: 4, y: 4, w: 30, h: 22 } },
+  { name: 'medium', rect: { x: 4, y: 4, w: 60, h: 45 } },
+  { name: 'large',  rect: { x: 4, y: 4, w: 92, h: 88 } },
+];
+
+const luminance = (hex) => {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(hex ?? '').trim());
+  if (!m) return null;
+  let h = m[1];
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  const ch = i => { const c = parseInt(h.slice(i, i + 2), 16) / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  return 0.2126 * ch(0) + 0.7152 * ch(2) + 0.0722 * ch(4);
+};
+const toHex = (rgb) => {
+  const m = String(rgb).match(/[\d.]+/g);
+  if (!m || m.length < 3) return null;
+  if (m.length > 3 && Number(m[3]) < 0.95) return null;   // translucent: not a reliable ground
+  return '#' + m.slice(0, 3).map(n => Math.round(+n).toString(16).padStart(2, '0')).join('');
+};
+const contrast = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+
+function textLeaves(root) {
+  const out = [];
+  for (const el of root.querySelectorAll('*')) {
+    if (!el.textContent || !el.textContent.trim()) continue;
+    if ([...el.children].some(c => c.textContent && c.textContent.trim())) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width >= 2 && r.height >= 2) out.push(el);
+  }
+  return out;
+}
+
+function mount(type, rect) {
+  const w = createWidget(type, { rect, content: undefined });
+  // createWidget defaults content to {} — give the plugin its OWN defaults,
+  // which is what dropping the widget on the canvas produces.
+  const plugin = listPlugins().find(p => p.type === type);
+  w.content = { ...plugin.defaults(), theme: plugin.defaults().theme ?? THEME };
+  const slide = createSlide({ theme: THEME, widgets: [w] });
+  const box = document.createElement('div');
+  rig.appendChild(box);
+  const dispose = renderSlideThumb(box, slide, { canvas: { w: W, h: H } }, { width: W });
+  return { box, dispose, slot: box.querySelector('.avs-thumb-slot'), content: w.content };
+}
+
+function measure(slot) {
+  const inner = slot.querySelector('.bb-slide') ?? slot;
+  let hero = 0;
+  for (const el of textLeaves(slot)) {
+    const fs = parseFloat(getComputedStyle(el).fontSize) || 0;
+    if (fs > hero) hero = fs;
+  }
+  const over = Math.max(inner.scrollHeight - inner.clientHeight, inner.scrollWidth - inner.clientWidth);
+
+  // Contrast, but only where a widget paints its OWN opaque ground: that is
+  // where a colour mistake is the widget's own and not the slide's.
+  let worst = null;
+  for (const el of textLeaves(slot)) {
+    let ground = null;
+    for (let p = el; p && p !== slot.parentElement; p = p.parentElement) {
+      const hex = toHex(getComputedStyle(p).backgroundColor);
+      if (hex) { ground = hex; break; }
+      if (getComputedStyle(p).backgroundImage !== 'none') break;   // gradient/image: unknowable
+    }
+    if (!ground) continue;
+    const fg = toHex(getComputedStyle(el).color);
+    const lf = luminance(fg), lb = luminance(ground);
+    if (lf == null || lb == null) continue;
+    const c = contrast(lf, lb);
+    if (!worst || c < worst.ratio) {
+      worst = { ratio: +c.toFixed(2), fg, bg: ground, text: el.textContent.trim().slice(0, 22) };
+    }
+  }
+  return { hero, over, worst };
+}
+
+const rows = [];
+for (const plugin of listPlugins()) {
+  const row = { type: plugin.type, label: plugin.label, sizes: {}, network: false };
+  for (const b of BOXES) {
+    const m = mount(plugin.type, b.rect);
+    row.network = row.network || usesNetwork(plugin, m.content);
+    const r = measure(m.slot);
+    row.sizes[b.name] = {
+      boxH: m.slot.offsetHeight,
+      hero: Math.round(r.hero),
+      over: Math.round(r.over),
+      worst: r.worst,
+    };
+    m.dispose();
+    m.box.remove();
+  }
+  const s = row.sizes.small, l = row.sizes.large;
+  // A responsive widget's type grows roughly with its box. The box grows 4x in
+  // height between 'small' and 'large'; anything under 1.5x of type growth is
+  // a widget whose sizing is pinned.
+  row.growth = s.hero > 0 ? +(l.hero / s.hero).toFixed(2) : 0;
+  row.maxOver = Math.max(s.over, row.sizes.medium.over, l.over);
+  const worsts = [s.worst, row.sizes.medium.worst, l.worst].filter(Boolean);
+  row.minContrast = worsts.length ? Math.min(...worsts.map(w => w.ratio)) : null;
+  row.contrastAt = worsts.length ? worsts.reduce((a, b) => (a.ratio <= b.ratio ? a : b)) : null;
+  rows.push(row);
+}
+
+window.__widgets = rows;
+
+const flag = r => [
+  (r.growth && r.growth < 1.5) ? 'PINNED ' : '       ',
+  r.maxOver > 2 ? 'OVERFLOW' : '        ',
+  (r.minContrast != null && r.minContrast < 4.5) ? 'CONTRAST' : '        ',
+].join(' ');
+out.textContent =
+  'widget            growth  small/med/large hero px      maxOver  minContrast   flags\n'
+  + rows.map(r =>
+    `${r.type.padEnd(16)} ${String(r.growth).padStart(5)}  `
+    + `${String(r.sizes.small.hero).padStart(4)}/${String(r.sizes.medium.hero).padStart(4)}/${String(r.sizes.large.hero).padStart(4)}`
+    + `${r.network ? ' (net)' : '      '}`
+    + `   ${String(r.maxOver).padStart(5)}  ${String(r.minContrast ?? '—').padStart(11)}   ${flag(r)}`).join('\n')
+  + `\n\n— ${rows.length} widgets · ${rows.filter(r => r.growth && r.growth < 1.5).length} pinned · `
+  + `${rows.filter(r => r.maxOver > 2).length} overflowing · `
+  + `${rows.filter(r => r.minContrast != null && r.minContrast < 4.5).length} below AA`;
+window.__auditReady = true;
+</script>
+</body>
+</html>

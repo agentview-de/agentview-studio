@@ -1881,9 +1881,15 @@
 /* `background-color` is set inline from the widget's `bgColor` so the card
    visually matches the QR's own quiet zone (qrserver `bgcolor`). Same for
    `.bb-qr-caption color` — driven by `fgColor` so it stays readable. */
-.bb-qr-card { padding: 24px; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.4); display: inline-flex; flex-direction: column; align-items: center; gap: 12px; }
+.bb-qr-card { padding: 24px; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.4); display: inline-flex; flex-direction: column; align-items: center; gap: 12px; min-height: 0; max-height: 100%; }
 .bb-qr-card.bb-qr-frameless { padding: 0; border-radius: 0; box-shadow: none; background: transparent !important; }
-.bb-qr-img { display: block; max-width: 90cqw; max-height: 90cqh; }
+/* `flex: 0 1 auto; min-height: 0` is what lets the code SHRINK for its caption.
+   With max-height alone the QR claimed 90 % of the box and the caption was
+   pushed out of the bottom — a widget that overflowed on its own defaults the
+   moment it was dropped in anything smaller than half a slide. The SVG has an
+   intrinsic 1:1 ratio, so constraining the height narrows it in step. */
+.bb-qr-img { display: block; flex: 0 1 auto; min-height: 0; max-width: 90cqw; max-height: 90cqh; }
+.bb-qr-text { flex: 0 0 auto; }
 .bb-qr-frameless .bb-qr-img { max-width: 100cqw; max-height: 100cqh; }
 .bb-qr-caption { font-weight: 600; font-size: calc(clamp(14px, 2.2cqmin, 20px) * var(--bb-qr-cap-scale, 1)); }
 .bb-qr-text { display: flex; flex-direction: column; align-items: center; gap: 6px; }
@@ -1892,6 +1898,45 @@
 .bb-qr-detail-value { font-family: var(--bb-mono); word-break: break-all; }
 .bb-qr-card-h { flex-direction: row; align-items: center; gap: 24px; }
 .bb-qr-card-h .bb-qr-text { align-items: flex-start; text-align: left; }
+
+/* ---------------------------------------------------------------------------
+   Small tiles: drop the detail rather than the content.
+
+   Every one of these widgets was built for a half- or full-slide box and, at a
+   quarter tile, simply ran off the bottom: dropped on a slide with its own
+   defaults, kpi-cards overflowed by 139 px, menu by 108 and world-clock by 49.
+   Nothing told the user — `.bb-slide` is overflow:hidden, so the last card was
+   just gone. A widget that cannot fit should shed its optional rows, which is
+   what the RSS and calendar blocks above already do.
+
+   Heights, not widths: the columns already reflow via auto-fit minmax. What
+   does not reflow is a card's own stack of label + value + delta + sparkline +
+   target, and that is what has to give.
+   --------------------------------------------------------------------------- */
+@container slide (max-height: 260px) {
+  /* KPI: keep the number and its label. The sparkline and the target bar are
+     the two rows that turn a readable figure into a clipped one. */
+  .bb-slide-kpi .bb-kpi-spark,
+  .bb-slide-kpi .bb-kpi-target { display: none; }
+  .bb-slide-kpi .bb-kpi-card { padding: 10px; }
+  .bb-slide-kpi .bb-kpi-grid { gap: 8px; }
+  .bb-slide-kpi .bb-kpi-value { margin-top: 0; }
+  .bb-slide-kpi .bb-kpi-delta { margin-top: 0; }
+  .bb-slide-kpi .bb-kpi-label { font-size: calc(clamp(10px, 1.6cqmin, 24px) * var(--bb-kpi-text-scale, 1)); letter-spacing: .08em; }
+
+  /* Menu: the dish and the price survive; the description and the footnote go.
+     The section heading keeps its role but stops claiming a heading's margins. */
+  .bb-slide-menu .bb-menu-desc,
+  .bb-slide-menu .bb-menu-footnote { display: none; }
+  .bb-slide-menu .bb-menu-cols { gap: 14px; }
+  .bb-slide-menu .bb-menu-section h2 { margin: 0 0 .15em; font-size: calc(clamp(15px, 3.6cqmin, 52px) * var(--bb-menu-text-scale, 1)); }
+  .bb-slide-menu .bb-menu-row { font-size: calc(clamp(13px, 2.8cqmin, 40px) * var(--bb-menu-text-scale, 1)); }
+
+  /* World clock: the time is the point; the date is the first thing to lose. */
+  .bb-slide-worldclock .bb-wc-date { display: none; }
+  .bb-slide-worldclock .bb-wc-card { padding: 10px; }
+  .bb-slide-worldclock .bb-wc-grid { gap: 8px; }
+}
 
 /* Currency */
 .bb-slide-fx .bb-fx-base { font-size: calc(clamp(16px, 2.6cqmin, 22px) * var(--bb-fx-text-scale, 1)); opacity: .6; margin-bottom: 12px; }

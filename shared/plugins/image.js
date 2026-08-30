@@ -1,6 +1,7 @@
 import { register } from './registry.js';
 import { mediaFitField, backgroundSizeValue } from '../media-fit.js';
 import { composeDispose } from '../plugin-contract.js';
+import { prefersReducedMotion } from '../animations.js';
 import { cssUrl } from '../safe-url.js';
 import { mediaPlaceholder } from '../media-placeholder.js';
 import { refreshSecField, refreshIntervalMs } from '../refresh-field.js';
@@ -146,7 +147,9 @@ export default register({
       // Default transparent so PNG transparency / contain-letterboxing reveals
       // the widget background; letterboxColor opts into a brand-coloured box.
       layer.style.backgroundColor = c.letterboxColor || 'transparent';
-      if (c.kenBurns) {
+      // Ken Burns is a continuous zoom: exactly what prefers-reduced-motion
+      // asks a page to stop doing. The photo still shows, it just holds still.
+      if (c.kenBurns && !prefersReducedMotion()) {
         ensureKenBurnsKeyframes();
         layer.style.animation = 'bb-kenburns 24s ease-in-out infinite alternate';
       }

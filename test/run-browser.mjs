@@ -69,7 +69,7 @@ const PAGES = [
   // exists in slide-themes.css, and the shared suite runs without app CSS.
   // The image widgets reach for demo URLs that 404 here, as everywhere else.
   {
-    name: 'template legibility',
+    name: 'template & widget legibility',
     path: '/test/template-legibility.test.html',
     expect: /Failed to load resource|ERR_|net::/i,
   },

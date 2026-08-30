@@ -396,7 +396,12 @@ let prevForm = null;
 // convention — so the whole panel has ONE consistent fold interaction. All
 // blocks default to open; keys are prefixed with `_` so they can never collide
 // with a schema section key.
-function foldSection(widgetType, key, title, defaultCollapsed = false) {
+// `title` is TEXT and is escaped as such. An icon goes in `opts.icon` as a
+// ui-icon id, never inline in the title: a caller that passed
+// `${uiIconSvg('link')} Bind to slot` got its SVG source escaped into the
+// header and then uppercased by the label's own CSS, so the Bindings section
+// announced itself as `<SVG VIEWBOX="0 0 24 24" WIDTH="13…`.
+function foldSection(widgetType, key, title, { defaultCollapsed = false, icon = '' } = {}) {
   const collapsed = loadCollapsed(widgetType, key, defaultCollapsed);
   const section = document.createElement('section');
   section.className = 'avs-inspector-section bb-form-section';
@@ -404,7 +409,9 @@ function foldSection(widgetType, key, title, defaultCollapsed = false) {
   const head = document.createElement('button');
   head.type = 'button';
   head.className = 'bb-form-section-head';
-  head.innerHTML = `<span class="bb-form-section-chev">▾</span> <span class="bb-form-section-label">${esc(title ?? '')}</span>`;
+  head.innerHTML = `<span class="bb-form-section-chev">▾</span> `
+    + (icon ? `<span class="bb-form-section-icon" aria-hidden="true">${uiIconSvg(icon, 13)}</span> ` : '')
+    + `<span class="bb-form-section-label">${esc(title ?? '')}</span>`;
   const body = document.createElement('div');
   body.className = 'bb-form-section-body';
   head.addEventListener('click', () => {
@@ -908,7 +915,7 @@ export function renderWidgetInspector(host) {
   // v3: Slot-Bindings section. Lets the editor wire any widget.content field
   // (by field-path) to a data slot. Player resolves at render time. Foldable
   // like its siblings, default open.
-  const { section: bindWrap, body: bindBody } = foldSection(widget.type, '_bindings', `${uiIconSvg('link', 13)} ${t('binding.sectionTitle')}`);
+  const { section: bindWrap, body: bindBody } = foldSection(widget.type, '_bindings', t('binding.sectionTitle'), { icon: 'link' });
   bindBody.innerHTML = `<p class="bb-form-help">${t('binding.help')}</p>
     <div id="bind-list"></div>
     <div class="avs-flex-row" style="margin-top:6px;">
