@@ -2,7 +2,7 @@
 // thumbnails (widget rects as blocks, no live plugin render so a long rail
 // stays cheap).
 
-import { state, commit, subscribe, withSavedShape } from '../store.js';
+import { state, commit, subscribe, withSavedShape, emit } from '../store.js';
 import { createSlide } from '../../shared/slide-schema.js';
 import { get as getPlugin } from '../../shared/plugins/registry.js';
 import { describeSchedule } from '../../shared/scheduler-core.js';
@@ -257,8 +257,14 @@ function card(slide, index) {
     if (e.target.closest('[data-act]')) return;
     state.ui.activeSlideId = slide.id;
     state.ui.selectedWidgetId = null;
-  // Choosing a slide means you are no longer editing the master.
-  if (state.ui.editingMaster) setEditingMaster(false);
+    // Choosing a slide means you are no longer editing the master.
+    if (state.ui.editingMaster) setEditingMaster(false);
+    // On a phone this rail is a sheet over the canvas, so picking a slide has
+    // to reveal it — the same courtesy the library sheet already does after a
+    // widget is added. Deliberately NOT a subscription to activeSlideId:
+    // deleting a card also moves the active slide, and the sheet should stay
+    // put while you delete several. Only an explicit pick closes it.
+    emit('slide.picked', slide.id);
   });
   el.querySelector('[data-act="up"]').addEventListener('click', () => moveSlideBy(slide.id, -1));
   el.querySelector('[data-act="down"]').addEventListener('click', () => moveSlideBy(slide.id, 1));

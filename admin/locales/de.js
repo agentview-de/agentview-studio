@@ -1035,6 +1035,8 @@ export const de = {
   "m.slides": "Folien",
   "m.design": "Design",
   "m.widgets": "Widgets",
+  "m.edit": "Bearbeiten",
+  "m.editText": "Text bearbeiten",
   "m.object": "Objekt",
   "m.arrange": "Anordnen",
   "tpl.preview": "Vorschau",

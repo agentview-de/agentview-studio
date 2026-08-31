@@ -32,11 +32,34 @@ export function addHandles(frameEl, rotateTitle = '') {
 //                      `click` fires for both, so the distinction is made here
 //                      where the movement is already known.
 export function makeInteractive(frameEl, { getStageRect, getRect, getRotation, onChange, onSelect, onTap, onRotate }) {
-  let mode = null;        // 'move' | dir | 'rotate'
+  let mode = null;        // 'move' | dir | 'rotate' | 'gesture'
   let startRect = null;
   let startRot = 0;
   let startX = 0, startY = 0;
   let badge = null;
+  // Two-finger gesture on the widget itself: turn and scale at once, the way
+  // Keynote and PowerPoint do it. The rotation handle is a 11px knob — fine
+  // for a mouse, a poor target for a thumb — and pinching an object is what
+  // people try first on a touchscreen. Only touch pointers are collected, so
+  // a mouse keeps the single-pointer paths untouched.
+  const pts = new Map();  // pointerId → {x, y}
+  let gesture = null;     // {span, angle, rect, rot} captured when the 2nd finger lands
+
+  const spanOf = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const angleOf = (a, b) => Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+  // Fingers can cross the ±180° seam mid-turn; without normalising, the widget
+  // would snap a full circle the moment they do.
+  const wrapDeg = d => ((d + 180) % 360 + 360) % 360 - 180;
+
+  function startGesture() {
+    const [a, b] = [...pts.values()];
+    const span = spanOf(a, b);
+    if (!span) return false;
+    gesture = { span, angle: angleOf(a, b), rect: { ...getRect() }, rot: getRotation?.() ?? 0 };
+    mode = 'gesture';
+    window.addEventListener('pointermove', onMove);
+    return true;
+  }
 
   function ensureBadge() {
     if (!badge) { badge = document.createElement('div'); badge.className = 'avs-size-badge'; frameEl.appendChild(badge); }
@@ -58,6 +81,20 @@ export function makeInteractive(frameEl, { getStageRect, getRect, getRotation, o
     // it must reach the browser (caret / drag-select); the resize + rotate
     // handles sit outside the body, so they still work.
     if (!handle && !rotateHandle && e.target.closest('[contenteditable="true"]')) return;
+    if (e.pointerType === 'touch') {
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      // Second finger down: whatever single-finger drag was running is
+      // abandoned mid-flight — the rect it was building is replaced by the
+      // gesture's own snapshot, so nothing jumps.
+      if (pts.size === 2) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (startGesture()) {
+          window.addEventListener('pointerup', onUp, { once: true });
+          return;
+        }
+      }
+    }
     mode = rotateHandle ? 'rotate' : handle ? handle.dataset.dir : 'move';
     startRect = { ...getRect() };
     startRot = getRotation?.() ?? 0;
@@ -77,6 +114,26 @@ export function makeInteractive(frameEl, { getStageRect, getRect, getRotation, o
 
   function onMove(e) {
     if (!mode) return;
+    if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (mode === 'gesture') {
+      // A finger lifted mid-gesture: hold the last state rather than acting on
+      // half a gesture. onUp commits what is already applied.
+      if (pts.size !== 2) return;
+      const [a, b] = [...pts.values()];
+      const span = spanOf(a, b);
+      const scale = span / gesture.span;
+      // Scale about the widget's own centre, so it grows under the fingers
+      // instead of drifting away from them.
+      const cx = gesture.rect.x + gesture.rect.w / 2;
+      const cy = gesture.rect.y + gesture.rect.h / 2;
+      const w = Math.max(MIN, gesture.rect.w * scale);
+      const h = Math.max(MIN, gesture.rect.h * scale);
+      onChange?.(clampRect({ x: cx - w / 2, y: cy - h / 2, w, h }), 'move', 'move', { noSnap: true });
+      const deg = gesture.rot + wrapDeg(angleOf(a, b) - gesture.angle);
+      onRotate?.(deg, 'move');
+      showRotBadge(deg);
+      return;
+    }
     if (mode === 'rotate') {
       // The (rotated) frame's bbox centre is the rotation pivot and stays put,
       // so it's a stable reference for the pointer angle. Shift snaps to 15°.
@@ -110,8 +167,24 @@ export function makeInteractive(frameEl, { getStageRect, getRect, getRotation, o
     showBadge(cr);
   }
 
-  function onUp() {
+  function onUp(e) {
+    if (e?.pointerId != null) pts.delete(e.pointerId);
+    // Two fingers, one lifted: the gesture is over, but the other finger is
+    // still down. Wait for it rather than starting a one-finger drag from a
+    // stale reference point.
+    if (mode === 'gesture' && pts.size > 0) {
+      window.addEventListener('pointerup', onUp, { once: true });
+      return;
+    }
     window.removeEventListener('pointermove', onMove);
+    if (mode === 'gesture') {
+      const cur = clampRect(getRect());
+      if (startRect == null || !rectsEqual(gesture?.rect ?? cur, cur)) onChange?.(cur, 'end', 'move');
+      if ((getRotation?.() ?? 0) !== (gesture?.rot ?? 0)) onRotate?.(getRotation?.() ?? 0, 'end');
+      hideBadge();
+      mode = null; startRect = null; gesture = null;
+      return;
+    }
     if (mode === 'rotate') {
       // Commit only on a real change — a bare click on the handle is a no-op
       // and shouldn't push an undo entry.
