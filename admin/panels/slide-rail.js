@@ -244,6 +244,11 @@ function card(slide, index) {
       ${anyBindings(slide) ? `<span class="avs-slide-badge" title="${tx('Slot bindings')}">${uiIconSvg('link', 11)}</span>` : ''}
     </div>
     <div class="avs-slide-actions">
+      <!-- Touch-only (CSS decides): the finger's replacement for dragging the
+           card. Kept out of the way on a mouse, where dragging already works
+           and two more buttons per card would be clutter. -->
+      <button class="avs-iconbtn avs-slide-move" data-act="up" title="${t('rail.moveUp')}" aria-label="${t('rail.moveUp')}">▲</button>
+      <button class="avs-iconbtn avs-slide-move" data-act="down" title="${t('rail.moveDown')}" aria-label="${t('rail.moveDown')}">▼</button>
       <button class="avs-iconbtn" data-act="dup" title="${t('rail.duplicate')}">${uiIconSvg('copy', 14)}</button>
       <button class="avs-iconbtn" data-act="del" title="${t('rail.delete')}">${uiIconSvg('trash', 14)}</button>
     </div>`;
@@ -255,6 +260,8 @@ function card(slide, index) {
   // Choosing a slide means you are no longer editing the master.
   if (state.ui.editingMaster) setEditingMaster(false);
   });
+  el.querySelector('[data-act="up"]').addEventListener('click', () => moveSlideBy(slide.id, -1));
+  el.querySelector('[data-act="down"]').addEventListener('click', () => moveSlideBy(slide.id, 1));
   el.querySelector('[data-act="dup"]').addEventListener('click', () => duplicate(slide.id));
   el.querySelector('[data-act="del"]').addEventListener('click', () => remove(slide.id));
   el.addEventListener('contextmenu', e => {
@@ -262,6 +269,36 @@ function card(slide, index) {
     openContextMenu(e.clientX, e.clientY, slideMenuItems(slide.id));
   });
   return el;
+}
+
+// Move one slide by `delta` positions. Two callers with nothing else in common
+// share it: Alt+arrow on the keyboard, and the up/down buttons a touch device
+// gets instead of dragging. Reordering the rail is HTML5 drag-and-drop, and
+// that fires no events at all for a finger — on a phone the order of a deck was
+// simply not changeable, which is not a rough edge but a missing feature.
+// Returns whether anything moved.
+export function moveSlideBy(id, delta) {
+  const all = state.playlist?.slides ?? [];
+  // Reordering a filtered list has no defined meaning: "one down" from a
+  // visible card lands on a slide that is not on screen. Refusing silently
+  // is its own bug — the action does nothing and nothing says why.
+  if (_filter) { announce(t('rail.moveFiltered'), 'warn'); return false; }
+  const ix = all.findIndex(s => s.id === id);
+  if (ix < 0) return false;
+  const to = ix + delta;
+  if (to < 0 || to >= all.length) { announce(t('rail.moveEdge'), 'warn'); return false; }
+  const next = [...all];
+  next.splice(to, 0, next.splice(ix, 1)[0]);
+  state.playlist.slides = next;
+  commit('reorder-slides');
+  // The card keeps its name and its focus, so nothing about the move reaches
+  // a screen reader on its own. Say where it landed.
+  announce(t('rail.moved', {
+    name: all[ix].name || t('rail.untitled'),
+    pos: to + 1,
+    total: all.length,
+  }));
+  return true;
 }
 
 // Arrow keys move BETWEEN slides; Alt+arrow moves the slide itself. Reordering
@@ -276,24 +313,8 @@ function onCardKey(e, id) {
   if (ix < 0) return;
 
   if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-    // Reordering a filtered list has no defined meaning: "one down" from a
-    // visible card lands on a slide that is not on screen. Refusing silently
-    // is its own bug — the key does nothing and nothing says why.
-    if (_filter) { e.preventDefault(); announce(t('rail.moveFiltered'), 'warn'); return; }
-    const to = ix + (e.key === 'ArrowDown' ? 1 : -1);
     e.preventDefault();
-    if (to < 0 || to >= slides.length) { announce(t('rail.moveEdge'), 'warn'); return; }
-    const next = [...all];
-    next.splice(to, 0, next.splice(ix, 1)[0]);
-    state.playlist.slides = next;
-    commit('reorder-slides');
-    // The card keeps its name and its focus, so nothing about the move reaches
-    // a screen reader on its own. Say where it landed.
-    announce(t('rail.moved', {
-      name: slides[ix].name || t('rail.untitled'),
-      pos: to + 1,
-      total: slides.length,
-    }));
+    moveSlideBy(id, e.key === 'ArrowDown' ? 1 : -1);
     return;
   }
 

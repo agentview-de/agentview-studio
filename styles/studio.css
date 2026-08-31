@@ -244,6 +244,16 @@ button { font-family: inherit; }
 .avs-slide-sched { font-size: var(--bb-text-xs); }
 .avs-slide-actions { position: absolute; top: 6px; right: 6px; display: none; gap: var(--bb-sp-1); }
 .avs-slide-card:hover .avs-slide-actions { display: flex; }
+/* The move buttons are the finger's substitute for dragging the card; a mouse
+   drags, so they stay out of its way. */
+.avs-slide-move { display: none; }
+@media (pointer: coarse) {
+  /* Hover does not exist here. Revealing the card actions on hover meant that
+     on a touchscreen duplicate and delete could not be reached AT ALL — not
+     just the new move buttons. They are always visible instead. */
+  .avs-slide-actions { display: flex; }
+  .avs-slide-move { display: inline-flex; }
+}
 
 /* ---------- Canvas ---------- */
 .avs-col-canvas { background: var(--bb-canvas-bg); position: relative; }
@@ -323,6 +333,12 @@ button { font-family: inherit; }
 .avs-widget-frame {
   position: absolute; outline: 1px solid transparent; cursor: move;
   transition: outline-color var(--bb-trans-fast);
+  /* Without this a finger drag never reaches the pointer handlers: the browser
+     claims the gesture as a scroll/pinch and fires pointercancel a few pixels
+     in, so on a touch device a widget simply could not be moved or resized.
+     Scoped to the frame and its handles — the canvas around them keeps its
+     native pan and pinch-zoom. */
+  touch-action: none;
 }
 .avs-widget-frame:hover { outline-color: color-mix(in srgb, var(--bb-accent) 50%, transparent); }
 /* Tabbing to a frame selects it, so the selected outline already marks where you
@@ -365,6 +381,25 @@ button { font-family: inherit; }
 .avs-handle-s  { bottom: -6px; left: 50%; margin-left: -6px; cursor: ns-resize; }
 .avs-handle-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
 .avs-handle-w  { top: 50%; left: -6px; margin-top: -6px; cursor: ew-resize; }
+
+/* Touch input, by INPUT TYPE rather than viewport width: a touchscreen laptop
+   needs this at 1600px, and a narrow window on a desktop does not. An 11px dot
+   is roughly a quarter of a fingertip — the handles stay visually small (eight
+   fat squares would bury a small widget) but get an invisible hit area around
+   them, which is what the finger actually aims at. */
+@media (pointer: coarse) {
+  .avs-handle::after,
+  .avs-rotate-handle::after {
+    content: ''; position: absolute; inset: -11px;
+  }
+  /* The small controls of the editor chrome measured 25–29px tall. That clears
+     the 24px floor, but these are the ones a finger hits over and over while
+     building a slide — the library's own tabs most of all — so they get a
+     little more to aim at. Height only: widening them would reflow the rows
+     they sit in. */
+  .avs-lib-tab, .avs-zoom-label, .avs-chip { min-height: 32px; }
+  .avs-lib-tab { display: inline-flex; align-items: center; }
+}
 
 /* Rotation knob above the top edge (stem drawn with ::before). Shown only while
    the frame is selected, like the resize handles. Rotates with the frame, so it
@@ -783,6 +818,119 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 }
 
 /* =================================================================
+   Phone / small tablet — the editor as one screen plus two sheets
+
+   Three columns need roughly 900px before the canvas has room to be
+   worked in. Below that this shrank them proportionally, and on a
+   375px phone the middle track resolved to ZERO: the canvas was gone
+   and the right column hung past the edge of the viewport. Customers
+   asked to design screens on their phones, so the columns stop being
+   columns here — the canvas takes the screen, and the rail and the
+   right panel slide up over it from a bottom bar.
+   ================================================================= */
+.avs-m-bar, .avs-m-scrim { display: none; }
+
+@media (max-width: 860px) {
+  /* One number for the bar's height: the sheets sit on top of it, the scrim
+     stops above it, and the canvas reserves it. */
+  :root { --avs-m-bar-h: 56px; }
+
+  .avs-editor { grid-template-columns: 1fr; }
+  /* The collapsed-inspector desktop state must not also apply here, or the
+     right sheet would be display:none the moment someone had collapsed it on
+     a desktop before (state.ui.inspectorOpen is persisted). */
+  .avs-editor.avs-right-collapsed { grid-template-columns: 1fr; }
+  .avs-editor.avs-right-collapsed .avs-col-right { display: flex; }
+  /* The seam handle belongs to a seam that no longer exists. */
+  .avs-col-toggle { display: none; }
+
+  .avs-col-canvas { grid-column: 1; }
+
+  /* Both side columns become bottom sheets: full width, at most three
+     quarters of the screen, and parked below the fold until asked for.
+     `visibility` rather than `display` so the transform can animate and so
+     nothing inside them is focusable while they are down. */
+  .avs-col-rail, .avs-col-right {
+    position: fixed; left: 0; right: 0; bottom: var(--avs-m-bar-h);
+    z-index: 30; max-height: 74vh; border: 0;
+    border-top: 1px solid var(--bb-glass-border);
+    border-radius: var(--bb-r-md) var(--bb-r-md) 0 0;
+    background: var(--bb-bg-2);
+    /* 100vh, NOT translateY(102%): a percentage resolves against the sheet's
+       own height, which changes as its content loads or the selection swaps the
+       right panel — every such change re-targets the running transition, and the
+       sheet never arrives. A viewport-relative distance is always far enough
+       down and never moves. */
+    transform: translateY(100vh);
+    visibility: hidden;
+    transition: transform 220ms ease, visibility 0s linear 220ms;
+    overflow-y: auto; overscroll-behavior: contain;
+  }
+  .avs-editor.avs-m-rail-open .avs-col-rail,
+  .avs-editor.avs-m-right-open .avs-col-right {
+    transform: translateY(0); visibility: visible;
+    transition: transform 220ms ease, visibility 0s;
+  }
+
+  .avs-m-scrim {
+    display: block; position: fixed; inset: 0 0 var(--avs-m-bar-h) 0;
+    z-index: 29; background: rgba(0, 0, 0, .45);
+  }
+  .avs-m-scrim[hidden] { display: none; }
+
+  /* The bottom bar. Fixed, above the sheets, and tall enough that the three
+     targets clear the 44px minimum with a label under each icon. */
+  .avs-m-bar {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 31;
+    height: var(--avs-m-bar-h);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--bb-bg-2); border-top: 1px solid var(--bb-border);
+  }
+  .avs-m-tab {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; border: 0; background: none; cursor: pointer;
+    color: var(--bb-ink-quiet); font-size: var(--bb-text-xs);
+    min-height: 44px; padding: 4px 2px;
+  }
+  .avs-m-tab span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .avs-m-tab.avs-on { color: var(--bb-accent); }
+  .avs-m-tab:focus-visible { outline: 2px solid var(--bb-accent); outline-offset: -2px; }
+
+  /* The canvas keeps the bar's height free so a slide is never hidden behind
+     it. The layers pane stays: the sheet scrolls, and picking a small widget
+     from a list beats aiming a fingertip at it on the canvas — it is more
+     useful on touch than on a desktop, not less. */
+  .avs-editor { padding-bottom: var(--avs-m-bar-h); }
+
+  /* The header wrapped onto three rows and ate 115px — 11% of the screen —
+     before the canvas got a single pixel. Drop what a phone cannot use or does
+     not need, and tighten the rest. NOT dropped: the language button, because
+     the overflow menu has no language entry, so hiding it would make the
+     setting unreachable; and undo/redo, which matter more on a touchscreen
+     than on a mouse, not less. */
+  .avs-topbar { gap: var(--bb-sp-3); padding: 0 10px; min-height: 46px; }
+  .avs-brand-tag { display: none; }
+  .avs-savechip { display: none; }
+  /* A keyboard shortcut as a button label, on a device with no keyboard. */
+  .avs-top-actions #t-palette { display: none; }
+  .avs-logo-img { height: 24px; }
+  .avs-viewswitch button { padding: 5px 10px; font-size: var(--bb-text-sm); }
+  .avs-canvas-toolbar { gap: var(--bb-sp-3); padding: 4px 8px; }
+
+  /* Displays view: the header put three buttons beside the heading, and at
+     375px each label broke onto two lines inside its own button ("+ Pair
+     display" stacked into a block). Giving the buttons their own row costs
+     nothing in height — they were already forcing the header to 85px — and
+     lets every label stay on one line. */
+  .avs-disp-toolbar { flex-wrap: wrap; gap: var(--bb-sp-4); margin-bottom: 12px; }
+  .avs-disp-tools { flex: 1 0 100%; }
+  /* nowrap only — no flex:1. The three labels together need 335 of 375px, so
+     stretching them to fill would just push the last one against the edge. */
+  .avs-disp-tools .bb-btn { white-space: nowrap; }
+}
+
+/* =================================================================
    v3 — Verwaltung-View, Per-Display-Drawer, Brand-Kit, Bindings
    ================================================================= */
 
@@ -1164,9 +1312,15 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
 
 /* ---------- 3-column responsive admin ---------- */
 @media (max-width: 800px) {
-  .avs-admin { grid-template-columns: 1fr; }
+  /* `auto 1fr` is not optional here: .avs-admin keeps height:100% from the
+     two-column layout, so with a single column its two implicit rows SHARE
+     that height — the tab strip was handed a third of the screen (223px for
+     one row of tabs) and the content below got what was left. */
+  .avs-admin { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .avs-admin-nav { flex-direction: row; overflow-x: auto; gap: var(--bb-sp-2); border-right: 0;
                    border-bottom: 1px solid var(--bb-border); padding: 8px 10px; }
+  /* A row of tabs that scrolls sideways must not also squeeze them. */
+  .avs-admin-tab { flex: 0 0 auto; }
   .avs-admin-tab { white-space: nowrap; }
   .avs-admin-tab.avs-on::before { display: none; }
   .avs-admin-body { padding: 18px 16px; }

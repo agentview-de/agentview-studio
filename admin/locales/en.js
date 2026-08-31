@@ -258,6 +258,7 @@ export const en = {
 
   'rail.slides': 'Slides', 'rail.add': 'Slide', 'rail.untitled': 'Untitled slide',
   'rail.duplicate': 'Duplicate', 'rail.delete': 'Delete',
+  'rail.moveUp': 'Move slide up', 'rail.moveDown': 'Move slide down',
   'rail.filter': 'Filter slides…',
   'rail.filterCount': '{shown} of {total}',
   'rail.filterEmpty': 'No matches',
@@ -1021,6 +1022,13 @@ export const en = {
   "tpl.sendFailed": "Could not send the template: {msg}",
   "tpl.noBody": "The server returned no HTML for this template.",
   "tpl.noDisplays": "No displays paired yet.",
+  // --- Phone shell (editor bottom bar) ---
+  "m.navLabel": "Editor panels",
+  "m.slides": "Slides",
+  "m.design": "Design",
+  "m.widgets": "Widgets",
+  "m.object": "Object",
+  "m.arrange": "Arrange",
   "tpl.preview": "Preview",
   "tpl.fromDisplay": "from {name}",
   "tpl.edit": "Open in the editor",
