@@ -1027,6 +1027,8 @@ export const en = {
   "m.slides": "Slides",
   "m.design": "Design",
   "m.widgets": "Widgets",
+  "m.edit": "Edit",
+  "m.editText": "Edit text",
   "m.object": "Object",
   "m.arrange": "Arrange",
   "tpl.preview": "Preview",

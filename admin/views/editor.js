@@ -6,12 +6,13 @@
 import { state, subscribe, on } from '../store.js';
 import { mountSlideRail } from '../panels/slide-rail.js';
 import { mountLayers } from '../panels/layers.js';
-import { mountCanvas, selectionGroupState } from '../canvas/canvas.js';
+import { mountCanvas, selectionGroupState, duplicateSelected, deleteSelected, bringToFront, sendToBack, editSelectedText } from '../canvas/canvas.js';
 import { mountLibrary } from '../panels/library.js';
 import { mountSlideSettings, renderWidgetInspector } from '../panels/inspector.js';
 import { renderArrangePanel } from '../panels/arrange-panel.js';
 import { t } from '../i18n.js';
 import { uiIconSvg } from '../../shared/data/ui-icons.js';
+import { activeSlide } from '../active-slide.js';
 
 let canvasApi = null;
 
@@ -33,6 +34,19 @@ export function mountEditor(host) {
          slide up over the canvas, and this bar is how you reach them: three
          columns do not fit on a 375px screen, but they are all still needed. -->
     <div class="avs-m-scrim" id="avs-m-scrim" hidden></div>
+    <!-- Selection bar, the way Keynote and PowerPoint put an object's common
+         actions within thumb reach instead of behind a panel. Appears over the
+         tab bar while something is selected and no sheet is covering the
+         canvas; the actions themselves are the ones the right-click menu has
+         always had. -->
+    <div class="avs-m-ctxbar" id="avs-m-ctxbar" hidden>
+      <button type="button" class="avs-m-ctxbtn avs-m-ctxtext" data-ctx="text" title="${t('m.editText')}" aria-label="${t('m.editText')}" hidden>${uiIconSvg('type', 17)}</button>
+      <button type="button" class="avs-m-ctxbtn" data-ctx="edit">${uiIconSvg('sliders', 17)}<span>${t('m.edit')}</span></button>
+      <button type="button" class="avs-m-ctxbtn" data-ctx="dup" title="${t('ctx.duplicate')}" aria-label="${t('ctx.duplicate')}">${uiIconSvg('copy', 17)}</button>
+      <button type="button" class="avs-m-ctxbtn" data-ctx="front" title="${t('ctx.toFront')}" aria-label="${t('ctx.toFront')}">▲</button>
+      <button type="button" class="avs-m-ctxbtn" data-ctx="back" title="${t('ctx.toBack')}" aria-label="${t('ctx.toBack')}">▼</button>
+      <button type="button" class="avs-m-ctxbtn avs-m-ctxdel" data-ctx="del" title="${t('ctx.delete')}" aria-label="${t('ctx.delete')}">${uiIconSvg('trash', 17)}</button>
+    </div>
     <nav class="avs-m-bar" id="avs-m-bar" aria-label="${t('m.navLabel')}">
       <button type="button" class="avs-m-tab" data-m-panel="rail">
         ${uiIconSvg('layers', 18)}<span>${t('m.slides')}</span>
@@ -127,12 +141,40 @@ function mountMobileShell(host, swap) {
   const scrim = host.querySelector('#avs-m-scrim');
   const rightLabel = host.querySelector('#avs-m-right-label');
 
+  const ctxbar = host.querySelector('#avs-m-ctxbar');
+
+  // Selection bar: only with a selection, and only while the canvas is
+  // actually visible — a bar acting on the thing behind an open sheet would be
+  // pointing at something nobody can see.
+  const textBtn = ctxbar.querySelector('[data-ctx="text"]');
+  const reflectCtxBar = () => {
+    const has = !!state.ui.selectedWidgetId || (state.ui.selectedWidgetIds?.length ?? 0) > 0;
+    ctxbar.hidden = !has || !!openPanel;
+    // The text button only makes sense for a single text widget — which is
+    // also the only case editSelectedText() acts on.
+    const id = state.ui.selectedWidgetId;
+    const w = id ? activeSlide()?.widgets.find(x => x.id === id) : null;
+    textBtn.hidden = w?.type !== 'text';
+  };
+
+  // What the right sheet holds depends on the selection, so the tab that opens
+  // it says which of the three panels is behind it. swapRight() has already run
+  // by the time this fires — it writes the mode class onto the same element.
+  const reflectRightLabel = () => {
+    const key = swap.classList.contains('avs-inspector') ? 'm.object'
+      : swap.classList.contains('avs-arrange-panel') ? 'm.arrange' : 'm.widgets';
+    rightLabel.textContent = t(key);
+  };
+
   const reflect = () => {
     host.classList.toggle('avs-m-rail-open', openPanel === 'rail');
     host.classList.toggle('avs-m-right-open', openPanel === 'right');
     scrim.hidden = !openPanel;
     bar.querySelectorAll('[data-m-panel]').forEach(b =>
       b.classList.toggle('avs-on', (b.dataset.mPanel ?? '') === openPanel));
+    // Opening a sheet hides the selection bar and closing one brings it back,
+    // so the two are always decided together.
+    reflectCtxBar();
     // The canvas just changed size (a sheet covers part of it, or gave it
     // back), so the slide has to be re-fitted or it sits half off-screen.
     requestAnimationFrame(() => canvasApi?.zoomToFit());
@@ -152,19 +194,28 @@ function mountMobileShell(host, swap) {
   // the thing land, and it is selected, so the panel this reveals is already
   // its inspector.
   on('widget.added', () => { if (openPanel) { openPanel = ''; reflect(); } });
+  // Same courtesy for the slide rail: an explicit pick reveals the slide.
+  on('slide.picked', () => { if (openPanel === 'rail') { openPanel = ''; reflect(); } });
 
-  // What the right sheet holds depends on the selection, so the tab that opens
-  // it says which of the three panels is behind it. swapRight() has already run
-  // by the time this fires — it writes the mode class onto the same element.
-  const reflectRightLabel = () => {
-    const key = swap.classList.contains('avs-inspector') ? 'm.object'
-      : swap.classList.contains('avs-arrange-panel') ? 'm.arrange' : 'm.widgets';
-    rightLabel.textContent = t(key);
-  };
+  ctxbar.addEventListener('click', e => {
+    const act = e.target.closest('[data-ctx]')?.dataset.ctx;
+    if (!act) return;
+    // "Edit" is the one that opens a panel; the rest act in place, so the
+    // canvas stays visible and you can see what happened.
+    if (act === 'edit') { openPanel = 'right'; reflect(); return; }
+    if (act === 'text') { editSelectedText(); return; }
+    if (act === 'dup') duplicateSelected();
+    else if (act === 'front') bringToFront();
+    else if (act === 'back') sendToBack();
+    else if (act === 'del') deleteSelected();
+  });
+
   subscribe('ui', p => {
     if (p !== 'ui.selectedWidgetId' && p !== 'ui.selectedWidgetIds') return;
     reflectRightLabel();
+    reflectCtxBar();
   });
+
   reflectRightLabel();
   reflect();
 }

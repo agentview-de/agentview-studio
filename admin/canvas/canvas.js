@@ -100,6 +100,68 @@ export function mountCanvas(host, { onSelect } = {}) {
     }
   }, { passive: false });
 
+  // ---- Touch gestures: one finger pans, two fingers pinch-zoom ----
+  // The wheel handler above is the mouse's half of this. A finger has neither a
+  // wheel nor a ctrl key, so on a phone the canvas could only be moved or
+  // zoomed through the toolbar buttons — while these two gestures are the first
+  // thing anyone tries on a slide editor. Pointer events (not touch events) so
+  // there is one code path for phones, tablets and touchscreen laptops.
+  const touches = new Map();       // pointerId → {x, y}, live finger positions
+  let lastCentre = null, lastSpan = null;
+  const centreOf = () => {
+    const pts = [...touches.values()];
+    return {
+      x: pts.reduce((s, p) => s + p.x, 0) / pts.length,
+      y: pts.reduce((s, p) => s + p.y, 0) / pts.length,
+    };
+  };
+  const spanOf = () => {
+    const [a, b] = [...touches.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
+  // Adding or lifting a finger moves the centre discontinuously; carrying the
+  // old reference across would make the canvas jump at that moment.
+  const resetGesture = () => { lastCentre = null; lastSpan = null; };
+
+  viewport.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'touch') return;
+    // A widget frame handles its own drag and stops propagation, so whatever
+    // reaches here started on empty canvas.
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    resetGesture();
+  });
+  window.addEventListener('pointermove', e => {
+    if (!touches.has(e.pointerId)) return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const centre = centreOf();
+    if (touches.size === 1) {
+      if (lastCentre) {
+        panX += centre.x - lastCentre.x;
+        panY += centre.y - lastCentre.y;
+        applyTransform();
+      }
+    } else if (touches.size === 2) {
+      const span = spanOf();
+      if (lastCentre && lastSpan > 0) {
+        const r = viewport.getBoundingClientRect();
+        // Zoom about the point BETWEEN the fingers, then follow their drift, so
+        // the slide stays under them instead of sliding away as it scales.
+        zoomAround(centre.x - r.left, centre.y - r.top, span / lastSpan);
+        panX += centre.x - lastCentre.x;
+        panY += centre.y - lastCentre.y;
+        applyTransform();
+      }
+      lastSpan = span;
+    }
+    lastCentre = centre;
+  });
+  const endTouch = e => {
+    if (!touches.delete(e.pointerId)) return;
+    resetGesture();
+  };
+  window.addEventListener('pointerup', endTouch);
+  window.addEventListener('pointercancel', endTouch);
+
   // Any pointerdown outside a widget frame → deselect, no matter where in the
   // canvas it lands. The narrow `e.target === stage` check used to miss clicks
   // on the surrounding gray viewport area, on overlay children (e.g. the snap
@@ -118,7 +180,11 @@ export function mountCanvas(host, { onSelect } = {}) {
     // replacing it, so a marquee can be used to extend a hand-picked set.
     const additive = !!(e.shiftKey || e.metaKey || e.ctrlKey);
     if (!additive) selectWidget(null);
-    if (e.button === 0) startMarquee(e, additive);
+    // A finger on empty canvas PANS (handled above) — it does not sweep a
+    // marquee. Keynote and PowerPoint both read that gesture as "move the
+    // page", and a rubber band there would make the canvas feel nailed down.
+    // Tapping still deselects, which is the other half of what people expect.
+    if (e.button === 0 && e.pointerType !== 'touch') startMarquee(e, additive);
   });
   // Double-click on empty stage → add a text widget at the click point.
   stage.addEventListener('dblclick', e => {
@@ -1621,6 +1687,23 @@ function applyTransform() {
 // The editing session itself lives in inline-text-edit.js (a self-contained
 // sub-feature). Here we just hand it the canvas hooks it needs: the viewport,
 // the zoom snapshot/restore + zoom-to-widget, and select/refresh.
+// Start editing the selected text widget's copy. Double-clicking it does the
+// same on a desktop, but a finger's version of that — the double TAP — depends
+// on the browser still synthesising a compatibility dblclick after the frame's
+// pointerdown calls preventDefault. Rather than bet the only route to editing
+// text on that, the phone's selection bar calls this directly. Returns whether
+// there was a text widget to edit.
+export function editSelectedText() {
+  const id = state.ui.selectedWidgetId;
+  if (!id) return false;
+  const widget = activeSlide()?.widgets.find(w => w.id === id);
+  if (widget?.type !== 'text') return false;
+  const frameEl = stage?.querySelector(`.avs-widget-frame[data-id="${CSS.escape(id)}"]`);
+  if (!frameEl) return false;
+  enterInlineEdit(widget, frameEl);
+  return true;
+}
+
 function enterInlineEdit(widget, frameEl) {
   enterInlineTextEdit(widget, frameEl, {
     viewport,

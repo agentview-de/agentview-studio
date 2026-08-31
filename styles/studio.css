@@ -266,7 +266,11 @@ button { font-family: inherit; }
 .avs-zoom-label { min-width: 52px; text-align: center; background: transparent; border: 1px solid var(--bb-border); color: var(--bb-ink-muted); border-radius: var(--bb-r-sm); padding: 4px 6px; cursor: pointer; font-size: var(--bb-text-sm); transition: background var(--bb-trans-fast), border-color var(--bb-trans-fast), color var(--bb-trans-fast); }
 .avs-zoom-label:hover { background: var(--bb-fill-soft); border-color: var(--bb-border-strong); color: var(--bb-ink); }
 .avs-canvas-hint { font-size: var(--bb-text-xs); color: var(--bb-ink-quiet); }
-.avs-canvas-scroller { flex: 1; position: relative; overflow: hidden; }
+/* The canvas is its own interaction space, like the slide area in Keynote:
+   one finger pans it, two zoom it (see canvas.js). Both need the browser to
+   keep its hands off the gesture — without this it claims them as page
+   scroll/pinch and the canvas cannot be moved at all. */
+.avs-canvas-scroller { flex: 1; position: relative; overflow: hidden; touch-action: none; }
 .avs-stage-wrap { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
 .avs-stage {
   position: relative; width: 1600px; height: 900px; background: #000;
@@ -828,7 +832,7 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
    columns here — the canvas takes the screen, and the rail and the
    right panel slide up over it from a bottom bar.
    ================================================================= */
-.avs-m-bar, .avs-m-scrim { display: none; }
+.avs-m-bar, .avs-m-scrim, .avs-m-ctxbar { display: none; }
 
 @media (max-width: 860px) {
   /* One number for the bar's height: the sheets sit on top of it, the scrim
@@ -896,6 +900,32 @@ input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
   .avs-m-tab span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
   .avs-m-tab.avs-on { color: var(--bb-accent); }
   .avs-m-tab:focus-visible { outline: 2px solid var(--bb-accent); outline-offset: -2px; }
+
+  /* Selection bar — floats just above the tab bar, the way Keynote keeps an
+     object's actions under your thumb rather than behind a panel. Inset from
+     both edges so it reads as a floating strip belonging to the selection,
+     not as a second permanent bar. */
+  .avs-m-ctxbar {
+    display: flex; align-items: center; justify-content: space-around; gap: var(--bb-sp-2);
+    position: fixed; left: 8px; right: 8px; z-index: 28;
+    bottom: calc(var(--avs-m-bar-h) + env(safe-area-inset-bottom, 0px) + 8px);
+    padding: 4px 6px; border-radius: 999px;
+    background: var(--bb-bg-3, var(--bb-bg-2));
+    border: 1px solid var(--bb-border-strong, var(--bb-border));
+    box-shadow: var(--bb-shadow-2);
+  }
+  .avs-m-ctxbar[hidden] { display: none; }
+  .avs-m-ctxbtn {
+    display: inline-flex; align-items: center; justify-content: center; gap: var(--bb-sp-2);
+    min-width: 44px; min-height: 44px; padding: 0 10px;
+    border: 0; background: none; color: var(--bb-ink); cursor: pointer;
+    border-radius: 999px; font-size: var(--bb-text-sm);
+  }
+  .avs-m-ctxbtn:active { background: var(--bb-fill-soft); }
+  .avs-m-ctxbtn:focus-visible { outline: 2px solid var(--bb-accent); outline-offset: -2px; }
+  /* Delete reads as the destructive one without a confirmation step in the way;
+     undo is one tap away in the header. */
+  .avs-m-ctxdel { color: var(--bb-danger, #f87171); }
 
   /* The canvas keeps the bar's height free so a slide is never hidden behind
      it. The layers pane stays: the sheet scrolls, and picking a small widget
