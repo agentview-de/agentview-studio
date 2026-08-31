@@ -266,6 +266,7 @@ export const de = {
 
   'rail.slides': 'Slides', 'rail.add': 'Slide', 'rail.untitled': 'Unbenannte Slide',
   'rail.duplicate': 'Duplizieren', 'rail.delete': 'Löschen',
+  'rail.moveUp': 'Folie nach oben', 'rail.moveDown': 'Folie nach unten',
   'rail.filter': 'Slides filtern…',
   'rail.filterCount': '{shown} von {total}',
   'rail.filterEmpty': 'Keine Treffer',
@@ -1029,6 +1030,13 @@ export const de = {
   "tpl.sendFailed": "Vorlage konnte nicht gesendet werden: {msg}",
   "tpl.noBody": "Der Server hat kein HTML zu dieser Vorlage geliefert.",
   "tpl.noDisplays": "Noch kein Display gekoppelt.",
+  // --- Handy-Shell (Editor-Leiste unten) ---
+  "m.navLabel": "Editor-Bereiche",
+  "m.slides": "Folien",
+  "m.design": "Design",
+  "m.widgets": "Widgets",
+  "m.object": "Objekt",
+  "m.arrange": "Anordnen",
   "tpl.preview": "Vorschau",
   "tpl.fromDisplay": "von {name}",
   "tpl.edit": "Im Editor öffnen",

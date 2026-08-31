@@ -5,7 +5,7 @@
 // property (like Theme), not an item you add to a slide — they now live in
 // the slide-settings modal alongside Theme/Background/Schedule.
 
-import { state, on } from '../store.js';
+import { state, on, emit } from '../store.js';
 import { listByGroup } from '../../shared/plugins/registry.js';
 import { addWidget, renderSlide as canvasRender } from '../canvas/canvas.js';
 import { list as listCustomWidgets } from '../../shared/custom-widgets.js';
@@ -280,7 +280,13 @@ function renderWidgets(body) {
         mountUsageBadge(btn, p.usage);
         btn.addEventListener('click', () => {
           const w = addWidget(p.type);
-          if (w) toast(t('lib.added', { label: tx(p.label) }), { kind: 'success', ttl: 1500 });
+          if (!w) return;
+          toast(t('lib.added', { label: tx(p.label) }), { kind: 'success', ttl: 1500 });
+          // On a phone this library IS a sheet covering the canvas, so the
+          // widget just added would land out of sight behind it. The editor
+          // shell listens and gets out of the way; on a desktop nothing is
+          // listening and nothing happens.
+          emit('widget.added', w);
         });
         // Drag-to-canvas: the canvas listens for `avs/widget-type` payloads on
         // dragover/drop and places the widget at the drop point. Click-to-add
